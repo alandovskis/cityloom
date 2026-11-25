@@ -926,20 +926,15 @@ fn a_crossing_on_call_chooses_its_detection_and_the_plan_shows_what_a_cancellati
     let h = panel(&s);
     let calls = &h[h.find(r#"id="signal-calls""#).unwrap()..];
     // A radio group per crossing on call, named by its heading and described by what the chosen detection does.
-    let at = calls.find(&format!(r#"id="call-detect-{e}""#)).expect("a detection group");
-    let group = &calls[calls[..at].rfind("<div").unwrap()..];
-    let tag = &group[..group.find('>').unwrap()];
+    let tag = tag_of(calls, &format!("call-detect-{e}"));
     for attr in [r#"role="radiogroup""#, &format!(r#"aria-labelledby="call-detect-h-{e}""#), &format!(r#"aria-describedby="call-detect-help-{e}""#)] {
         assert!(tag.contains(attr), "{attr}: {tag}");
     }
-    assert!(group.contains(&format!(r#"<span id="call-detect-h-{e}" class="call-detect-h">Detection</span>"#)), "{group}");
-    let radio = |h: &str, which: &str| {
-        let at = h.find(&format!(r#"id="call-detect-{e}-{which}""#)).unwrap_or_else(|| panic!("{which}: {h}"));
-        h[h[..at].rfind("<input").unwrap()..at + h[at..].find('>').unwrap()].to_string()
-    };
-    assert!(radio(calls, "push-button").contains("checked") && !radio(calls, "passive").contains("checked"));
-    for r in [radio(calls, "push-button"), radio(calls, "passive")] {
-        assert!(r.contains(r#"type="radio""#) && r.contains(&format!(r#"name="call-detect-{e}""#)), "{r}");
+    assert!(calls.contains(&format!(r#"<span id="call-detect-h-{e}" class="call-detect-h">Detection</span>"#)), "{calls}");
+    let chosen = |h: &str, which: &str| option_chosen(h, &format!("call-detect-{e}-{which}"));
+    assert!(chosen(calls, "push-button") && !chosen(calls, "passive"));
+    for r in ["push-button", "passive"].map(|which| tag_of(calls, &format!("call-detect-{e}-{which}"))) {
+        assert!(r.contains(r#"type="radio""#) || r.contains(r#"role="radio""#), "{r}");
     }
     assert!(calls.contains("<span>Push button</span>") && calls.contains("<span>Passive detection</span>"), "{calls}");
     assert!(calls.contains("the call stays placed after they leave"), "{calls}");
@@ -949,7 +944,7 @@ fn a_crossing_on_call_chooses_its_detection_and_the_plan_shows_what_a_cancellati
     assert!(s.set_detection(e, Detection::Passive));
     let h = panel(&s);
     let calls = &h[h.find(r#"id="signal-calls""#).unwrap()..];
-    assert!(radio(calls, "passive").contains("checked") && !radio(calls, "push-button").contains("checked"));
+    assert!(chosen(calls, "passive") && !chosen(calls, "push-button"));
     assert!(calls.contains("one who leaves after waiting 30 s cancels it, and a walk with nobody left waiting is skipped"), "{calls}");
     let t = s.view_now().signal.as_ref().unwrap().calls.crossings.iter().find(|c| c.uid == e).unwrap().totals.unwrap();
     assert!(t.cancelled > 0 && t.walks_skipped > 0, "{t:?}");
@@ -977,8 +972,7 @@ fn a_junction_shown_read_only_shows_a_crossing_s_detection_and_offers_it_disable
     let locked = r#"<fieldset disabled class="read-only-controls"><ul class="calls-crossings">"#;
     let inside = &calls[calls.find(locked).expect("the crossings are offered in a disabled fieldset")..];
     let inside = &inside[..inside.find("</fieldset>").unwrap()];
-    let at = inside.find(&format!(r#"id="call-detect-{e}-passive""#)).expect("the detection is shown");
-    assert!(inside[inside[..at].rfind("<input").unwrap()..at + inside[at..].find('>').unwrap()].contains("checked"), "{inside}");
+    assert!(option_chosen(inside, &format!("call-detect-{e}-passive")), "{inside}");
     assert!(inside.contains("one who leaves after waiting 30 s cancels it"), "{inside}");
     assert!(!s.set_detection(e, Detection::PushButton), "and cannot be changed");
 }
@@ -4310,6 +4304,18 @@ fn input_tag<'a>(h: &'a str, id: &str) -> &'a str {
     &h[h[..at].rfind("<input").unwrap()..at + h[at..].find('>').unwrap()]
 }
 
+/// The tag of the element with id `id` in `h`, whatever the element.
+fn tag_of<'a>(h: &'a str, id: &str) -> &'a str {
+    let at = h.find(&format!(r#"id="{id}""#)).unwrap_or_else(|| panic!("{id}: {h}"));
+    &h[h[..at].rfind('<').unwrap()..at + h[at..].find('>').unwrap()]
+}
+
+/// Whether the option with id `id` is the chosen one of its group, a native radio or a radio button.
+fn option_chosen(h: &str, id: &str) -> bool {
+    let tag = tag_of(h, id);
+    tag.contains(r#"aria-checked="true""#) || tag.replace("aria-checked", "").contains("checked")
+}
+
 #[test]
 fn the_plan_offers_each_street_with_a_phase_recall_or_actuated_and_shows_the_placeholder_figures() {
     let s = shared(0);
@@ -4323,13 +4329,12 @@ fn the_plan_offers_each_street_with_a_phase_recall_or_actuated_and_shows_the_pla
     for st in &streets {
         let u = st.uid;
         // A radio group per street, named by its heading and described by what its mode does.
-        let at = act.find(&format!(r#"id="act-mode-{u}""#)).expect("a mode group");
-        let tag = &act[act[..at].rfind("<div").unwrap()..at + act[at..].find('>').unwrap()];
+        let tag = tag_of(act, &format!("act-mode-{u}"));
         for attr in [r#"role="radiogroup""#, &format!(r#"aria-labelledby="act-mode-h-{u}""#), &format!(r#"aria-describedby="act-status-{u}""#)] {
             assert!(tag.contains(attr), "{attr}: {tag}");
         }
-        assert!(input_tag(act, &format!("act-mode-{u}-recall")).contains("checked"), "on recall to begin with");
-        assert!(!input_tag(act, &format!("act-mode-{u}-actuated")).contains("checked"));
+        assert!(option_chosen(act, &format!("act-mode-{u}-recall")), "on recall to begin with");
+        assert!(!option_chosen(act, &format!("act-mode-{u}-actuated")));
     }
     assert_eq!(act.matches("Phase on recall: runs every cycle at its green").count(), 4);
     assert!(act.contains(r#"id="actuation-none""#) && !act.contains(r#"id="actuation-phases""#) && !act.contains("act-min-"));
@@ -4338,7 +4343,7 @@ fn the_plan_offers_each_street_with_a_phase_recall_or_actuated_and_shows_the_pla
     assert!(s.set_actuated(n, true));
     let h = panel(&s);
     let act = actuation_of(&h);
-    assert!(input_tag(act, &format!("act-mode-{n}-actuated")).contains("checked"));
+    assert!(option_chosen(act, &format!("act-mode-{n}-actuated")));
     assert!(act.contains("vehicles detected on its approach call its phase"), "{act}");
     assert!(act.contains("Its green runs at least 7 s, each vehicle holds it 3 s more, up to 45 s."), "{act}");
     for (field, label, value, range) in [
@@ -4424,7 +4429,7 @@ fn a_junction_shown_read_only_shows_its_actuation_and_offers_it_disabled() {
     let locked = r#"<fieldset disabled class="read-only-controls"><ul class="act-streets">"#;
     let inside = &act[act.find(locked).expect("the streets are offered in a disabled fieldset")..];
     let inside = &inside[..inside.find("</fieldset>").unwrap()];
-    assert!(input_tag(inside, &format!("act-mode-{n}-actuated")).contains("checked"), "{inside}");
+    assert!(option_chosen(inside, &format!("act-mode-{n}-actuated")), "{inside}");
     assert!(input_tag(inside, &format!("act-min-{n}")).contains(r#"value="7""#), "{inside}");
     assert!(act.contains(r#"id="actuation-phases""#), "the hour is shown");
     assert!(!s.set_actuated(n, false) && !s.set_actuation(n, crate::junction::model::actuation::Field::MinGreen, 9), "and cannot be changed");
@@ -4491,13 +4496,12 @@ fn the_plan_offers_each_bike_movement_it_runs_recall_or_on_detection_named_by_it
         let u = m.uid;
         let name = format!("Bikes from {} to {}", say(&m.label), say(m.to.as_ref().unwrap()));
         assert!(bikes.contains(&format!(r#"role="group" aria-label="{name}""#)), "{name}: {bikes}");
-        let at = bikes.find(&format!(r#"id="bike-mode-{u}""#)).expect("a mode group");
-        let tag = &bikes[bikes[..at].rfind("<div").unwrap()..at + bikes[at..].find('>').unwrap()];
+        let tag = tag_of(bikes, &format!("bike-mode-{u}"));
         for attr in [r#"role="radiogroup""#, &format!(r#"aria-labelledby="bike-mode-h-{u}""#), &format!(r#"aria-describedby="bike-status-{u}""#)] {
             assert!(tag.contains(attr), "{attr}: {tag}");
         }
-        assert!(input_tag(bikes, &format!("bike-mode-{u}-recall")).contains("checked"), "on recall to begin with");
-        assert!(!input_tag(bikes, &format!("bike-mode-{u}-detection")).contains("checked"));
+        assert!(option_chosen(bikes, &format!("bike-mode-{u}-recall")), "on recall to begin with");
+        assert!(!option_chosen(bikes, &format!("bike-mode-{u}-detection")));
     }
     assert_eq!(bikes.matches("On recall: runs with every phase that lets it go").count(), 4);
     assert!(bikes.contains(r#"id="bikes-none""#) && !bikes.contains(r#"id="bikes-totals""#) && !bikes.contains("bike-rate-"));
@@ -4508,7 +4512,7 @@ fn the_plan_offers_each_bike_movement_it_runs_recall_or_on_detection_named_by_it
     let h = panel(&s);
     let bikes = bikes_of(&h);
     let m = s.view_now().signal.as_ref().unwrap().bicycles.movements.iter().find(|m| m.uid == n).cloned().unwrap();
-    assert!(input_tag(bikes, &format!("bike-mode-{n}-detection")).contains("checked"));
+    assert!(option_chosen(bikes, &format!("bike-mode-{n}-detection")));
     let length = Units::Metres.length(m.length_mm);
     let bound = format!(
         "Each call needs a minimum green of 5 s + a clearance of {} s over {length} = {} s of green; a phase's green is extended by at most 15 s for it.",
@@ -4591,7 +4595,7 @@ fn a_junction_shown_read_only_shows_its_bike_detection_and_offers_it_disabled() 
     let locked = r#"<fieldset disabled class="read-only-controls"><ul class="bike-movements">"#;
     let inside = &bikes[bikes.find(locked).expect("the movements are offered in a disabled fieldset")..];
     let inside = &inside[..inside.find("</fieldset>").unwrap()];
-    assert!(input_tag(inside, &format!("bike-mode-{n}-detection")).contains("checked"), "{inside}");
+    assert!(option_chosen(inside, &format!("bike-mode-{n}-detection")), "{inside}");
     assert!(input_tag(inside, &format!("bike-rate-{n}")).contains(r#"value="30""#), "{inside}");
     assert!(bikes.contains(r#"id="bikes-totals""#), "the hour is shown");
     assert!(!s.set_bike_detection(n, false) && !s.set_cyclists(n, 9), "and cannot be changed");
@@ -4656,14 +4660,13 @@ fn the_plan_offers_each_street_with_transit_no_priority_an_early_green_an_extens
     assert_eq!(streets.iter().map(|s| s.uid).collect::<Vec<_>>(), vec![n], "only north has transit");
     let name = crate::shared::said::say_now(s.i18n(), Units::Metres, &streets[0].label);
     assert!(t.contains(&format!(r#"role="group" aria-label="Buses on {name}""#)), "{t}");
-    let at = t.find(&format!(r#"id="transit-mode-{n}""#)).expect("a mode group");
-    let tag = &t[t[..at].rfind("<div").unwrap()..at + t[at..].find('>').unwrap()];
+    let tag = tag_of(t, &format!("transit-mode-{n}"));
     for attr in [r#"role="radiogroup""#, &format!(r#"aria-labelledby="transit-mode-h-{n}""#), &format!(r#"aria-describedby="transit-status-{n}""#)] {
         assert!(tag.contains(attr), "{attr}: {tag}");
     }
-    assert!(input_tag(t, &format!("transit-mode-{n}-off")).contains("checked"), "no priority to begin with");
+    assert!(option_chosen(t, &format!("transit-mode-{n}-off")), "no priority to begin with");
     for id in ["early-green", "extension", "both"] {
-        assert!(!input_tag(t, &format!("transit-mode-{n}-{id}")).contains("checked"), "{id}");
+        assert!(!option_chosen(t, &format!("transit-mode-{n}-{id}")), "{id}");
     }
     assert!(t.contains(&format!(r#"id="transit-status-{n}" class="insp-range">No priority: a bus waits"#)), "{t}");
     assert!(t.contains(r#"id="transit-none""#) && t.contains("No street gives its buses priority"), "{t}");
@@ -4673,7 +4676,7 @@ fn the_plan_offers_each_street_with_transit_no_priority_an_early_green_an_extens
     assert!(s.set_transit_priority(n, Some(Mode::Both)));
     let h = panel(&s);
     let t = transit_of(&h);
-    assert!(input_tag(t, &format!("transit-mode-{n}-both")).contains("checked"));
+    assert!(option_chosen(t, &format!("transit-mode-{n}-both")));
     assert!(t.contains("Early green and green extension: a bus coming during red brings the street's green forward by at most 10 s"), "{t}");
     assert!(t.contains("a bus coming within 10 s after the green would end holds it until it has passed. Not for two greens running."), "{t}");
     assert!(t.contains(&format!(r#"<label for="transit-rate-{n}">Buses an hour</label>"#)), "{t}");
@@ -4782,7 +4785,7 @@ fn a_junction_shown_read_only_shows_its_transit_priority_and_offers_it_disabled(
     let locked = r#"<fieldset disabled class="read-only-controls"><ul class="transit-streets">"#;
     let inside = &t[t.find(locked).expect("the streets are offered in a disabled fieldset")..];
     let inside = &inside[..inside.find("</fieldset>").unwrap()];
-    assert!(input_tag(inside, &format!("transit-mode-{n}-extension")).contains("checked"), "{inside}");
+    assert!(option_chosen(inside, &format!("transit-mode-{n}-extension")), "{inside}");
     assert!(input_tag(inside, &format!("transit-rate-{n}")).contains(r#"value="12""#), "{inside}");
     assert!(t.contains(r#"id="transit-totals""#), "the hour is shown");
     assert!(!s.set_transit_priority(n, None) && !s.set_buses(n, 9), "and cannot be changed");
@@ -4852,13 +4855,12 @@ fn the_plan_offers_each_street_with_a_phase_pre_emption_off_or_on_with_its_trigg
     let street = streets.iter().find(|x| x.uid == n).unwrap().clone();
     let name = crate::shared::said::say_now(s.i18n(), Units::Metres, &street.label);
     assert!(p.contains(&format!(r#"role="group" aria-label="Emergency vehicles on {name}""#)), "{p}");
-    let at = p.find(&format!(r#"id="preempt-mode-{n}""#)).expect("a mode group");
-    let tag = &p[p[..at].rfind("<div").unwrap()..at + p[at..].find('>').unwrap()];
+    let tag = tag_of(p, &format!("preempt-mode-{n}"));
     for attr in [r#"role="radiogroup""#, &format!(r#"aria-labelledby="preempt-mode-h-{n}""#), &format!(r#"aria-describedby="preempt-status-{n}""#)] {
         assert!(tag.contains(attr), "{attr}: {tag}");
     }
-    assert!(input_tag(p, &format!("preempt-mode-{n}-off")).contains("checked"), "off to begin with");
-    assert!(!input_tag(p, &format!("preempt-mode-{n}-on")).contains("checked"));
+    assert!(option_chosen(p, &format!("preempt-mode-{n}-off")), "off to begin with");
+    assert!(!option_chosen(p, &format!("preempt-mode-{n}-on")));
     assert!(p.contains(&format!(r#"id="preempt-status-{n}" class="insp-range">Off: an emergency vehicle waits"#)), "{p}");
     assert!(p.contains(r#"id="preempt-none""#) && p.contains("No street has pre-emption on"), "{p}");
     assert!(!p.contains(r#"id="preempt-totals""#) && !p.contains("preempt-rate-"));
@@ -4867,7 +4869,7 @@ fn the_plan_offers_each_street_with_a_phase_pre_emption_off_or_on_with_its_trigg
     assert!(s.set_preemption(n, true));
     let h = panel(&s);
     let p = preempt_of(&h);
-    assert!(input_tag(p, &format!("preempt-mode-{n}-on")).contains("checked"));
+    assert!(option_chosen(p, &format!("preempt-mode-{n}-on")));
     let entry = s.view_now().signal.as_ref().unwrap().preemption.streets.iter().find(|x| x.uid == n).unwrap().entry_s;
     assert!(entry > 5, "a clearance, the yellow and the all-red: {entry}");
     for words in [
@@ -4943,7 +4945,7 @@ fn a_junction_shown_read_only_shows_its_pre_emption_and_offers_it_disabled() {
     let locked = r#"<fieldset disabled class="read-only-controls"><ul class="preempt-streets">"#;
     let inside = &p[p.find(locked).expect("the streets are offered in a disabled fieldset")..];
     let inside = &inside[..inside.find("</fieldset>").unwrap()];
-    assert!(input_tag(inside, &format!("preempt-mode-{n}-on")).contains("checked"), "{inside}");
+    assert!(option_chosen(inside, &format!("preempt-mode-{n}-on")), "{inside}");
     assert!(input_tag(inside, &format!("preempt-rate-{n}")).contains(r#"value="2""#), "{inside}");
     assert!(p.contains(r#"id="preempt-totals""#), "the hour is shown");
     assert!(!s.set_preemption(n, false) && !s.set_emergency_calls(n, 9), "and cannot be changed");
@@ -4973,6 +4975,48 @@ fn emergency_vehicle_pre_emption_speaks_french() {
     ] {
         assert!(p.contains(words), "{words}: {p}");
     }
+}
+
+// ---- the signal options' radio groups (CLM-48) ------------------------------------------------------------------------
+
+/// Whether the option with id `id` is a radio button, whether it is checked, and its tab index.
+fn radio_button(h: &str, id: &str) -> (bool, bool, String) {
+    let tag = tag_of(h, id);
+    let attr = |name: &str| tag.split(&format!(" {name}=\"")).nth(1).and_then(|v| v.split('"').next()).unwrap_or_default();
+    (tag.starts_with("<button") && attr("role") == "radio", attr("aria-checked") == "true", attr("tabindex").to_string())
+}
+
+#[test]
+fn the_signal_options_are_radio_buttons_with_one_tab_stop_on_the_chosen_one() {
+    let (s, n) = transit_in(crate::shared::i18n::Locale::En);
+    let e = arm(&s, 90);
+    assert!(s.set_on_call(e, true));
+    let h = panel(&s);
+    let groups: [(String, &[&str]); 5] = [
+        (format!("act-mode-{n}"), &["recall", "actuated"]),
+        (format!("bike-mode-{n}"), &["recall", "detection"]),
+        (format!("transit-mode-{n}"), &["off", "early-green", "extension", "both"]),
+        (format!("preempt-mode-{n}"), &["off", "on"]),
+        (format!("call-detect-{e}"), &["push-button", "passive"]),
+    ];
+    for (group, options) in groups {
+        let tag = tag_of(&h, &group);
+        let class = tag.split(" class=\"").nth(1).and_then(|c| c.split('"').next()).unwrap_or_default();
+        assert!(tag.starts_with("<ul") && class.split_whitespace().any(|c| c == "opts"), "{group}: {tag}");
+        for (i, option) in options.iter().enumerate() {
+            let tabindex = if i == 0 { "0" } else { "-1" };
+            assert_eq!(radio_button(&h, &format!("{group}-{option}")), (true, i == 0, tabindex.to_string()), "{group}-{option}");
+        }
+    }
+}
+
+#[test]
+fn a_signal_option_chosen_takes_the_check_and_the_tab_stop() {
+    let (s, n) = transit_in(crate::shared::i18n::Locale::En);
+    assert!(s.set_actuated(n, true));
+    let h = panel(&s);
+    assert_eq!(radio_button(&h, &format!("act-mode-{n}-actuated")), (true, true, "0".to_string()));
+    assert_eq!(radio_button(&h, &format!("act-mode-{n}-recall")), (true, false, "-1".to_string()));
 }
 
 // ---- time-of-day plans (CLM-16) -----------------------------------------------------------------------------------------

@@ -51,11 +51,12 @@ The files at the top level:
 
 ## The crates
 
-The workspace has six crates, all in `crates/`. Those that run in the browser are built to WebAssembly.
+The workspace has seven crates, all in `crates/`. Those that run in the browser are built to WebAssembly.
 
 | Crate                 | Runs in                   | What it is                                                                                                                                                                                                                                                   |
 | --------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `cityloom_editor`     | The browser               | The editor: every page's logic and views. Its `Cargo.toml` holds the product's version, which every pull request that changes the app raises.                                                                                                                |
+| `cityloom_ui`         | The browser               | The controls the editor's pages share: the radio group, the stepper and its number field, the section of the details and the question asked before something is done. It holds no wording and uses no other crate of the workspace.                          |
 | `cityloom_model`      | Browser, builder          | The plain street network that `citymodel_builder` produces and the editor reads (serde only).                                                                                                                                                                |
 | `cityloom_report`     | The browser               | The design-review report as plain data (serde only). The editor fills it and hands it to the PDF writer.                                                                                                                                                     |
 | `cityloom_report_pdf` | The browser               | The PDF writer. It is a module of its own, `web/pkg/cityloom_report_pdf*`, that `web/report.js` loads the first time a report is asked for, so its large dependency (krilla) stays out of the editor's module. The build fails if the editor links it.       |
@@ -88,12 +89,14 @@ Inside an editing slice, `model.rs` holds the rules, `vm.rs` the view-model, `te
 `tests.rs` the tests and `i18n/en.ftl` and `i18n/fr.ftl` the messages; the views sit beside them. In the three largest
 slices, `street/`, `junction/` and `map/`, each layer has a folder of its own: `model/`, `vm/` and `view/` (with
 `model/mod.rs`, `vm/mod.rs` and `view/mod.rs` in place of `model.rs`, `vm.rs` and `view.rs`, and the tests in
-`view/tests.rs`); only `mod.rs`, `i18n/` and `CLAUDE.md` stay at the slice's root. Four files sit at the top of `src/`:
+`view/tests.rs`); only `mod.rs`, `i18n/` and `CLAUDE.md` stay at the slice's root. Five files sit at the top of `src/`:
 
 - `lib.rs`: the entry points the pages call (`mount_*`) and the registry of every slice's messages.
 - `i18n_guard.rs`: a test that fails when a translated file holds wording of its own instead of a message.
 - `layout_guard.rs`: a test that fails when a file is left at the root of `street/`, `junction/` or `map/` instead of in
   one of its layers.
+- `ui_guard.rs`: a test that fails when a slice draws its own radio group, stepper, headed section of the details or
+  question instead of `cityloom_ui`'s.
 - `atlas_contract.rs`: a test that keeps what is built and the Atlas table's list of measures in step.
 
 ## `web/`

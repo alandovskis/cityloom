@@ -3,6 +3,7 @@
 
 use std::rc::Rc;
 
+use cityloom_ui::Section;
 use leptos::prelude::*;
 use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
@@ -87,8 +88,7 @@ pub fn CurbTools(vm: Rc<StreetVm>) -> impl IntoView {
     let typed = move |id: &str| document().get_element_by_id(id).and_then(|e| e.dyn_into::<HtmlInputElement>().ok()).map(|i| i.value()).unwrap_or_default();
     view! {
         <Show when=any>
-            <section class="insp-sec" aria-labelledby="h-curb-tools">
-                <h3 class="note-h" id="h-curb-tools">{move || text("st-curb-tools")}</h3>
+            <Section id="h-curb-tools" heading=Signal::derive(move || text("st-curb-tools")) labelled=true>
                 <div class="zone-tools curb-tools" role="group" aria-label=move || text("st-curb-tools")>
                     <div class="zone-tool">
                         <label for="curb-use">{move || text("st-curb-use")}</label>
@@ -162,7 +162,7 @@ pub fn CurbTools(vm: Rc<StreetVm>) -> impl IntoView {
                         </button>
                     </div>
                 </div>
-            </section>
+            </Section>
         </Show>
     }
 }

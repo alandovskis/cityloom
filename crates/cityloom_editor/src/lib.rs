@@ -346,6 +346,9 @@ mod i18n_guard;
 mod layout_guard;
 
 #[cfg(test)]
+mod ui_guard;
+
+#[cfg(test)]
 mod atlas_contract;
 
 #[cfg(test)]

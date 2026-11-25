@@ -5,8 +5,9 @@
 
 use std::rc::Rc;
 
+use cityloom_ui::{NumberField, RadioGroup, RadioOption, Section, Stepper, tick};
 use leptos::prelude::*;
-use leptos::web_sys::{Element, HtmlElement, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
+use leptos::web_sys::{HtmlElement, HtmlInputElement, HtmlSelectElement};
 
 use crate::junction::model::actuation::{Actuation, ApproachTotals, Field, PhaseTotals};
 use crate::junction::model::bicycles;
@@ -26,7 +27,6 @@ use crate::junction::view::phase_svg::phase_drawings;
 use crate::junction::view::signal_folds::{SignalFold, set_line, shown, warnings, warnings_line};
 use crate::junction::view::turns::turn_glyph;
 use crate::junction::vm::JunctionVm;
-use crate::junction::vm::keys;
 use crate::junction::vm::watch::Watch;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::locked::locked;
@@ -124,10 +124,6 @@ fn stepper(w: Watch, key: &'static str, mm: i32) -> Signal<String> {
 
 // ---- small pieces -------------------------------------------------------------
 
-fn tick() -> impl IntoView {
-    view! { <svg class="tick" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 8.5 6.5 12.5 13.5 3.5"/></svg> }
-}
-
 fn btn_icon(plus: bool) -> impl IntoView {
     let d = if plus { "M3 8h10M8 3v10" } else { "M3.5 3.5l9 9M12.5 3.5l-9 9" };
     view! { <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d=d/></svg> }
@@ -165,13 +161,13 @@ fn option_view(checked: Signal<bool>, disabled: Signal<bool>, glyph: AnyView, na
 }
 
 /// A section with a heading (a message) and its contents.
-fn section(w: Watch, id: &'static str, heading: &'static str, body: impl IntoView) -> impl IntoView {
-    view! { <section class="insp-sec"><h3 class="note-h" id=id>{words(w, heading)}</h3>{body}</section> }
+fn section(w: Watch, id: &'static str, heading: &'static str, body: impl IntoView + 'static) -> impl IntoView {
+    view! { <Section id=id heading=Signal::derive(words(w, heading))>{body}</Section> }
 }
 
 /// A section whose body is a list, too wide for the control column: its name is above it and the list spans both columns.
-fn wide_section(w: Watch, id: &'static str, heading: &'static str, body: impl IntoView) -> impl IntoView {
-    view! { <section class="insp-sec insp-span"><h3 class="note-h" id=id>{words(w, heading)}</h3>{body}</section> }
+fn wide_section(w: Watch, id: &'static str, heading: &'static str, body: impl IntoView + 'static) -> impl IntoView {
+    view! { <Section id=id heading=Signal::derive(words(w, heading)) span=true>{body}</Section> }
 }
 
 /// A section of editing controls: offered disabled on a junction shown read-only (`shared::locked`).
@@ -210,50 +206,21 @@ fn num_field(w: Watch, n: Num, on_step: impl Fn(i32) + 'static, on_set: impl Fn(
 
 /// The markup of a number field, made once for every field of the panel.
 fn num_view(w: Watch, n: Num, on_step: Rc<dyn Fn(i32)>, on_set: Box<dyn Fn(f64)>) -> AnyView {
-    let (down, up, keyed) = (on_step.clone(), on_step.clone(), on_step);
+    let (on_step, on_set) = (StoredValue::new_local(on_step), StoredValue::new_local(on_set));
+    let step = Callback::new(move |dir| on_step.with_value(|step| step(dir)));
+    let commit = Callback::new(move |typed: String| on_set.with_value(|set| commit_typed(&typed, &**set)));
     let Num { id, label, minus, plus, value, tag, hint: note } = n;
     let hint_id = format!("{id}-hint");
-    let described_by = hint_id.clone();
+    let described = hint_id.clone();
+    let described_by = Signal::derive(move || (!note.get().is_empty()).then(|| described.clone()));
     let field = view! {
-        <section class="insp-sec">
-            <h3 class="note-h" id=id>{words(w, label)}</h3>
-            <div class="stepper">
-                <button type="button" class="ico" aria-label=move || minus.get() on:click=move |_| down(-1)>
-                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"/></svg>
-                </button>
-                <span class="wfield">
-                    <input
-                        type="text"
-                        inputmode="decimal"
-                        autocomplete="off"
-                        value=move || value.get()
-                        prop:value=move || value.get()
-                        aria-labelledby=id
-                        aria-describedby=move || (!note.get().is_empty()).then(|| described_by.clone())
-                        on:keydown=move |ev| {
-                            if let Some(dir) = step_key(&ev.key()) {
-                                ev.prevent_default();
-                                keyed(dir);
-                            }
-                        }
-                        on:change=move |ev| {
-                            let input = event_target::<HtmlInputElement>(&ev);
-                            commit_typed(&input.value(), &*on_set);
-                            // What the field holds is the model's value, whether it took the edit or refused it.
-                            input.set_value(&value.get_untracked());
-                        }
-                    />
-                    <span class="unit-tag" class:unit-long=move || tag.with(|t| t.chars().count() > 2) aria-hidden="true">{move || tag.get()}</span>
-                </span>
-                <button type="button" class="ico" aria-label=move || plus.get() on:click=move |_| up(1)>
-                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>
-                </button>
-            </div>
-            {hint_with_id(note, hint_id)}
-        </section>
+        <Stepper less=minus more=plus on_step=step>
+            <NumberField value=value unit=tag commit=commit on_step=step labelled_by=id described_by=described_by long_unit=true/>
+        </Stepper>
+        {hint_with_id(note, hint_id)}
     };
     // Every number field edits: offered disabled on a junction shown read-only.
-    locked(w.read_only(), field)
+    edit_section(w, id, label, field)
 }
 
 /// A hint that a field is described by.
@@ -264,14 +231,8 @@ fn hint_with_id(text: Signal<String>, id: String) -> impl IntoView {
     }
 }
 
-/// The step an arrow key makes in a number field, as the browser's spinner did.
-pub fn step_key(key: &str) -> Option<i32> {
-    match key {
-        "ArrowUp" => Some(1),
-        "ArrowDown" => Some(-1),
-        _ => None,
-    }
-}
+// The step an arrow key makes in a number field, as the browser's spinner did.
+pub use cityloom_ui::keys::step_key;
 
 /// Hands what was typed (a comma or a point for the decimal mark) to `set`;
 /// false when it is not a number.
@@ -341,8 +302,8 @@ fn ring_size(w: Watch) -> impl IntoView {
     )
 }
 
-/// The layouts the roundabout could take, as a radio group: the single lane (none) first. The radios are keyed by their
-/// layout, so they stay while the offered set is the same and the one with the focus keeps it across a choice.
+/// The layouts the roundabout could take, as a radio group: the single lane (none) first. The options are keyed by their
+/// layout and its name, so they stay while the offered set is the same and the one with the focus keeps it across a choice.
 fn turbo_layout(w: Watch) -> impl IntoView {
     type Choice = (Option<usize>, &'static str);
     let choices = Memo::new(move |_| {
@@ -351,70 +312,24 @@ fn turbo_layout(w: Watch) -> impl IntoView {
         all
     });
     let current = Memo::new(move |_| w.view().turbo.as_ref().map(|t| t.layout));
-    // Where the chosen one is among the radios; none when the layout in force is not among those offered.
-    let chosen = Memo::new(move |_| choices.with(|all| all.iter().position(|c| c.0 == current.get())));
-    let radio = move |(layout, key): Choice| {
-        let index = move || choices.with(|all| all.iter().position(|c| c.0 == layout));
-        let tab_stop = move || keys::radio_tab_stop(chosen.get(), index().unwrap_or(usize::MAX));
-        let on_key = move |ev: KeyboardEvent| {
-            let name = ev.key();
-            let press = keys::Press {
-                key: &name,
-                ctrl: ev.ctrl_key(),
-                meta: ev.meta_key(),
-                alt: ev.alt_key(),
-                repeat: ev.repeat(),
-                composing: ev.is_composing(),
-                taken: ev.default_prevented(),
-            };
-            let all = choices.get_untracked();
-            let Some(to) = index().and_then(|at| keys::radio_choice(&press, all.len(), at)) else { return };
-            ev.prevent_default();
-            if w.choose_turbo(all[to].0) {
-                focus_radio(&ev, to);
-            }
-        };
-        view! {
-            <li role="none">
-                <button
-                    type="button"
-                    class="opt"
-                    role="radio"
-                    aria-checked=move || (current.get() == layout).to_string()
-                    tabindex=move || if tab_stop() { "0" } else { "-1" }
-                    on:click=move |_| {
-                        w.choose_turbo(layout);
-                    }
-                    on:keydown=on_key
-                >
-                    <span>{move || w.tr(key)}</span>{tick()}
-                </button>
-            </li>
-        }
-    };
+    // None when the layout in force is not among those offered.
+    let chosen = move || choices.with(|all| all.iter().copied().find(|c| c.0 == current.get()));
     edit_section(
         w,
         "i-h-turbo",
         "jn-insp-turbo",
         view! {
-            <ul class="opts" role="radiogroup" aria-labelledby="i-h-turbo">
-                <For each=move || choices.get() key=|c| c.0 children=radio/>
-            </ul>
+            <RadioGroup
+                options=choices.into()
+                chosen=Signal::derive(chosen)
+                draw=move |(_, key): Choice| RadioOption::new(Signal::derive(words(w, key)))
+                choose=Callback::new(move |(layout, _): Choice| {
+                    w.choose_turbo(layout);
+                })
+                labelled_by="i-h-turbo"
+            />
         },
     )
-}
-
-/// Puts the focus on the `index`th radio of the group the key was pressed in.
-fn focus_radio(ev: &KeyboardEvent, index: usize) {
-    use leptos::wasm_bindgen::JsCast;
-    let radios = ev
-        .current_target()
-        .and_then(|t| t.dyn_into::<Element>().ok())
-        .and_then(|button| button.closest("[role=radiogroup]").ok().flatten())
-        .and_then(|group| group.query_selector_all("[role=radio]").ok());
-    if let Some(radio) = radios.and_then(|all| all.item(index as u32)).and_then(|n| n.dyn_into::<HtmlElement>().ok()) {
-        let _ = radio.focus();
-    }
 }
 
 /// The turbo's block: stepped one up or down, with its name between the steps.
@@ -427,35 +342,18 @@ fn turbo_size(w: Watch) -> impl IntoView {
         "i-h-turbo-size",
         "jn-insp-turbo-size",
         view! {
-            <div class="stepper" role="group" aria-labelledby="i-h-turbo-size">
-                <button
-                    type="button"
-                    class="ico"
-                    aria-label=words(w, "jn-insp-turbo-smaller")
-                    aria-disabled=move || (!can_smaller()).then_some("true")
-                    on:click=move |_| {
-                        if can_smaller() {
-                            w.edit(|j| j.step_turbo_size(-1));
-                        }
-                    }
-                >
-                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"/></svg>
-                </button>
+            <Stepper
+                less=Signal::derive(words(w, "jn-insp-turbo-smaller"))
+                more=Signal::derive(words(w, "jn-insp-turbo-larger"))
+                less_off=Signal::derive(move || !can_smaller())
+                more_off=Signal::derive(move || !can_larger())
+                on_step=Callback::new(move |dir| {
+                    w.edit(|j| j.step_turbo_size(dir));
+                })
+                group="i-h-turbo-size"
+            >
                 <span class="wfield turbo-size">{size}</span>
-                <button
-                    type="button"
-                    class="ico"
-                    aria-label=words(w, "jn-insp-turbo-larger")
-                    aria-disabled=move || (!can_larger()).then_some("true")
-                    on:click=move |_| {
-                        if can_larger() {
-                            w.edit(|j| j.step_turbo_size(1));
-                        }
-                    }
-                >
-                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>
-                </button>
-            </div>
+            </Stepper>
         },
     )
 }
@@ -1154,10 +1052,9 @@ fn crossing_section(w: Watch, uid: u32) -> impl IntoView {
     move || {
         if walk.get() {
             view! {
-                <section class="insp-sec">
-                    <h3 class="note-h" id="i-h-cross">{words(w, "jn-insp-crossing")}</h3>
+                <Section id="i-h-cross" heading=Signal::derive(words(w, "jn-insp-crossing"))>
                     <p class="insp-range">{words(w, "jn-insp-crossing-pedestrian")}</p>
-                </section>
+                </Section>
             }
             .into_any()
         } else if has.get() {
@@ -1374,10 +1271,9 @@ fn signal_section(w: Watch, uid: u32) -> impl IntoView {
     move || match phase.get() {
         None => ().into_any(),
         Some(false) => view! {
-            <section class="insp-sec">
-                <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
+            <Section id="i-h-signal" heading=Signal::derive(words(w, "jn-insp-signal"))>
                 <p class="insp-range">{words(w, "jn-sig-no-phase")}</p>
-            </section>
+            </Section>
         }
         .into_any(),
         Some(true) => {
@@ -1518,13 +1414,13 @@ fn pattern_id(i: usize, pattern: Pattern) -> String {
     format!("sig-pattern-{i}-{}", pattern.name_key().trim_start_matches("jn-pattern-"))
 }
 
-/// What a phase allows, as a radio group of the ready-made patterns that fit the junction (one tab stop, Arrow, Home
-/// and End choose). A phase that matches none shows Custom checked first: it is the state the group is in, and
-/// cannot be chosen. The radios are keyed by pattern, so the one with the focus keeps it across a choice.
+/// What a phase allows, as a radio group of the ready-made patterns that fit the junction. A phase that matches none
+/// shows Custom checked first: it is the state the group is in, and cannot be chosen. The options are keyed by pattern,
+/// so the one with the focus keeps it across a choice.
 fn pattern_group(w: Watch, i: usize) -> impl IntoView {
     let current = Memo::new(move |_| w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map_or(Pattern::Custom, |p| p.pattern));
     let offered = Memo::new(move |_| w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| p.patterns.clone()).unwrap_or_default());
-    // The radios shown: Custom first when it is what the phase is.
+    // The options shown: Custom first when it is what the phase is.
     let shown = Memo::new(move |_| {
         let mut all: Vec<Pattern> = Vec::new();
         if current.get() == Pattern::Custom {
@@ -1533,69 +1429,30 @@ fn pattern_group(w: Watch, i: usize) -> impl IntoView {
         all.extend(offered.get().iter().map(|o| o.pattern));
         all
     });
-    // Where the phase's pattern is among those that can be chosen; none for Custom.
-    let chosen = Memo::new(move |_| offered.with(|all| all.iter().position(|o| o.pattern == current.get())));
     let label = move || {
         let street = w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| w.say(&p.street)).unwrap_or_default();
         tr(w, "jn-pattern-group", Args::new().num("n", i as i64 + 1).str("street", street))
     };
-    let radio = move |pattern: Pattern| {
-        let custom = pattern == Pattern::Custom;
-        let index = move || offered.with(|all| all.iter().position(|o| o.pattern == pattern));
-        // Custom, when the phase is it, is the one tab stop; else the checked radio is.
-        let tab_stop = move || if custom { true } else { chosen.get().is_some() && keys::radio_tab_stop(chosen.get(), index().unwrap_or(usize::MAX)) };
-        let on_key = move |ev: KeyboardEvent| {
-            let name = ev.key();
-            let press = keys::Press {
-                key: &name,
-                ctrl: ev.ctrl_key(),
-                meta: ev.meta_key(),
-                alt: ev.alt_key(),
-                repeat: ev.repeat(),
-                composing: ev.is_composing(),
-                taken: ev.default_prevented(),
-            };
-            let all: Vec<Pattern> = offered.get_untracked().iter().map(|o| o.pattern).collect();
-            let to = match chosen.get_untracked() {
-                Some(at) => keys::radio_choice(&press, all.len(), at),
-                None => keys::radio_choice_from_none(&press, all.len()),
-            };
-            let Some(to) = to else { return };
-            ev.prevent_default();
-            if w.choose_pattern(i, all[to]) {
-                focus_after_swap(pattern_id(i, all[to]));
-            }
-        };
-        let (id, desc_id) = (pattern_id(i, pattern), format!("{}-desc", pattern_id(i, pattern)));
-        let described = desc_id.clone();
-        view! {
-            <li role="none">
-                <button
-                    type="button"
-                    class="opt"
-                    role="radio"
-                    id=id
-                    aria-checked=move || (current.get() == pattern).to_string()
-                    aria-disabled=custom.then_some("true")
-                    aria-describedby=described
-                    tabindex=move || if tab_stop() { "0" } else { "-1" }
-                    on:click=move |_| {
-                        if !custom && w.choose_pattern(i, pattern) {
-                            focus_after_swap(pattern_id(i, pattern));
-                        }
-                    }
-                    on:keydown=on_key
-                >
-                    <span>{move || w.tr(pattern.name_key())}</span>{tick()}
-                </button>
-                <span class="insp-range" id=desc_id>{move || w.tr(pattern.description_key())}</span>
-            </li>
-        }
+    let draw = move |pattern: Pattern| RadioOption {
+        id: Some(pattern_id(i, pattern)),
+        description: Some((format!("{}-desc", pattern_id(i, pattern)), Signal::derive(words(w, pattern.description_key())))),
+        enabled: pattern != Pattern::Custom,
+        ..RadioOption::new(Signal::derive(words(w, pattern.name_key())))
     };
     view! {
-        <ul class="opts phase-patterns" id=format!("sig-pattern-{i}") role="radiogroup" aria-label=label>
-            <For each=move || shown.get() key=|p| *p children=radio/>
-        </ul>
+        <RadioGroup
+            options=shown.into()
+            chosen=Signal::derive(move || Some(current.get()))
+            draw=draw
+            choose=Callback::new(move |pattern| {
+                if w.choose_pattern(i, pattern) {
+                    focus_after_swap(pattern_id(i, pattern));
+                }
+            })
+            id=format!("sig-pattern-{i}")
+            label=Signal::derive(label)
+            class="opts phase-patterns"
+        />
     }
 }
 
@@ -1713,8 +1570,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
         shown.get().then(|| {
             view! {
                 {signal_fold(w, SignalFold::Plans, move |_| plans_section(w))}
-                <section class="insp-sec">
-                    <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
+                <Section id="i-h-signal" heading=Signal::derive(words(w, "jn-insp-signal"))>
                     <p class="insp-range">{move || tr(w, "jn-sig-cycle", Args::new().num("seconds", w.view().signal.as_ref().map_or(0, |s| i64::from(s.cycle_s))))}</p>
                     <p class="insp-range" id="signal-plan-state" tabindex="-1">{move || w.tr(if suggested.get() { "jn-sig-suggested" } else { "jn-sig-edited" })}</p>
                     {move || {
@@ -1740,7 +1596,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
                             {words(w, "jn-sig-restore")}
                         </button>
                     </div> })}
-                </section>
+                </Section>
                 {signal_fold(w, SignalFold::Calls, move |on| calls_section(w, on))}
                 {signal_fold(w, SignalFold::Actuation, move |on| actuation_section(w, on))}
                 {signal_fold(w, SignalFold::Bikes, move |on| bikes_section(w, on))}
@@ -1751,18 +1607,10 @@ fn signal_overview(w: Watch) -> impl IntoView {
     }
 }
 
-/// The Detection radios of a crossing on call: what each chooses, the end of its id and its label.
-const DETECTION_RADIOS: [(Detection, &str, &str); 2] =
-    [(Detection::PushButton, "push-button", "jn-calls-detection-push-button"), (Detection::Passive, "passive", "jn-calls-detection-passive")];
-
-/// Checks the Detection radio of crossing `uid` that is `kept`, and only it.
-fn show_detection(uid: u32, kept: Detection) {
-    use leptos::wasm_bindgen::JsCast;
-    for (choice, id, _) in DETECTION_RADIOS {
-        if let Some(radio) = document().get_element_by_id(&format!("call-detect-{uid}-{id}")).and_then(|e| e.dyn_into::<HtmlInputElement>().ok()) {
-            radio.set_checked(choice == kept);
-        }
-    }
+/// An option of the radio group `group` of a signal option: the end of its id and the message of its name. A choice the
+/// model refuses leaves the group as it was: what is checked is what the model kept.
+fn mode_option(w: Watch, group: &str, (id, key): (&'static str, &'static str)) -> RadioOption {
+    RadioOption { id: Some(format!("{group}-{id}")), ..RadioOption::new(Signal::derive(words(w, key))) }
 }
 
 /// Which time-of-day plan's timing and response settings are shown (and edited), said where a street's timing or the
@@ -2140,39 +1988,42 @@ fn calls_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
             })
         };
         // How the crossing detects people, while it is on call: a radio group named by its heading and described by what
-        // the chosen detection does. Made again only when the crossing goes on or off call, so a radio keeps the focus.
+        // the chosen detection does. Made again only when the crossing goes on or off call, so an option keeps the focus.
         let on_call = Memo::new(move |_| crossing(uid).is_some_and(|c| c.on_call));
         let detection = move || crossing(uid).map_or(Detection::PushButton, |c| c.detection);
         let detect = move || {
             on_call.get().then(|| {
                 let (group, head, help) = (format!("call-detect-{uid}"), format!("call-detect-h-{uid}"), format!("call-detect-help-{uid}"));
+                let draw = {
+                    let group = group.clone();
+                    move |choice| {
+                        let named = match choice {
+                            Detection::PushButton => ("push-button", "jn-calls-detection-push-button"),
+                            Detection::Passive => ("passive", "jn-calls-detection-passive"),
+                        };
+                        mode_option(w, &group, named)
+                    }
+                };
                 let help_text = move || match detection() {
                     Detection::PushButton => w.tr("jn-calls-detection-push-button-help"),
                     Detection::Passive => tr(w, "jn-calls-detection-passive-help", Args::new().num("limit", i64::from(WAIT_LIMIT_S))),
                 };
-                let radio = move |choice: Detection, id: &'static str, key: &'static str| {
-                    let chosen = move || detection() == choice;
-                    view! {
-                        <label class="phase-move">
-                            <input type="radio" name=format!("call-detect-{uid}") id=format!("call-detect-{uid}-{id}") checked=chosen prop:checked=chosen
-                                on:change=move |_| {
-                                    // Refused (no phase walks it, say): the radios show the detection the model kept. The
-                                    // browser has unchecked the other radio, and no change re-runs its binding, so each is set.
-                                    if !w.set_detection(uid, choice) {
-                                        show_detection(uid, detection());
-                                    }
-                                } />
-                            <span>{words(w, key)}</span>
-                        </label>
-                    }
-                };
                 let (named_by, described_by) = (head.clone(), help.clone());
                 view! {
-                    <div class="call-detect" id=group role="radiogroup" aria-labelledby=named_by aria-describedby=described_by>
-                        <span class="call-detect-h" id=head>{words(w, "jn-calls-detection")}</span>
-                        {DETECTION_RADIOS.map(|(choice, id, key)| radio(choice, id, key))}
-                        <p class="insp-range" id=help>{help_text}</p>
-                    </div>
+                    <span class="call-detect-h" id=head>{words(w, "jn-calls-detection")}</span>
+                    <RadioGroup
+                        options=Signal::derive(|| vec![Detection::PushButton, Detection::Passive])
+                        chosen=Signal::derive(move || Some(detection()))
+                        draw=draw
+                        choose=Callback::new(move |choice| {
+                            w.set_detection(uid, choice);
+                        })
+                        id=group
+                        labelled_by=named_by
+                        described_by=described_by
+                        class="opts call-detect"
+                    />
+                    <p class="insp-range" id=help>{help_text}</p>
                 }
             })
         };
@@ -2364,21 +2215,9 @@ fn actuation_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
             })
         };
         let (group, head) = (format!("act-mode-{uid}"), format!("act-mode-h-{uid}"));
-        let radio = move |on: bool, id: &'static str, key: &'static str| {
-            let chosen = move || actuated.get() == on;
-            view! {
-                <label class="phase-move">
-                    <input type="radio" name=format!("act-mode-{uid}") id=format!("act-mode-{uid}-{id}") checked=chosen prop:checked=chosen
-                        on:change=move |ev| {
-                            let input = event_target::<HtmlInputElement>(&ev);
-                            // Refused (no phase of its own, say): the radios show the mode the model kept.
-                            if !w.set_actuated(uid, on) {
-                                input.set_checked(chosen());
-                            }
-                        } />
-                    <span>{words(w, key)}</span>
-                </label>
-            }
+        let draw = {
+            let group = group.clone();
+            move |on| mode_option(w, &group, if on { ("actuated", "jn-act-mode-actuated") } else { ("recall", "jn-act-mode-recall") })
         };
         let fields = move || {
             actuated.get().then(|| view! { <div class="act-fields">{Field::ALL.into_iter().map(|f| act_field(w, uid, f, settings)).collect_view()}</div> })
@@ -2388,11 +2227,19 @@ fn actuation_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
             <li>
                 <div class="act-street" role="group" aria-label=move || tr(w, "jn-act-group", Args::new().str("street", name_of(uid)))>
                     <span class="act-name">{move || name_of(uid)}</span>
-                    <div class="act-mode" id=group role="radiogroup" aria-labelledby=named_by aria-describedby=described_by>
-                        <span class="act-mode-h" id=head>{words(w, "jn-act-mode")}</span>
-                        {radio(false, "recall", "jn-act-mode-recall")}
-                        {radio(true, "actuated", "jn-act-mode-actuated")}
-                    </div>
+                    <span class="act-mode-h" id=head>{words(w, "jn-act-mode")}</span>
+                    <RadioGroup
+                        options=Signal::derive(|| vec![false, true])
+                        chosen=Signal::derive(move || Some(actuated.get()))
+                        draw=draw
+                        choose=Callback::new(move |on| {
+                            w.set_actuated(uid, on);
+                        })
+                        id=group
+                        labelled_by=named_by
+                        described_by=described_by
+                        class="opts act-mode"
+                    />
                     <p class="insp-range" id=status_id>{status}</p>
                     {fields}
                     {effect}
@@ -2598,29 +2445,6 @@ fn rate_field(
     }
 }
 
-/// One radio of a group `name`, its id `id` and its label's message `key`: checked while `chosen`; picked, it asks
-/// `choose`, and when that is refused the radio shows the choice the model kept.
-fn choice_radio(
-    w: Watch,
-    (name, id): (String, String),
-    key: &'static str,
-    chosen: impl Fn() -> bool + Copy + Send + Sync + 'static,
-    choose: impl Fn() -> bool + Copy + Send + Sync + 'static,
-) -> impl IntoView {
-    view! {
-        <label class="phase-move">
-            <input type="radio" name=name id=id checked=chosen prop:checked=chosen
-                on:change=move |ev| {
-                    let input = event_target::<HtmlInputElement>(&ev);
-                    if !choose() {
-                        input.set_checked(chosen());
-                    }
-                } />
-            <span>{words(w, key)}</span>
-        </label>
-    }
-}
-
 /// The findings of `section`, `found`, as the list `<section>-findings` under its heading.
 fn findings_list(w: Watch, section: &'static str, found: Vec<Said>) -> impl IntoView {
     let (list, head) = (format!("{section}-findings"), format!("{section}-findings-h"));
@@ -2709,21 +2533,28 @@ fn bikes_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
             })
         };
         let (group, head) = (format!("bike-mode-{uid}"), format!("bike-mode-h-{uid}"));
-        // Refused (no phase runs it, say): the radios show the mode the model kept.
-        let radio = move |detection: bool, id: &'static str, key: &'static str| {
-            let names = (format!("bike-mode-{uid}"), format!("bike-mode-{uid}-{id}"));
-            choice_radio(w, names, key, move || on.get() == detection, move || w.set_bike_detection(uid, detection))
+        let draw = {
+            let group = group.clone();
+            move |detection| mode_option(w, &group, if detection { ("detection", "jn-bikes-mode-detection") } else { ("recall", "jn-bikes-mode-recall") })
         };
         let (named_by, described_by) = (head.clone(), status_id.clone());
         view! {
             <li>
                 <div class="bike-movement" role="group" aria-label=move || name_of(uid)>
                     <span class="bike-name">{move || name_of(uid)}</span>
-                    <div class="bike-mode" id=group role="radiogroup" aria-labelledby=named_by aria-describedby=described_by>
-                        <span class="bike-mode-h" id=head>{words(w, "jn-bikes-mode")}</span>
-                        {radio(false, "recall", "jn-bikes-mode-recall")}
-                        {radio(true, "detection", "jn-bikes-mode-detection")}
-                    </div>
+                    <span class="bike-mode-h" id=head>{words(w, "jn-bikes-mode")}</span>
+                    <RadioGroup
+                        options=Signal::derive(|| vec![false, true])
+                        chosen=Signal::derive(move || Some(on.get()))
+                        draw=draw
+                        choose=Callback::new(move |detection| {
+                            w.set_bike_detection(uid, detection);
+                        })
+                        id=group
+                        labelled_by=named_by
+                        described_by=described_by
+                        class="opts bike-mode"
+                    />
                     <p class="insp-range" id=status_id>{status}</p>
                     {rate}
                     {effect}
@@ -2878,23 +2709,36 @@ fn priority_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
             })
         };
         let (group, head) = (format!("transit-mode-{uid}"), format!("transit-mode-h-{uid}"));
-        // Refused (no transit, say): the radios show the priority the model kept.
-        let radio = move |choice: Option<Mode>, id: &'static str, key: &'static str| {
-            let names = (format!("transit-mode-{uid}"), format!("transit-mode-{uid}-{id}"));
-            choice_radio(w, names, key, move || mode.get() == choice, move || w.set_transit_priority(uid, choice))
+        let draw = {
+            let group = group.clone();
+            move |choice| {
+                let named = match choice {
+                    None => ("off", "jn-transit-mode-off"),
+                    Some(Mode::EarlyGreen) => ("early-green", "jn-transit-mode-early-green"),
+                    Some(Mode::Extension) => ("extension", "jn-transit-mode-extension"),
+                    Some(Mode::Both) => ("both", "jn-transit-mode-both"),
+                };
+                mode_option(w, &group, named)
+            }
         };
         let (named_by, described_by) = (head.clone(), status_id.clone());
         view! {
             <li>
                 <div class="transit-street" role="group" aria-label=move || tr(w, "jn-transit-group", Args::new().str("street", name_of(uid)))>
                     <span class="transit-name">{move || tr(w, "jn-transit-group", Args::new().str("street", name_of(uid)))}</span>
-                    <div class="transit-mode" id=group role="radiogroup" aria-labelledby=named_by aria-describedby=described_by>
-                        <span class="transit-mode-h" id=head>{words(w, "jn-transit-mode")}</span>
-                        {radio(None, "off", "jn-transit-mode-off")}
-                        {radio(Some(Mode::EarlyGreen), "early-green", "jn-transit-mode-early-green")}
-                        {radio(Some(Mode::Extension), "extension", "jn-transit-mode-extension")}
-                        {radio(Some(Mode::Both), "both", "jn-transit-mode-both")}
-                    </div>
+                    <span class="transit-mode-h" id=head>{words(w, "jn-transit-mode")}</span>
+                    <RadioGroup
+                        options=Signal::derive(|| vec![None, Some(Mode::EarlyGreen), Some(Mode::Extension), Some(Mode::Both)])
+                        chosen=Signal::derive(move || Some(mode.get()))
+                        draw=draw
+                        choose=Callback::new(move |choice| {
+                            w.set_transit_priority(uid, choice);
+                        })
+                        id=group
+                        labelled_by=named_by
+                        described_by=described_by
+                        class="opts transit-mode"
+                    />
                     <p class="insp-range" id=status_id>{status}</p>
                     {rate}
                     {effect}
@@ -3053,21 +2897,28 @@ fn preemption_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
             })
         };
         let (group, head) = (format!("preempt-mode-{uid}"), format!("preempt-mode-h-{uid}"));
-        // Refused (no phase of its own, say): the radios show the setting the model kept.
-        let radio = move |choice: bool, id: &'static str, key: &'static str| {
-            let names = (format!("preempt-mode-{uid}"), format!("preempt-mode-{uid}-{id}"));
-            choice_radio(w, names, key, move || on.get() == choice, move || w.set_preemption(uid, choice))
+        let draw = {
+            let group = group.clone();
+            move |choice| mode_option(w, &group, if choice { ("on", "jn-preempt-mode-on") } else { ("off", "jn-preempt-mode-off") })
         };
         let (named_by, described_by) = (head.clone(), status_id.clone());
         view! {
             <li>
                 <div class="preempt-street" role="group" aria-label=move || tr(w, "jn-preempt-group", Args::new().str("street", name_of(uid)))>
                     <span class="preempt-name">{move || tr(w, "jn-preempt-group", Args::new().str("street", name_of(uid)))}</span>
-                    <div class="preempt-mode" id=group role="radiogroup" aria-labelledby=named_by aria-describedby=described_by>
-                        <span class="preempt-mode-h" id=head>{words(w, "jn-preempt-mode")}</span>
-                        {radio(false, "off", "jn-preempt-mode-off")}
-                        {radio(true, "on", "jn-preempt-mode-on")}
-                    </div>
+                    <span class="preempt-mode-h" id=head>{words(w, "jn-preempt-mode")}</span>
+                    <RadioGroup
+                        options=Signal::derive(|| vec![false, true])
+                        chosen=Signal::derive(move || Some(on.get()))
+                        draw=draw
+                        choose=Callback::new(move |choice| {
+                            w.set_preemption(uid, choice);
+                        })
+                        id=group
+                        labelled_by=named_by
+                        described_by=described_by
+                        class="opts preempt-mode"
+                    />
                     <p class="insp-range" id=status_id>{status}</p>
                     {rate}
                     {effect}
@@ -3167,19 +3018,18 @@ fn preemption_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
     }
 }
 
-/// One setting of actuated street `uid` as a number field with steppers (the street page's and the timing's `.stepper`
-/// markup): its name as the label, the value the model holds, a step down and up (and the arrow keys) by
+/// One setting of actuated street `uid` as a number field with steppers (the street page's and the timing's): its name as the label, the value the model holds, a step down and up (and the arrow keys) by
 /// `Field::step`, and its placeholder bound under it, which the field is described by. A typed value is rounded to a
 /// whole one; one the model refuses (out of its bound, a minimum above the maximum) is said and the field shows the
 /// value kept.
 fn act_field(w: Watch, uid: u32, field: Field, settings: impl Fn() -> Option<Actuation> + Copy + Send + Sync + 'static) -> AnyView {
     let (id, range_id) = (format!("act-{}-{uid}", field.id()), format!("act-{}-range-{uid}", field.id()));
     let value = move || settings().map(|a| field.get(&a).to_string()).unwrap_or_default();
-    let step = move |dir: i32| {
+    let step = Callback::new(move |dir: i32| {
         if let Some(a) = settings() {
             w.set_actuation(uid, field, (field.get(&a) as i32).saturating_add(dir * field.step() as i32));
         }
-    };
+    });
     let set = move |v: f64| {
         if v.is_finite() && v.abs() < f64::from(i32::MAX) {
             w.set_actuation(uid, field, v.round() as i32);
@@ -3190,35 +3040,22 @@ fn act_field(w: Watch, uid: u32, field: Field, settings: impl Fn() -> Option<Act
         Field::Vehicles => ("jn-act-range-vehicles", "jn-act-unit-vehicles"),
         _ => ("jn-act-range-seconds", "jn-act-unit-seconds"),
     };
-    let stepper = move |key: &'static str| move || tr(w, key, Args::new().str("field", w.tr(field.key())).num("step", i64::from(field.step())));
+    let stepper = move |key: &'static str| Signal::derive(move || tr(w, key, Args::new().str("field", w.tr(field.key())).num("step", i64::from(field.step()))));
     let (label_for, described_by) = (id.clone(), range_id.clone());
     view! {
         <div class="act-field">
             <label for=label_for>{words(w, field.key())}</label>
-            <div class="stepper">
-                <button type="button" class="ico" id=format!("{id}-less") aria-label=stepper("jn-act-less") on:click=move |_| step(-1)>
-                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"/></svg>
-                </button>
-                <span class="wfield">
-                    <input type="text" inputmode="numeric" autocomplete="off" id=id aria-describedby=described_by value=value prop:value=value
-                        on:keydown=move |ev| {
-                            if let Some(dir) = step_key(&ev.key()) {
-                                ev.prevent_default();
-                                step(dir);
-                            }
-                        }
-                        on:change=move |ev| {
-                            let input = event_target::<HtmlInputElement>(&ev);
-                            commit_typed(&input.value(), &set);
-                            // What the field holds is the model's value, whether it took the edit or refused it.
-                            input.set_value(&value());
-                        } />
-                    <span class="unit-tag" aria-hidden="true">{words(w, unit_key)}</span>
-                </span>
-                <button type="button" class="ico" id=format!("act-{}-{uid}-more", field.id()) aria-label=stepper("jn-act-more") on:click=move |_| step(1)>
-                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>
-                </button>
-            </div>
+            <Stepper less=stepper("jn-act-less") more=stepper("jn-act-more") on_step=step less_id=format!("{id}-less") more_id=format!("{id}-more")>
+                <NumberField
+                    id=id
+                    value=Signal::derive(value)
+                    unit=Signal::derive(words(w, unit_key))
+                    commit=Callback::new(move |typed: String| commit_typed(&typed, &set))
+                    on_step=step
+                    inputmode="numeric"
+                    described_by=Signal::derive(move || Some(described_by.clone()))
+                />
+            </Stepper>
             <span class="insp-range" id=range_id>{move || tr(w, range_key, Args::new().num("min", i64::from(lo)).num("max", i64::from(hi)))}</span>
         </div>
     }

@@ -67,7 +67,7 @@ test("a new account is asked where its work is kept, with nothing chosen for it"
   await expect(page.locator("#h-storage")).toBeFocused();
   await expect(page.getByRole("radio")).toHaveCount(2);
   await expect(page.getByRole("radio", { checked: true })).toHaveCount(0);
-  await page.getByRole("radio", { name: /Store my work on the server/ }).check();
+  await page.getByRole("radio", { name: /Store my work on the server/ }).click();
   await expect(live(page)).toHaveText("Your choice is recorded: store your work on the server.");
   await expect(page.getByRole("radio", { name: /Store my work on the server/ })).toBeFocused();
   // The choice does not move from under the person.
@@ -126,10 +126,97 @@ test("a storage choice the server refuses leaves nothing chosen and focus on the
   await page.unroute("**/api/me/storage");
   await page.route("**/api/me/storage", (route) => route.fulfill({ status: 500 }));
   await page.goto("/account.html");
-  await page.getByRole("radio", { name: /Store my work on the server/ }).check({ force: true });
+  await page.getByRole("radio", { name: /Store my work on the server/ }).click();
   await expect(live(page)).toHaveText("That did not work. Try again.");
   await expect(page.getByRole("radio", { checked: true })).toHaveCount(0);
   await expect(page.locator("#h-storage")).toBeFocused();
+});
+
+// ---- the storage choices as one radio group with the editors' (CLM-48) --------------------------------------------------
+
+/** The storage choices the Tab key stops on. */
+const tabStops = (page: Page) => page.locator('[role=radio][tabindex="0"]');
+const deviceChoice = (page: Page) => page.getByRole("radio", { name: /Keep my work on this device only/ });
+const serverChoice = (page: Page) => page.getByRole("radio", { name: /Store my work on the server/ });
+
+test("with nothing chosen only the first storage choice is in the tab order, and an arrow chooses", async ({
+  page,
+}) => {
+  await serveAccount(page, { store_on_server: null, identities: [identity("a", "google", null)] });
+  const sent: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().endsWith("/api/me/storage")) sent.push(r.method());
+  });
+  await page.goto("/account.html");
+  await expect(page.locator("#h-storage")).toBeFocused();
+  await expect(tabStops(page)).toHaveCount(1);
+  await expect(tabStops(page)).toHaveAccessibleName(/Keep my work on this device only/);
+  await page.keyboard.press("Tab");
+  await expect(deviceChoice(page)).toBeFocused();
+  await expect(page.getByRole("radio", { checked: true })).toHaveCount(0);
+  await page.keyboard.press("ArrowDown");
+  await expect(serverChoice(page)).toBeFocused();
+  await expect(serverChoice(page)).toBeChecked();
+  expect(sent).toHaveLength(1);
+  // Choosing what is chosen already asks the server nothing.
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(250);
+  await expect(serverChoice(page)).toBeChecked();
+  expect(sent).toHaveLength(1);
+});
+
+test("Space chooses the storage choice that has the focus", async ({ page }) => {
+  await serveAccount(page, { store_on_server: null, identities: [identity("a", "google", null)] });
+  await page.goto("/account.html");
+  await expect(deviceChoice(page)).toHaveAttribute("tabindex", "0");
+  await deviceChoice(page).focus();
+  await page.keyboard.press("Space");
+  await expect(deviceChoice(page)).toBeChecked();
+});
+
+test("an arrow from the server to the device asks first, and Escape leaves the server chosen", async ({ page }) => {
+  await serveAccount(page, { store_on_server: true, identities: [identity("a", "google", null)] });
+  await page.goto("/account.html");
+  await expect(tabStops(page)).toHaveCount(1);
+  await expect(tabStops(page)).toHaveAccessibleName(/Store my work on the server/);
+  await serverChoice(page).focus();
+  await page.keyboard.press("ArrowUp");
+  await expect(page.locator("#stop-no")).toBeFocused();
+  await expect(serverChoice(page)).toBeChecked();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#stop-confirm")).toHaveCount(0);
+  await expect(page.locator("#h-storage")).toBeFocused();
+  await expect(serverChoice(page)).toBeChecked();
+});
+
+test("the storage choices are cards with their help line, at 280 px, in both languages", async ({ page }) => {
+  await serveAccount(page, { store_on_server: true, identities: [identity("a", "google", null)] });
+  await page.setViewportSize({ width: 280, height: 700 });
+  await page.goto("/account.html");
+  for (const lang of ["en", "fr-CA"]) {
+    await page.evaluate((l) => localStorage.setItem("cityloom-lang", l), lang);
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("lang", lang);
+    const cards = page.locator('button[role="radio"]');
+    await expect(cards).toHaveCount(2);
+    for (const card of await cards.all()) await expect(card.locator(".choice-help")).toBeVisible();
+    const bad = await cards.evaluateAll((all) =>
+      all.flatMap((card) => {
+        const css = getComputedStyle(card);
+        const sides = [css.borderTopWidth, css.borderRightWidth, css.borderBottomWidth, css.borderLeftWidth];
+        const help = card.querySelector(".choice-help")!;
+        const [c, h] = [card.getBoundingClientRect(), help.getBoundingClientRect()];
+        const within = h.left >= c.left && h.right <= c.right && h.top >= c.top && h.bottom <= c.bottom;
+        const cut = card.scrollWidth > card.clientWidth || help.scrollWidth > help.clientWidth;
+        return [
+          ...(sides.some((s) => parseFloat(s) < 1) ? [`border ${sides}`] : []),
+          ...(within && !cut ? [] : [`the help is cut: ${help.textContent}`]),
+        ];
+      }),
+    );
+    expect(bad, lang).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), lang).toBe(true);
+  }
 });
 
 test("Escape closes the deletion's confirmation and focus goes back to Delete account", async ({ page }) => {

@@ -5,6 +5,7 @@
 
 use std::rc::Rc;
 
+use cityloom_ui::Section;
 use leptos::prelude::*;
 use leptos::web_sys::HtmlInputElement;
 
@@ -51,8 +52,7 @@ pub fn StopTools(vm: Rc<StreetVm>) -> impl IntoView {
     let length_value = move || chosen(w).filter(|c| c.is_stop).map(|c| w.units().number_in(c.to_mm - c.from_mm, w.i18n().locale())).unwrap_or_default();
     view! {
         <Show when=is_stop>
-            <section class="insp-sec" aria-labelledby="h-stop-tools">
-                <h3 class="note-h" id="h-stop-tools">{move || text("st-stop-tools")}</h3>
+            <Section id="h-stop-tools" heading=Signal::derive(move || text("st-stop-tools")) labelled=true>
                 <div class="zone-tools curb-tools" role="group" aria-label=move || text("st-stop-tools")>
                     <div class="zone-tool">
                         <label for="stop-name">{move || text("st-stop-name")}</label>
@@ -106,7 +106,7 @@ pub fn StopTools(vm: Rc<StreetVm>) -> impl IntoView {
                         </button>
                     </div>
                 </div>
-            </section>
+            </Section>
         </Show>
     }
 }

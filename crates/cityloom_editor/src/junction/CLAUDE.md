@@ -36,7 +36,7 @@ Comparison (CLM-9): `compare.html` shows two designs of a junction side by side;
 - `read_model::layout` widens each entered arm to the layout's lanes (`TURBO_ENTRY_LANE_MM`, 3.5 m, placeholder) and builds the ring on the block. A widened entry past its street's property line is refused as `TurboEntryTooNarrow` (names the arm; a saved turbo with no room is dropped like one past the skew limit); a turbo fitting no block is refused as too big.
 - `RingView.lanes` / `.dividers` carry the ring to the 2.5D (dividers open, painted double white line in pieces, `shared::iso::paint`). Its sidewalks stay where the street has them.
 - `read_model::choose_turbo` is the one test both `set_turbo` and `turbo_options` use.
-- Inspector layout choice: WAI-ARIA radio group (one tab stop; pure `keys::radio_choice` / `radio_tab_stop`); re-choosing the chosen layout is a silent no-op.
+- Inspector layout choice: `cityloom_ui`'s `RadioGroup`, as every radio group of the inspector (a phase's patterns, the signal options' `.opts.call-detect`, `.act-mode`, `.bike-mode`, `.transit-mode` and `.preempt-mode`, drawn as the street's tiles, their heading before the list; CLM-48): one tab stop, the chosen option or else the first; arrows, Home and End move the focus and choose; re-choosing the chosen one, or Custom, is a silent no-op; a refused choice leaves the checked one as the model kept it. `vm::keys` gives the crate's `radio_choice` / `radio_tab_stop` under their old names.
 
 ## The 2.5D diagram (`junction/view/iso/`, #140)
 

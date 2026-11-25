@@ -678,12 +678,13 @@ dependencies = [
 
 [[package]]
 name = "cityloom_editor"
-version = "0.114.2"
+version = "0.115.0"
 dependencies = [
  "any_spawner",
  "cityloom_model",
  "cityloom_report",
  "cityloom_report_pdf",
+ "cityloom_ui",
  "fluent-bundle",
  "fluent-syntax",
  "js-sys",
@@ -765,6 +766,14 @@ dependencies = [
  "url",
  "uuid",
  "zeroize",
+]
+
+[[package]]
+name = "cityloom_ui"
+version = "0.1.0"
+dependencies = [
+ "leptos",
+ "web-sys",
 ]
 
 [[package]]

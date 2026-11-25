@@ -22,7 +22,11 @@
         "crates/cityloom_editor/src/street/view/page.rs",
         "crates/cityloom_editor/src/shared/catalogue.rs",
         "crates/cityloom_model/src/catalogue.rs",
-        "crates/cityloom_model/src/street/*.rs"
+        "crates/cityloom_model/src/street/*.rs",
+        "crates/cityloom_ui/src/keys.rs",
+        "crates/cityloom_ui/src/radio.rs",
+        "crates/cityloom_ui/src/stepper.rs",
+        "crates/cityloom_ui/src/section.rs"
       ],
       "specs": ["street", "editors"]
     },
@@ -171,7 +175,11 @@
         "crates/cityloom_editor/src/junction/model/stops.rs",
         "crates/cityloom_editor/src/junction/vm/*.rs",
         "crates/cityloom_editor/src/junction/view/*.rs",
-        "crates/cityloom_editor/src/junction/view/iso/*.rs"
+        "crates/cityloom_editor/src/junction/view/iso/*.rs",
+        "crates/cityloom_ui/src/keys.rs",
+        "crates/cityloom_ui/src/radio.rs",
+        "crates/cityloom_ui/src/stepper.rs",
+        "crates/cityloom_ui/src/section.rs"
       ],
       "specs": ["junction", "junction-a11y", "focus-touch"]
     },
@@ -427,7 +435,8 @@
       "owner": "crates/cityloom_editor/src/project",
       "code": [
         "crates/cityloom_editor/src/project/*.rs",
-        "crates/cityloom_editor/src/shared/project_id.rs"
+        "crates/cityloom_editor/src/shared/project_id.rs",
+        "crates/cityloom_ui/src/confirm.rs"
       ],
       "specs": ["home", "projects"]
     },
@@ -437,7 +446,7 @@
       "fr-CA": "Les jalons d’un projet conservent son travail à un moment donné, et se comparent au travail actuel",
       "pages": ["timeline.html"],
       "owner": "crates/cityloom_editor/src/timeline",
-      "code": ["crates/cityloom_editor/src/timeline/*.rs"],
+      "code": ["crates/cityloom_editor/src/timeline/*.rs", "crates/cityloom_ui/src/confirm.rs"],
       "specs": ["timeline"]
     },
     {
@@ -446,7 +455,7 @@
       "fr-CA": "L’aménagement d’un projet s’exporte en un seul fichier et s’importe sur un autre appareil",
       "pages": ["street.html", "account.html"],
       "owner": "crates/cityloom_editor/src/archive",
-      "code": ["crates/cityloom_editor/src/archive/*.rs"],
+      "code": ["crates/cityloom_editor/src/archive/*.rs", "crates/cityloom_ui/src/confirm.rs"],
       "specs": ["design-archive"]
     },
     {
@@ -459,7 +468,8 @@
         "crates/cityloom_editor/src/share/*.rs",
         "crates/cityloom_editor/src/project/copies.rs",
         "crates/cityloom_server/src/share.rs",
-        "crates/cityloom_server/src/db/share.rs"
+        "crates/cityloom_server/src/db/share.rs",
+        "crates/cityloom_ui/src/confirm.rs"
       ],
       "specs": ["share"]
     },
@@ -491,7 +501,10 @@
         "crates/cityloom_server/src/providers/**/*.rs",
         "crates/cityloom_server/src/session.rs",
         "crates/cityloom_server/src/crypto.rs",
-        "crates/cityloom_server/src/db.rs"
+        "crates/cityloom_server/src/db.rs",
+        "crates/cityloom_ui/src/keys.rs",
+        "crates/cityloom_ui/src/radio.rs",
+        "crates/cityloom_ui/src/confirm.rs"
       ],
       "specs": ["account", "account-server"]
     },
@@ -542,6 +555,7 @@
       "owner": "crates/cityloom_editor/src/shared",
       "code": [
         "crates/cityloom_editor/src/shared/contrast.rs",
+        "crates/cityloom_editor/src/ui_guard.rs",
         "web/app.css",
         "web/editor.css"
       ],

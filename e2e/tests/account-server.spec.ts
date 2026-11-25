@@ -52,7 +52,7 @@ test.describe("a first sign-in", () => {
 
   test("keeps the choice, and the person stays signed in after a reload", async ({ page, context, baseURL }) => {
     await newAccount(page, context, baseURL!);
-    await page.getByRole("radio", { name: /Store my work on the server/ }).check();
+    await page.getByRole("radio", { name: /Store my work on the server/ }).click();
     await expect(live(page)).toHaveText(MERGED);
     await expect(page.locator("#merge-report")).toHaveText(MERGED);
     await page.reload();
@@ -96,7 +96,7 @@ test.describe("a returning person", () => {
   }) => {
     const sub = unique();
     await newAccount(page, context, baseURL!, { sub });
-    await page.getByRole("radio", { name: /Store my work on the server/ }).check();
+    await page.getByRole("radio", { name: /Store my work on the server/ }).click();
     await expect(live(page)).toHaveText(MERGED);
     await expect(page.locator("#merge-report")).toHaveText(MERGED);
     await page.locator("#session-btn").click();

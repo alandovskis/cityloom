@@ -1,0 +1,284 @@
+//! A group of radio buttons: exactly one option is chosen, or none yet.
+
+use std::sync::Arc;
+
+use leptos::prelude::*;
+use leptos::wasm_bindgen::JsCast;
+use web_sys::{Element, HtmlElement, KeyboardEvent};
+
+use crate::icons::tick;
+use crate::keys::{Press, radio_move, radio_picks, radio_tab_stop};
+
+/// One option of a group, as it is drawn.
+pub struct RadioOption {
+    pub id: Option<String>,
+    /// Drawn before the name.
+    pub glyph: Option<AnyView>,
+    pub name: Signal<String>,
+    /// Inside the button, under the name.
+    pub help: Option<Signal<String>>,
+    /// The id and the words of a description after the button, which the button is described by.
+    pub description: Option<(String, Signal<String>)>,
+    /// Whether it can be chosen.
+    pub enabled: bool,
+}
+
+impl RadioOption {
+    /// An option that is its name alone and can be chosen.
+    pub fn new(name: Signal<String>) -> Self {
+        RadioOption { id: None, glyph: None, name, help: None, description: None, enabled: true }
+    }
+}
+
+/// Where a key pressed in a group moves: the option to focus and choose, if it is a key that moves.
+fn moved_to(e: &KeyboardEvent) -> Option<HtmlElement> {
+    let focused = e.target()?.dyn_into::<Element>().ok()?.closest("[role=radio]").ok()??;
+    let all = focused.closest("[role=radiogroup]").ok()??.query_selector_all("[role=radio]").ok()?;
+    let radios: Vec<HtmlElement> = (0..all.length()).filter_map(|i| all.item(i)?.dyn_into().ok()).collect();
+    let enabled: Vec<bool> = radios.iter().map(|r| r.get_attribute("aria-disabled").as_deref() != Some("true")).collect();
+    let at = radios.iter().position(|r| **r == focused)?;
+    let key = e.key();
+    let press = Press {
+        key: &key,
+        ctrl: e.ctrl_key(),
+        meta: e.meta_key(),
+        alt: e.alt_key(),
+        repeat: e.repeat(),
+        composing: e.is_composing(),
+        taken: e.default_prevented(),
+    };
+    radio_move(&press, &enabled, at).map(|to| radios[to].clone())
+}
+
+/// The markup of an option, the same for every group.
+fn option_view(option: RadioOption, checked: Signal<bool>, tab_stop: Signal<bool>, pick: Callback<()>) -> AnyView {
+    let RadioOption { id, glyph, name, help, description, enabled } = option;
+    let described_by = description.as_ref().map(|(id, _)| id.clone());
+    let words = match help {
+        Some(help) => view! {
+            <span class="choice-body">
+                <span class="choice-label">{move || name.get()}</span>
+                <span class="choice-help">{move || help.get()}</span>
+            </span>
+        }
+        .into_any(),
+        None => view! { <span>{move || name.get()}</span> }.into_any(),
+    };
+    view! {
+        <li role="none">
+            <button
+                type="button"
+                class="opt"
+                role="radio"
+                id=id
+                aria-checked=move || checked.get().to_string()
+                aria-disabled=(!enabled).then_some("true")
+                aria-describedby=described_by
+                tabindex=move || if tab_stop.get() { "0" } else { "-1" }
+                on:click=move |_| {
+                    if radio_picks(checked.get_untracked(), enabled) {
+                        pick.run(());
+                    }
+                }
+            >
+                {glyph}
+                {words}
+                {tick()}
+            </button>
+            {description.map(|(id, words)| view! { <span class="insp-range" id=id>{move || words.get()}</span> })}
+        </li>
+    }
+    .into_any()
+}
+
+/// A list of radio buttons, one tab stop: the chosen option, or the first when none is. The arrow keys move the focus and
+/// the choice and wrap, Home and End go to the ends.
+#[component]
+pub fn RadioGroup<K, D>(
+    options: Signal<Vec<K>>,
+    chosen: Signal<Option<K>>,
+    draw: D,
+    choose: Callback<K>,
+    #[prop(optional, into)] id: Option<String>,
+    #[prop(optional, into)] labelled_by: Option<String>,
+    #[prop(optional)] label: Option<Signal<String>>,
+    #[prop(optional, into)] described_by: Option<String>,
+    #[prop(default = "opts")] class: &'static str,
+) -> impl IntoView
+where
+    K: Clone + Eq + std::hash::Hash + Send + Sync + 'static,
+    D: Fn(K) -> RadioOption + Send + Sync + 'static,
+{
+    let options = Memo::new(move |_| options.get());
+    // Where the chosen one is among the options; none when it is not one of them.
+    let at = Memo::new(move |_| chosen.get().and_then(|c| options.with(|all| all.iter().position(|k| *k == c))));
+    let draw = Arc::new(draw);
+    let row = move |key: K| {
+        let index = {
+            let key = key.clone();
+            Memo::new(move |_| options.with(|all| all.iter().position(|k| *k == key)))
+        };
+        let checked = Signal::derive(move || index.get().is_some() && at.get() == index.get());
+        let tab_stop = Signal::derive(move || index.get().is_some_and(|i| radio_tab_stop(at.get(), i)));
+        let option = draw(key.clone());
+        option_view(option, checked, tab_stop, Callback::new(move |_| choose.run(key.clone())))
+    };
+    let on_key = move |e: KeyboardEvent| {
+        if let Some(to) = moved_to(&e) {
+            e.prevent_default();
+            let _ = to.focus();
+            to.click();
+        }
+    };
+    view! {
+        <ul
+            role="radiogroup"
+            aria-label=move || label.map(|l| l.get())
+            aria-labelledby=labelled_by
+            aria-describedby=described_by
+            id=id
+            class=class
+            on:keydown=on_key
+        >
+            <For each=move || options.get() key=|k| k.clone() children=row/>
+        </ul>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::{attr, has_class, html, said, tags, word};
+
+    fn keys() -> Signal<Vec<&'static str>> {
+        Signal::derive(|| vec!["a", "b", "c"])
+    }
+
+    fn name(key: &str) -> Signal<String> {
+        word(match key {
+            "a" => "Alpha",
+            "b" => "Beta",
+            _ => "Gamma",
+        })
+    }
+
+    /// The group labelled by `h`, with `chosen` chosen, each option as `draw` makes it.
+    fn drawn(chosen: Option<&'static str>, draw: impl Fn(&'static str) -> RadioOption + Send + Sync + 'static) -> String {
+        html(move || {
+            view! { <RadioGroup options=keys() chosen=Signal::derive(move || chosen) draw=draw choose=Callback::new(|_| {}) labelled_by="h"/> }.into_any()
+        })
+    }
+
+    fn group(chosen: Option<&'static str>) -> String {
+        drawn(chosen, |k| RadioOption::new(name(k)))
+    }
+
+    /// Attribute `name` of each button, in order.
+    fn of_buttons<'a>(h: &'a str, name: &str) -> Vec<Option<&'a str>> {
+        tags(h, "button").into_iter().map(|b| attr(b, name)).collect()
+    }
+
+    #[test]
+    fn a_group_is_a_labelled_list_of_radio_buttons_with_the_chosen_one_checked() {
+        let h = group(Some("b"));
+        let lists = tags(&h, "ul");
+        assert_eq!(lists.len(), 1, "{h}");
+        assert!(h.starts_with("<ul"), "{h}");
+        assert!(has_class(lists[0], "opts"), "{h}");
+        assert_eq!((attr(lists[0], "role"), attr(lists[0], "aria-labelledby")), (Some("radiogroup"), Some("h")), "{h}");
+        assert_eq!(h.matches(r#"<li role="none">"#).count(), 3, "{h}");
+        let buttons = tags(&h, "button");
+        assert_eq!(buttons.len(), 3, "{h}");
+        for button in buttons {
+            assert_eq!((attr(button, "type"), attr(button, "role")), (Some("button"), Some("radio")), "{button}");
+            assert!(has_class(button, "opt"), "{button}");
+        }
+        for name in ["Alpha", "Beta", "Gamma"] {
+            assert_eq!(h.matches(&format!("<span>{name}</span>")).count(), 1, "{name}: {h}");
+        }
+        assert_eq!(h.matches(r#"class="tick""#).count(), 3, "{h}");
+        assert_eq!(of_buttons(&h, "aria-checked"), [Some("false"), Some("true"), Some("false")], "{h}");
+    }
+
+    #[test]
+    fn only_the_chosen_option_is_in_the_tab_order() {
+        let h = group(Some("b"));
+        assert_eq!(of_buttons(&h, "tabindex"), [Some("-1"), Some("0"), Some("-1")], "{h}");
+    }
+
+    #[test]
+    fn with_nothing_chosen_only_the_first_option_is_in_the_tab_order() {
+        for chosen in [None, Some("not among the options")] {
+            let h = group(chosen);
+            assert_eq!(of_buttons(&h, "tabindex"), [Some("0"), Some("-1"), Some("-1")], "{chosen:?}: {h}");
+            assert_eq!(of_buttons(&h, "aria-checked"), [Some("false"); 3], "{chosen:?}: {h}");
+        }
+    }
+
+    #[test]
+    fn a_group_takes_its_id_its_label_its_description_and_its_class() {
+        let h = html(|| {
+            view! {
+                <RadioGroup
+                    options=keys()
+                    chosen=Signal::derive(|| Some("a"))
+                    draw=|k| RadioOption { id: Some(format!("opt-{k}")), ..RadioOption::new(name(k)) }
+                    choose=Callback::new(|_| {})
+                    id="g"
+                    label=word("Pattern for phase 1")
+                    described_by="d"
+                    class="opts phase-patterns"
+                />
+            }
+            .into_any()
+        });
+        let list = tags(&h, "ul")[0];
+        assert_eq!((attr(list, "id"), attr(list, "aria-describedby"), attr(list, "class")), (Some("g"), Some("d"), Some("opts phase-patterns")), "{h}");
+        assert!(list.contains(r#"role="radiogroup" aria-label="Pattern for phase 1""#), "{list}");
+        assert_eq!(attr(list, "aria-labelledby"), None, "{list}");
+        assert_eq!(of_buttons(&h, "id"), [Some("opt-a"), Some("opt-b"), Some("opt-c")], "{h}");
+        // Given none of them, it has none.
+        let h = group(Some("a"));
+        let list = tags(&h, "ul")[0];
+        assert_eq!((attr(list, "id"), attr(list, "aria-label"), attr(list, "aria-describedby")), (None, None, None), "{list}");
+        assert_eq!(of_buttons(&h, "id"), [None; 3], "{h}");
+    }
+
+    #[test]
+    fn an_option_s_help_is_in_its_button_and_its_description_after_it() {
+        let h = drawn(Some("a"), |k| match k {
+            "a" => RadioOption { help: Some(word("Nothing is sent")), ..RadioOption::new(name(k)) },
+            "b" => RadioOption { description: Some(("desc-b".into(), word("Every street at once"))), ..RadioOption::new(name(k)) },
+            _ => RadioOption::new(name(k)),
+        });
+        let items: Vec<(&str, &str)> = h.split("<li").skip(1).map(|li| li.split_once("</button>").expect("a button")).collect();
+        assert_eq!(items.len(), 3, "{h}");
+        let helped = r#"<span class="choice-body"><span class="choice-label">Alpha</span><span class="choice-help">Nothing is sent</span></span>"#;
+        assert!(items[0].0.contains(helped), "{h}");
+        assert_eq!(h.matches("choice-help").count(), 1, "only the first option has help: {h}");
+        let after = items[1].1;
+        let description = tags(after, "span").first().copied().unwrap_or_else(|| panic!("a description after the button: {h}"));
+        assert_eq!((attr(description, "id"), attr(description, "class")), (Some("desc-b"), Some("insp-range")), "{description}");
+        assert!(after.contains(&format!("{description}Every street at once</span>")), "{after}");
+        assert_eq!(of_buttons(&h, "aria-describedby"), [None, Some("desc-b"), None], "{h}");
+    }
+
+    #[test]
+    fn an_option_that_cannot_be_chosen_is_said_to_be_and_keeps_the_tab_stop_while_checked() {
+        let h = drawn(Some("a"), |k| RadioOption { enabled: k != "a", ..RadioOption::new(name(k)) });
+        assert_eq!(of_buttons(&h, "aria-disabled"), [Some("true"), None, None], "{h}");
+        assert_eq!(of_buttons(&h, "aria-checked"), [Some("true"), Some("false"), Some("false")], "{h}");
+        assert_eq!(of_buttons(&h, "tabindex"), [Some("0"), Some("-1"), Some("-1")], "{h}");
+    }
+
+    #[test]
+    fn a_radio_group_has_no_word_of_its_own() {
+        let h = drawn(Some("a"), |k| RadioOption {
+            help: (k == "a").then(|| word("")),
+            description: (k == "b").then(|| ("desc-b".into(), word(""))),
+            enabled: k != "c",
+            ..RadioOption::new(word(""))
+        });
+        assert_eq!(said(&h), "", "{h}");
+    }
+}

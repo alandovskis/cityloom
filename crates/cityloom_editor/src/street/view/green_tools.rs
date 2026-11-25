@@ -5,6 +5,7 @@
 
 use std::rc::Rc;
 
+use cityloom_ui::Section;
 use leptos::prelude::*;
 use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
 
@@ -230,8 +231,7 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
     };
     view! {
         <Show when=is_chosen>
-            <section class="insp-sec" aria-labelledby="h-green-tools">
-                <h3 class="note-h" id="h-green-tools">{move || text("st-green-tools")}</h3>
+            <Section id="h-green-tools" heading=Signal::derive(move || text("st-green-tools")) labelled=true>
                 <div class="zone-tools curb-tools" role="group" aria-label=move || text("st-green-tools")>
                     <div class="zone-tool">
                         <label for="green-kind">{move || text("st-green-kind")}</label>
@@ -290,7 +290,7 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
                         </button>
                     </div>
                 </div>
-            </section>
+            </Section>
         </Show>
     }
 }

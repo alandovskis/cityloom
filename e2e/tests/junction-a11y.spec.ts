@@ -387,6 +387,98 @@ test.describe("emergency vehicle pre-emption in the signal plan (CLM-15)", () =>
   });
 });
 
+test.describe("the signal options' radio groups (CLM-48)", () => {
+  const GROUPS = [".act-mode", ".bike-mode", ".transit-mode", ".preempt-mode", ".call-detect"];
+
+  /** Opens the plan of a junction made a traffic signal, with a group of each kind in it: a bus lane gives the first street
+   *  with a phase of its own transit, and a crossing is on call. Whatever the language. */
+  async function openSignalOptions(page: Page) {
+    await openJunction(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await page.locator('select[aria-labelledby="i-h-control"]').selectOption("3");
+    await page.locator("#jn-go-plan").click();
+    await openSignalFolds(page);
+    const uid = (await page.locator("#signal-actuation .act-mode").first().getAttribute("id"))!.replace(
+      "act-mode-",
+      "",
+    );
+    await page.locator("#jn-path-up-0").click();
+    await page.locator(`#jn-go-${uid}`).click();
+    await page.locator("#jn-fold-transit summary").click();
+    await page.locator("#jn-fold-transit .opt").first().click();
+    await page.locator("#jn-path-up-0").click();
+    await page.locator("#jn-go-plan").click();
+    await openSignalFolds(page);
+    const call = page.locator(".call-crossing input[type=checkbox]").first();
+    await call.click();
+    await expect(call).toBeChecked();
+    for (const group of GROUPS) await expect(page.locator(group).first()).toBeVisible();
+  }
+
+  test("each signal option is a radio group with one tab stop, in which the arrows, Home and End choose", async ({
+    page,
+  }) => {
+    await openSignalOptions(page);
+    for (const name of GROUPS) {
+      const group = page.locator(name).first();
+      const stop = group.locator('[role=radio][tabindex="0"]');
+      await expect(stop, name).toHaveCount(1);
+      await expect(stop, name).toBeChecked();
+      const radios = group.getByRole("radio");
+      expect(await radios.count(), name).toBeGreaterThan(1);
+      await stop.focus();
+      for (const [key, to] of [
+        ["End", radios.last()],
+        ["ArrowDown", radios.first()],
+        ["ArrowUp", radios.last()],
+        ["Home", radios.first()],
+      ] as const) {
+        await page.keyboard.press(key);
+        await expect(to, `${name}, ${key}`).toBeChecked();
+        await expect(to, `${name}, ${key}`).toBeFocused();
+        await expect(stop, `${name}, ${key}`).toHaveCount(1);
+      }
+    }
+  });
+
+  for (const lang of ["en", "fr-CA"]) {
+    test(`the signal options are tiles, each with its whole name clear of its tick, at the usual width and at 280 px (${lang})`, async ({
+      page,
+    }) => {
+      await page.addInitScript((l) => localStorage.setItem("cityloom-lang", l), lang);
+      await openSignalOptions(page);
+      for (const width of [page.viewportSize()!.width, 280]) {
+        await page.setViewportSize({ width, height: 900 });
+        for (const name of GROUPS) {
+          const tiles = page.locator(name).first().locator('button[role="radio"]');
+          expect(await tiles.count(), `${name}, ${width} px`).toBeGreaterThan(0);
+          const bad = await tiles.evaluateAll((all) =>
+            all.flatMap((t) => {
+              const css = getComputedStyle(t);
+              const sides = [css.borderTopWidth, css.borderRightWidth, css.borderBottomWidth, css.borderLeftWidth];
+              const said = t.querySelector("span")!;
+              const name = said.getBoundingClientRect();
+              const tick = t.querySelector(".tick")!.getBoundingClientRect();
+              const marked =
+                tick.left < name.right && tick.right > name.left && tick.top < name.bottom && tick.bottom > name.top;
+              const cut = t.scrollWidth > t.clientWidth;
+              return [
+                ...(sides.some((s) => parseFloat(s) < 1) ? [`${t.textContent}: border ${sides}`] : []),
+                ...(cut ? [`${t.textContent}: cut`] : []),
+                ...(marked ? [`${t.textContent}: under its tick`] : []),
+              ];
+            }),
+          );
+          expect(bad, `${name}, ${width} px`).toEqual([]);
+        }
+        await expect
+          .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+          .toBe(true);
+      }
+    });
+  }
+});
+
 test.describe("time-of-day plans in the signal plan (CLM-16)", () => {
   test("the plan shown is a labelled choice described by what it changes, each control of the plans and the schedule is named by its plan, day and time, each day's table is a region named by its caption, which plan runs is a status, and at 280 px nothing scrolls sideways", async ({
     page,

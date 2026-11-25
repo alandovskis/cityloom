@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use cityloom_ui::{Confirm, RadioGroup, RadioOption};
 use leptos::prelude::*;
 
 use crate::account::text::identity_text;
@@ -14,58 +15,44 @@ fn tr(vm: Vm, key: &'static str) -> String {
     vm.with_value(|v| v.i18n().tr(key, &Args::new()))
 }
 
-fn radio(vm: Vm, value: &'static str, store: bool, label: &'static str, help: &'static str) -> impl IntoView {
-    view! {
-        <label class="choice">
-            <input
-                type="radio"
-                name="storage"
-                value=value
-                checked=move || vm.with_value(|v| v.storage()) == Some(store)
-                prop:checked=move || vm.with_value(|v| v.storage()) == Some(store)
-                on:click=move |ev| {
-                    // Stopping server storage deletes the server copy: the radio stays where it is until confirmed.
-                    if vm.with_value(|v| v.guard_stop(store)) {
-                        ev.prevent_default();
-                    }
-                }
-                on:change=move |_| vm.with_value(|v| v.choose_storage(store))
-            />
-            <span class="choice-body">
-                <span class="choice-label">{move || tr(vm, label)}</span>
-                <span class="choice-help">{move || tr(vm, help)}</span>
-            </span>
-        </label>
-    }
-}
-
 fn storage(vm: Vm) -> impl IntoView {
+    let word = move |key: &'static str| Signal::derive(move || tr(vm, key));
+    let draw = move |store| {
+        let (label, help) =
+            if store { ("account-storage-server", "account-storage-server-help") } else { ("account-storage-device", "account-storage-device-help") };
+        RadioOption { help: Some(word(help)), ..RadioOption::new(word(label)) }
+    };
+    let choose = move |store| {
+        vm.with_value(|v| {
+            // Stopping server storage deletes the server copy: the choice stays where it is until confirmed.
+            if !v.guard_stop(store) {
+                v.choose_storage(store);
+            }
+        })
+    };
     view! {
         <section class="account-section" aria-labelledby="h-storage">
             <h2 id="h-storage" tabindex="-1">
                 {move || tr(vm, "account-storage-heading")}
             </h2>
             <p class="hint">{move || tr(vm, "account-storage-lead")}</p>
-            <div class="choices" role="radiogroup" aria-labelledby="h-storage">
-                {radio(vm, "device", false, "account-storage-device", "account-storage-device-help")}
-                {radio(vm, "server", true, "account-storage-server", "account-storage-server-help")}
-            </div>
+            <RadioGroup
+                options=Signal::derive(|| vec![false, true])
+                chosen=Signal::derive(move || vm.with_value(|v| v.storage()))
+                draw=draw
+                choose=Callback::new(choose)
+                labelled_by="h-storage"
+                class="opts choices"
+            />
             {move || {
                 vm.with_value(|v| v.confirming_stop())
                     .then(|| {
                         view! {
-                            <div
-                                role="group"
-                                aria-labelledby="h-stop"
-                                aria-describedby="stop-warning"
+                            <Confirm
+                                labelled_by="h-stop"
+                                described_by="stop-warning"
                                 id="stop-confirm"
-                                class="confirm"
-                                on:keydown=move |e| {
-                                    if e.key() == "Escape" {
-                                        e.stop_propagation();
-                                        vm.with_value(|v| v.cancel_stop());
-                                    }
-                                }
+                                on_escape=Callback::new(move |_| vm.with_value(|v| v.cancel_stop()))
                             >
                                 <h3 id="h-stop">{move || tr(vm, "account-stop-heading")}</h3>
                                 <p id="stop-warning">{move || tr(vm, "account-stop-warning")}</p>
@@ -75,7 +62,7 @@ fn storage(vm: Vm) -> impl IntoView {
                                 <button type="button" id="stop-yes" class="btn danger" on:click=move |_| vm.with_value(|v| v.confirm_stop())>
                                     {move || tr(vm, "account-stop-yes")}
                                 </button>
-                            </div>
+                            </Confirm>
                         }
                     })
             }}
@@ -170,28 +157,21 @@ fn delete(vm: Vm) -> impl IntoView {
             {move || {
                 if vm.with_value(|v| v.confirming_delete()) {
                     view! {
-                        <div
-                            role="group"
-                            aria-labelledby="h-confirm"
-                            aria-describedby="delete-warning"
+                        <Confirm
+                            labelled_by="h-confirm"
+                            described_by="delete-warning"
                             id="delete-confirm"
-                            class="confirm"
-                            on:keydown=move |e| {
-                                if e.key() == "Escape" {
-                                    e.stop_propagation();
-                                    vm.with_value(|v| v.cancel_delete());
-                                }
-                            }
+                            on_escape=Callback::new(move |_| vm.with_value(|v| v.cancel_delete()))
                         >
-                            <h3 id="h-confirm">{tr(vm, "account-delete-confirm-heading")}</h3>
-                            <p id="delete-warning">{tr(vm, "account-delete-warning")}</p>
+                            <h3 id="h-confirm">{move || tr(vm, "account-delete-confirm-heading")}</h3>
+                            <p id="delete-warning">{move || tr(vm, "account-delete-warning")}</p>
                             <button type="button" id="delete-no" class="btn" on:click=move |_| vm.with_value(|v| v.cancel_delete())>
-                                {tr(vm, "account-delete-no")}
+                                {move || tr(vm, "account-delete-no")}
                             </button>
                             <button type="button" class="btn danger" on:click=move |_| vm.with_value(|v| v.confirm_delete())>
-                                {tr(vm, "account-delete-yes")}
+                                {move || tr(vm, "account-delete-yes")}
                             </button>
-                        </div>
+                        </Confirm>
                     }
                         .into_any()
                 } else {

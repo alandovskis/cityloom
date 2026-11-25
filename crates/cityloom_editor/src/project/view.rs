@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use cityloom_ui::Confirm;
 use leptos::prelude::*;
 
 use crate::project::vm::{ProjectsVm, Row};
@@ -87,17 +88,7 @@ fn rename_form(vm: Vm, row: Row) -> impl IntoView {
 /// The question asked in a row before its project is deleted.
 fn delete_question(vm: Vm) -> impl IntoView {
     view! {
-        <div
-            role="group"
-            class="confirm"
-            aria-labelledby="project-delete-question"
-            on:keydown=move |e| {
-                if e.key() == "Escape" {
-                    e.stop_propagation();
-                    vm.with_value(|v| v.cancel_delete());
-                }
-            }
-        >
+        <Confirm labelled_by="project-delete-question" on_escape=Callback::new(move |_| vm.with_value(|v| v.cancel_delete()))>
             <p id="project-delete-question">{move || vm.with_value(|v| v.delete_question())}</p>
             // One status node for the question's life: what happens while its share links are deleted.
             <p id="project-delete-status" role="status">
@@ -147,7 +138,7 @@ fn delete_question(vm: Vm) -> impl IntoView {
                         })
                 }}
             </div>
-        </div>
+        </Confirm>
     }
 }
 

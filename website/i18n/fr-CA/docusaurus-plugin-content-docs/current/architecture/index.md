@@ -210,10 +210,12 @@ flowchart LR
     editor[cityloom_editor]
     pdf[cityloom_report_pdf]
   end
+  ui[cityloom_ui]
   report[cityloom_report]
   model[cityloom_model]
   builder[citymodel_builder]
   server[cityloom_server]
+  editor --> ui
   editor --> model
   editor --> report
   pdf --> report

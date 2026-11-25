@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use cityloom_ui::Confirm;
 use leptos::prelude::*;
 
 use crate::timeline::vm::{Comparison, Row, TimelineVm};
@@ -53,17 +54,7 @@ struct Ask {
 /// A question asked in a row before something is done: the safe button first, and Escape answers no.
 fn question(vm: Vm, ask: Ask, text: fn(&TimelineVm) -> Option<String>, no: fn(&TimelineVm), yes: fn(&TimelineVm) -> bool) -> impl IntoView {
     view! {
-        <div
-            role="group"
-            class="confirm"
-            aria-labelledby=ask.question_id
-            on:keydown=move |e| {
-                if e.key() == "Escape" {
-                    e.stop_propagation();
-                    vm.with_value(|v| no(v));
-                }
-            }
-        >
+        <Confirm labelled_by=ask.question_id on_escape=Callback::new(move |_| vm.with_value(|v| no(v)))>
             <p id=ask.question_id>{move || vm.with_value(|v| text(v))}</p>
             <div class="timeline-buttons">
                 <button type="button" id=ask.safe_id class="btn" on:click=move |_| vm.with_value(|v| no(v))>
@@ -75,7 +66,7 @@ fn question(vm: Vm, ask: Ask, text: fn(&TimelineVm) -> Option<String>, no: fn(&T
                     {move || word(vm, ask.yes_key)}
                 </button>
             </div>
-        </div>
+        </Confirm>
     }
 }
 
