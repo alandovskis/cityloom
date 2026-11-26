@@ -1,6 +1,7 @@
 ---
 id: coverage-matrix
 title: Matrice de couverture
+slug: /coverage-matrix
 ---
 
 # Matrice de couverture
@@ -10,7 +11,7 @@ case. Elle donne aussi les tests qui n’appartiennent à aucune fonctionnalité
 SonarCloud. Les nombres sont copiés de l’[inventaire des tests](test-inventory.md), qui dit comment les tests sont
 comptés et nomme leurs fichiers. Ce sont ceux du commit `0d9cb8b9` (version 0.113.0). Aucun script ne produit ni ne
 vérifie ces nombres : ils restent donc ceux de ce commit jusqu’au prochain décompte. Les lacunes des tests sont dans
-[Lacunes et risques connus](testing.md#lacunes-et-risques-connus).
+[Lacunes et risques connus](index.md#lacunes-et-risques-connus).
 
 ## Fonctionnalités et paliers
 
@@ -162,6 +163,6 @@ Les fichiers à la racine de `src/` sont ce que les dossiers laissent des lignes
 
 ## Les lacunes
 
-Une lacune est un manquement à [Où va un nouveau test](testing.md#où-va-un-nouveau-test), c’est-à-dire à une ligne de
+Une lacune est un manquement à [Où va un nouveau test](index.md#où-va-un-nouveau-test), c’est-à-dire à une ligne de
 son tableau ou à sa liste de ce que seuls les tests dans le navigateur atteignent, confirmé dans le code. Les 23
-lacunes, chacune avec son billet, sont dans [Lacunes et risques connus](testing.md#lacunes-et-risques-connus).
+lacunes, chacune avec son billet, sont dans [Lacunes et risques connus](index.md#lacunes-et-risques-connus).

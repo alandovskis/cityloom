@@ -11,11 +11,11 @@ files differ from it. Where the code has no settled way, the page states no rule
 Each rule ends with what enforces it:
 
 - **Tool**: a formatter, the compiler or a script checks it.
-- **Guard**: a test about the code checks it (see [The guards](testing.md#the-guards)); the rule names the test.
+- **Guard**: a test about the code checks it (see [The guards](testing/levels.md#the-guards)); the rule names the test.
 - **Review**: only the review of the pull request checks it.
 
 How the code is organised (slices, layers, ports) is in [Architecture](architecture/index.md). How it is tested is in
-[Testing](testing.md). The French terms and the spacing are in
+[Testing](testing/index.md). The French terms and the spacing are in
 [`docs/glossary-fr-ca.md`](https://github.com/alandovskis/cityloom/blob/main/docs/glossary-fr-ca.md). The paths of the
 editor's files are relative to `crates/cityloom_editor/src/`.
 
@@ -29,7 +29,7 @@ editor's files are relative to `crates/cityloom_editor/src/`.
 - No formatter covers the rest, such as `web/*.css`, the HTML, `scripts/`, the SQL, the `.ftl` files, and the Markdown
   outside `website/` and `e2e/`: these are laid out by hand. Example: `web/app.css` (`:root`). **Review**
 
-Clippy denies nothing: it runs only for [SonarCloud](testing.md#sonarcloud), with its lints capped at warnings.
+Clippy denies nothing: it runs only for [SonarCloud](testing/when-tests-run.md#sonarcloud), with its lints capped at warnings.
 
 ## Rust
 
@@ -130,7 +130,7 @@ rule here that says what a layer does not use is about the code outside tests.
   street's and the junction's views. Example: `project/vm.rs` (`ProjectsVm`). **Review**
 - A view-model that takes the ports is tested natively against their fakes, through `test_ports()`,
   `test_ports_with_time()` or another helper of `shared/ports.rs` (see [View-model
-  tests](testing.md#view-model-tests)). Example: `standards/tests.rs` (`setup`). **Review**
+  tests](testing/levels.md#view-model-tests)). Example: `standards/tests.rs` (`setup`). **Review**
 
 ### View
 
@@ -169,7 +169,7 @@ rule here that says what a layer does not use is about the code outside tests.
 
 ## Tests
 
-Where a new test goes is in [Testing](testing.md#where-a-new-test-goes).
+Where a new test goes is in [Testing](testing/index.md#where-a-new-test-goes).
 
 - The name of almost every Rust test is a sentence that states the behaviour; none has a `test_` prefix. Example:
   `crates/cityloom_server/src/crypto.rs` (`two_seals_of_one_value_differ`). **Review**
@@ -247,7 +247,7 @@ What belongs in JavaScript is in [Architecture](architecture/index.md#javascript
   (`every_message_id_used_in_a_migrated_file_exists_in_both_languages`). **Guard** (`i18n_guard.rs`)
 - Both languages have the same ids, with the same variables. Example: `shared/i18n.rs` (`parity_problems`). **Guard**
   (the parity test of the slice), **Review** for `timeline` and `standards`, which have no parity test (see
-  [Translation](testing.md#translation)).
+  [Translation](testing/quality-attributes.md#translation)).
 
 ## Commits and pull requests
 
@@ -263,6 +263,6 @@ What belongs in JavaScript is in [Architecture](architecture/index.md#javascript
   **Review**
 - A pull request raises the version in `crates/cityloom_editor/Cargo.toml` (major for a breaking change, minor for a
   feature, patch for a fix) and updates `Cargo.lock`, unless it changes only documentation and CI configuration (see
-  [What must pass before a merge](testing.md#what-must-pass-before-a-merge)). Example: `scripts/check-version.sh`
+  [What must pass before a merge](testing/when-tests-run.md#what-must-pass-before-a-merge)). Example: `scripts/check-version.sh`
   (`version_of`). **Tool** (presubmit's Version bump job) for raising it, **Review** for the choice of major, minor or
   patch and for `Cargo.lock`.

@@ -23,7 +23,15 @@ const sidebars: SidebarsConfig = {
     },
     "issues",
   ],
-  testingSidebar: ["testing", "test-inventory", "coverage-matrix"],
+  testingSidebar: [
+    "testing/index",
+    "testing/levels",
+    "testing/test-data",
+    "testing/quality-attributes",
+    "testing/when-tests-run",
+    "testing/test-inventory",
+    "testing/coverage-matrix",
+  ],
 };
 
 export default sidebars;
