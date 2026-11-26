@@ -201,6 +201,51 @@ mod tests {
     }
 
     #[test]
+    fn a_material_change_reaches_the_counterpart_and_leaves_its_other_fields() {
+        let before = vec![seg(1, "sidewalk", 2000), seg(2, "travel", 3500)];
+        let mut after = before.clone();
+        after[0].material = 3; // brick
+        let mut target = vec![seg(11, "sidewalk", 1800), seg(12, "travel", 3200)];
+        target[0].curb = Some(0); // granite, not the default
+        let out = replay(&before, &after, &target);
+        assert_eq!(out.section[0].material, 3);
+        assert_eq!((out.section[0].width_mm, out.section[0].curb), (1800, Some(0)));
+        assert_eq!(out.section[1], target[1]);
+        assert_eq!(out.missed, None);
+    }
+
+    #[test]
+    fn a_tram_change_reaches_the_counterpart_and_leaves_its_other_fields() {
+        let before = vec![seg(1, "sidewalk", 2000), seg(2, "bus", 3300)];
+        let mut after = before.clone();
+        after[1].tram = true;
+        let mut target = vec![seg(11, "sidewalk", 1800), seg(12, "bus", 3500)];
+        target[1].direction = Some(1);
+        let out = replay(&before, &after, &target);
+        assert!(out.section[1].tram);
+        assert_eq!((out.section[1].width_mm, out.section[1].direction), (3500, Some(1)));
+        assert_eq!(out.section[0], target[0]);
+        assert_eq!(out.missed, None);
+    }
+
+    #[test]
+    fn a_change_of_times_of_day_reaches_the_counterpart_and_leaves_its_other_fields() {
+        use super::super::Variant;
+        let bus = kind_index("bus").unwrap();
+        let before = vec![seg(1, "sidewalk", 2000), seg(2, "parking", 2400)];
+        let mut after = before.clone();
+        after[1].variants = vec![Variant { kind: bus, material: 0, direction: None, from_min: 420, to_min: 600, days: None }];
+        let mut target = vec![seg(11, "sidewalk", 1800), seg(12, "parking", 2000)];
+        target[1].material = 2;
+        target[1].variants = vec![Variant { kind: bus, material: 0, direction: None, from_min: 960, to_min: 1140, days: None }];
+        let out = replay(&before, &after, &target);
+        assert_eq!(out.section[1].variants, after[1].variants, "the target's own times of day are replaced");
+        assert_eq!((out.section[1].width_mm, out.section[1].material), (2000, 2));
+        assert_eq!(out.section[0], target[0]);
+        assert_eq!(out.missed, None);
+    }
+
+    #[test]
     fn an_added_piece_lands_beside_the_same_neighbour_with_the_same_uid() {
         let before = vec![seg(1, "sidewalk", 2000), seg(2, "travel", 3500), seg(3, "sidewalk", 2000)];
         let after = vec![seg(1, "sidewalk", 2000), seg(9, "bike", 1500), seg(2, "travel", 3500), seg(3, "sidewalk", 2000)];
@@ -327,6 +372,48 @@ mod tests {
         let target = vec![seg(11, "sidewalk", 1800), seg(12, "travel", 3200), seg(13, "parking", 2400)];
         let out = replay(&before, &after, &target);
         assert_eq!(uids(&out.section), vec![11, 12, 13, 9]);
+        assert_eq!(out.missed, None);
+    }
+
+    #[test]
+    fn an_added_first_piece_whose_right_neighbour_the_target_lacks_goes_at_the_start() {
+        let before = vec![seg(1, "bike", 1500), seg(2, "travel", 3500)];
+        let after = vec![seg(9, "planting", 1500), seg(1, "bike", 1500), seg(2, "travel", 3500)];
+        let target = vec![seg(11, "parking", 2400), seg(12, "travel", 3200)];
+        let out = replay(&before, &after, &target);
+        assert_eq!(uids(&out.section), vec![9, 11, 12]);
+        assert_eq!(out.missed, None);
+    }
+
+    #[test]
+    fn an_added_piece_with_no_counterpart_on_its_left_goes_before_the_nearest_on_its_right() {
+        let before = vec![seg(1, "bike", 1500), seg(2, "bus", 3300), seg(3, "travel", 3500), seg(4, "sidewalk", 2000)];
+        let mut after = before.clone();
+        after.insert(1, seg(9, "planting", 1500));
+        let target = vec![seg(11, "parking", 2400), seg(13, "travel", 3200), seg(14, "sidewalk", 2200)];
+        let out = replay(&before, &after, &target);
+        assert_eq!(uids(&out.section), vec![11, 9, 13, 14]);
+        assert_eq!(out.missed, None);
+    }
+
+    #[test]
+    fn an_added_piece_with_no_counterpart_on_either_side_goes_at_the_start_when_nearer_it() {
+        let before = vec![seg(1, "bike", 1500), seg(2, "bus", 3300), seg(3, "travel", 3500)];
+        let after = vec![seg(1, "bike", 1500), seg(9, "planting", 1500), seg(2, "bus", 3300), seg(3, "travel", 3500)];
+        let target = vec![seg(11, "sidewalk", 1800), seg(12, "parking", 2400)];
+        let out = replay(&before, &after, &target);
+        assert_eq!(uids(&out.section), vec![9, 11, 12]);
+        assert_eq!(out.missed, None);
+    }
+
+    #[test]
+    fn an_added_piece_with_no_counterpart_on_either_side_goes_at_the_end_when_not_nearer_the_start() {
+        // The added piece is at 2 of 4: halfway, so not nearer the start.
+        let before = vec![seg(1, "bike", 1500), seg(2, "bus", 3300), seg(3, "travel", 3500)];
+        let after = vec![seg(1, "bike", 1500), seg(2, "bus", 3300), seg(9, "planting", 1500), seg(3, "travel", 3500)];
+        let target = vec![seg(11, "sidewalk", 1800), seg(12, "parking", 2400)];
+        let out = replay(&before, &after, &target);
+        assert_eq!(uids(&out.section), vec![11, 12, 9]);
         assert_eq!(out.missed, None);
     }
 

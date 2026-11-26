@@ -2757,6 +2757,60 @@ mod tests {
     }
 
     #[test]
+    fn a_change_of_side_lays_an_untouched_streets_own_stretches_out_again() {
+        let travel = kind("travel");
+        let dirs = |segs: &[Segment]| -> Vec<Option<usize>> { segs.iter().filter(|s| s.kind == travel).map(|s| s.direction).collect() };
+        let mut base = street_of(StreetClass::Local, &["sidewalk", "travel", "travel", "sidewalk"]);
+        // The base is two-way, laid out for the right; the second stretch is one-way, which neither side's layout gives.
+        for (s, d) in base.segments.iter_mut().filter(|s| s.kind == travel).zip([1, 0]) {
+            s.direction = Some(d);
+        }
+        let mut own = base.segments.clone();
+        for s in own.iter_mut().filter(|s| s.kind == travel) {
+            s.direction = Some(0);
+        }
+        base.zones = vec![
+            Zone { from_mm: 0, segments: None, name: None, speed: Speed::Undecided },
+            Zone { from_mm: 20_000, segments: Some(own), name: None, speed: Speed::Undecided },
+        ];
+        base.length_mm = Some(40_000);
+        let s = base.settled();
+        assert!(s.zones[1].segments.is_some(), "the stretch has its own section");
+        let mut e = Editor::from_street(&s, &s, 0);
+        assert_eq!(e.states.len(), 1, "an untouched street");
+        let uk = REGIONS.iter().position(|r| r.id == "united-kingdom").unwrap();
+        assert!(e.set_region(uk));
+        let snap = e.snapshot();
+        let own = snap.zones[1].segments.as_ref().expect("the stretch keeps its own section");
+        assert_eq!(dirs(own), [Some(0), Some(1)], "laid out again for the left, not mirrored");
+        assert_eq!(dirs(&snap.segments), [Some(0), Some(1)]);
+        assert!(!e.view().can_undo);
+        assert_eq!(e.states.len(), 1, "no revision is added");
+    }
+
+    #[test]
+    fn a_change_of_side_on_an_edited_street_mirrors_the_direction_of_a_pieces_times_of_day() {
+        let travel = kind("travel");
+        let dirs = |e: &Editor| -> Vec<Option<usize>> { e.snapshot().segments.iter().filter(|s| s.kind == travel).map(|s| s.direction).collect() };
+        let mut e = Editor::new(0);
+        let parking = e.current()[1].uid;
+        assert!(e.add_variant(parking));
+        assert!(e.set_variant_direction(parking, 0, Some(1)));
+        let revs = e.view().revisions.len();
+        let lanes = dirs(&e);
+        assert_eq!(lanes.len(), 2, "two travel lanes to mirror");
+        let uk = REGIONS.iter().position(|r| r.id == "united-kingdom").unwrap();
+        assert!(e.set_region(uk));
+        assert_eq!(e.snapshot().segments[1].variants[0].direction, Some(0));
+        let flipped: Vec<Option<usize>> = lanes.iter().map(|d| d.map(|d| 1 - d)).collect();
+        assert_eq!(dirs(&e), flipped);
+        assert_eq!(e.view().revisions.len(), revs + 1);
+        assert_eq!(says(&e.view().revisions.last().unwrap().label), "Traffic keeps left");
+        assert!(e.undo());
+        assert_eq!(e.snapshot().segments[1].variants[0].direction, Some(1));
+    }
+
+    #[test]
     fn a_piece_can_take_a_different_type_at_certain_times() {
         let mut e = Editor::new(0);
         let parking = e.current()[1].uid;
