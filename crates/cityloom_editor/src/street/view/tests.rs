@@ -634,6 +634,98 @@ fn the_add_menu_offers_every_kind_of_green_greyed_where_green_cannot_go() {
 }
 
 #[test]
+fn the_add_menu_s_search_lists_its_matches_with_where_each_goes_and_why_it_is_greyed() {
+    let s = add_menu_on(&NO_BUS_LANE, "busshelter", Locale::En);
+    let h = street_html(|| add_menu::search_results(s.clone(), "ar"));
+    assert_eq!(count(&h, "id=\"add-results\""), 1, "{h}");
+    assert!(tag_of(&h, "add-results").contains("class=\"add-sub\""), "{h}");
+    // Rain garden (green), Bikeshare station (piece), Boarding island (stop, greyed: no lane a bus can stop in),
+    // Parking (piece), in topic order, each with its topic's name.
+    let found = [
+        ("green-kind-rain-garden", "Rain garden", "Greenery", "green"),
+        ("kind-bikeshare", "Bikeshare station", "Cycling", "pieces"),
+        ("stop-kind-island", "Boarding island", "Transit", "stops"),
+        ("kind-parking", "Parking", "Roadway", "pieces"),
+    ];
+    assert_eq!(count(&h, "class=\"add-item\""), found.len(), "{h}");
+    let at = |text: &str| h.find(text).unwrap_or_else(|| panic!("{text}: {h}"));
+    let mut last = 0;
+    for (_, name, topic, _) in found {
+        let b = at(&format!("<b>{name}</b>"));
+        assert!(b > last, "{name} in topic order: {h}");
+        let named = b + h[b..].find(&format!("<span class=\"add-topic-name\">{topic}</span>")).unwrap_or_else(|| panic!("{topic}: {h}"));
+        assert!(named < b + h[b..].find("</button>").unwrap(), "{name} with its topic's name, {topic}: {h}");
+        last = named;
+    }
+    // One hidden line per kind of item, after the list, in the order the kinds are first met.
+    let end = at("</ul>");
+    let mut last = end;
+    for (run, hint) in [
+        ("green", "Goes at the first free place along the street."),
+        ("pieces", "Goes after the selected piece."),
+        ("stops", "Goes into the chosen free stretch of its row."),
+    ] {
+        assert_eq!(count(&h, &format!("id=\"add-place-{run}\"")), 1, "{run}: {h}");
+        let place = tag_of(&h, &format!("add-place-{run}"));
+        assert!(place.contains(" hidden"), "{place}");
+        let p = at(&format!("id=\"add-place-{run}\""));
+        assert!(p > last, "{run} after the list, in the order first met: {h}");
+        assert!(h[p..].starts_with(&format!("id=\"add-place-{run}\" hidden>{hint}</p>")), "{run}: {h}");
+        last = p;
+    }
+    // An item the street can take points at where it goes; the greyed stop also at its reason, by its place in the list.
+    for (data, _, _, run) in found.iter().filter(|f| f.0 != "stop-kind-island") {
+        let item = tag_with(&h, &format!("data-item=\"{data}\""));
+        assert!(item.contains(&format!("aria-describedby=\"add-place-{run}\"")) && !item.contains("aria-disabled"), "{item}");
+    }
+    let island = tag_with(&h, "data-item=\"stop-kind-island\"");
+    assert!(island.contains("aria-disabled=\"true\"") && island.contains("aria-describedby=\"add-place-stops add-reason-r2\""), "{island}");
+    assert_eq!(count(&h, "aria-disabled"), 1, "{h}");
+    assert_eq!(count(&h, "class=\"add-reason\""), 1, "{h}");
+    assert!(tag_of(&h, "add-reason-r2").contains("class=\"add-reason\""), "{h}");
+    let reason = at("id=\"add-reason-r2\"");
+    assert!(h[reason..].contains(">Stops need a lane a bus can stop in on this street.</p></li>"), "the reason, inside its item: {h}");
+    assert!(at("<b>Boarding island</b>") < reason && reason < at("<b>Parking</b>"), "under the greyed item, before the next: {h}");
+    // The panel's ids are not the results'.
+    assert!(!h.contains("add-reason-stops") && !h.contains("add-hint-"), "{h}");
+}
+
+#[test]
+fn the_add_menu_s_search_of_items_the_street_can_take_greys_none() {
+    let s = add_menu_on(&PARKED, "bus", Locale::En);
+    let h = street_html(|| add_menu::search_results(s.clone(), "bike"));
+    assert_eq!(count(&h, "id=\"add-results\""), 1, "{h}");
+    assert_eq!(count(&h, "class=\"add-item\""), 3, "{h}");
+    for name in ["Bike lane", "Bike rack", "Bikeshare station"] {
+        assert!(h.contains(&format!("<b>{name}</b>")), "{name}: {h}");
+    }
+    assert_eq!(count(&h, "aria-describedby=\"add-place-pieces\""), 3, "each points only at where it goes: {h}");
+    assert_eq!(count(&h, "aria-describedby="), 3, "{h}");
+    assert!(!h.contains("aria-disabled") && !h.contains("add-reason"), "{h}");
+    assert_eq!(count(&h, "class=\"add-icon\""), 3, "a piece keeps its icon: {h}");
+    assert_eq!(count(&h, ">Cycling</span>"), 3, "{h}");
+    assert_eq!(count(&h, "id=\"add-place-pieces\""), 1, "{h}");
+    assert!(h.contains("id=\"add-place-pieces\" hidden>Goes after the selected piece.</p>"), "{h}");
+    assert!(!h.contains("add-place-stops") && !h.contains("add-place-green") && !h.contains("add-none"), "{h}");
+}
+
+#[test]
+fn the_add_menu_s_search_says_when_nothing_matches() {
+    let s = add_menu_on(&NO_BUS_LANE, "busshelter", Locale::En);
+    let h = street_html(|| add_menu::search_results(s.clone(), "zzz"));
+    assert_eq!(count(&h, "<p class=\"add-none\">Nothing matches “zzz”.</p>"), 1, "{h}");
+    assert!(!h.contains("add-results") && !h.contains("add-item") && !h.contains("add-place-"), "{h}");
+}
+
+#[test]
+fn the_add_menu_s_search_says_in_french_when_nothing_matches() {
+    let s = add_menu_on(&NO_BUS_LANE, "busshelter", Locale::FrCa);
+    let h = street_html(|| add_menu::search_results(s.clone(), "zzz"));
+    assert_eq!(count(&h, "<p class=\"add-none\">Rien ne correspond à «\u{a0}zzz\u{a0}».</p>"), 1, "{h}");
+    assert!(!h.contains("add-results") && !h.contains("add-item"), "{h}");
+}
+
+#[test]
 fn the_clock_is_hidden_until_a_piece_changes_through_the_day() {
     let s = street_shared(1);
     let h = street_html(|| view! { <page::Clock vm=s.clone()/> });
