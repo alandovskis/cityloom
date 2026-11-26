@@ -75,8 +75,9 @@ Todo ─ queue ─ triage ─ plan ─ test-writer ─ tests gate ─ review ─
 There is no red commit, no implementer and no `Factory-Red` trailer. The record `**Factory · tests** <sha>` takes the
 place of `green`, as `**Factory · docs**` does in the docs flow. Rounds: `rounds.green`.
 
-**Plan.** Its headings: `## Change`, `## Where`, `## Tests`, `## Faults`, `## Version`, `## Out of scope`. `## Faults`
-holds one fenced `json` block. The planner writes it, so the one who writes the tests does not choose what is faulted.
+**Plan.** Its headings: `## Change`, `## Where`, `## Tests`, `## Faults`, `## Version`, `## Out of scope`. It has no
+`## Slice dependencies` (the code flow's since CLM-57): test code is exempt from `dependency_guard.rs`, and this flow
+changes no product code. `## Faults` holds one fenced `json` block. The planner writes it, so the one who writes the tests does not choose what is faulted.
 
 ```json
 {
@@ -209,8 +210,9 @@ there are more faults, they are taken in turn, one from each named entry, in the
   (`cargo install cargo-mutants --version 27.1.0 --root .tools`), and the gate runs it from there. The README says so,
   and the gate's refusal gives the command. No `justfile` recipe: the `justfile` is not CI configuration
   (`CI_CONFIGURATION`), so a change to it would raise the product's version for a tool the product does not use.
-- `CLAUDE.md` (the factory's bullet), and the Testing page that names the factory's gates, in English and fr-CA
-  (`website/docs/testing.md`, or the page CLM-60 moves that part to).
+- `CLAUDE.md` (the factory's bullet), and the Testing pages that name the factory's gates and their tests, in English
+  and fr-CA: `website/docs/testing/when-tests-run.md` (the factory's gates) and `testing/levels.md` (the script tests,
+  for `test_factory_faults.py`).
 - Tests: `scripts/include/tests/test_factory_gate.py` (each rule, with fake runs) and a new `test_factory_faults.py`
   (each kind of fault on sample text, and the text put back exactly).
 
