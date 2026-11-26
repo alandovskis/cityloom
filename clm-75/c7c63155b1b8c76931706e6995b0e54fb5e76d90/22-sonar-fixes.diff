@@ -1,0 +1,37 @@
+$ git diff --stat 4bff968a..c7c63155
+ crates/citymodel_builder/src/city.rs    |   2 +-
+ crates/citymodel_builder/tests/city.rs  | 192 ++++++++++++++++++++------------
+ scripts/include/tests/test_city_docs.py |   4 +-
+ 3 files changed, 125 insertions(+), 73 deletions(-)
+
+$ git diff 4bff968a..c7c63155 -- crates/citymodel_builder/src scripts
+diff --git a/crates/citymodel_builder/src/city.rs b/crates/citymodel_builder/src/city.rs
+index 756e65dc..dd5d2e14 100644
+--- a/crates/citymodel_builder/src/city.rs
++++ b/crates/citymodel_builder/src/city.rs
+@@ -64,7 +64,7 @@ pub fn known(root: &Path) -> Vec<String> {
+     let mut ids: Vec<String> = entries
+         .filter_map(|entry| entry.ok().map(|e| e.path()))
+         .filter(|path| path.is_file() && path.extension().is_some_and(|e| e == EXTENSION))
+-        .filter_map(|path| path.file_stem().and_then(|s| s.to_str()).map(str::to_string))
++        .filter_map(|path| path.file_stem().and_then(std::ffi::OsStr::to_str).map(str::to_string))
+         .collect();
+     ids.sort();
+     ids
+diff --git a/scripts/include/tests/test_city_docs.py b/scripts/include/tests/test_city_docs.py
+index dc928052..9f1ac14e 100644
+--- a/scripts/include/tests/test_city_docs.py
++++ b/scripts/include/tests/test_city_docs.py
+@@ -84,10 +84,10 @@ def paragraph_with(text: str, word: str) -> str:
+ 
+ class CityDocs(unittest.TestCase):
+     def says(self, text: str, words: str) -> None:
+-        self.assertTrue(words in text, f"{words!r} is not said")
++        self.assertIn(words, text, f"{words!r} is not said")
+ 
+     def says_no(self, text: str, words: str) -> None:
+-        self.assertFalse(words in text, f"{words!r} is said")
++        self.assertNotIn(words, text, f"{words!r} is said")
+ 
+     def test_the_command_is_shown_with_its_city(self):
+         for path in ("README.md", "CLAUDE.md", EN + "getting-started.md", FR + "getting-started.md"):

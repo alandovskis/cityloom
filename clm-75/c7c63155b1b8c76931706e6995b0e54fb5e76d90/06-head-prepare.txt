@@ -1,0 +1,29 @@
+$ git -C /Users/alex/src/cityloom/worktrees/clm-75 rev-parse HEAD
+4bff968a56aefb5bf6ed3767a8501fc9987bdef2
+$ just prepare montreal --extract /Users/alex/src/cityloom/main/data/quebec-latest.osm.pbf
+RUNS archive montreal.citymodel 785 of 1,120 MB
+RUNS archive montreal.citymodel 897 of 1,120 MB
+RUNS archive montreal.citymodel 1,009 of 1,120 MB
+RUNS archive montreal.citymodel 1719 members, 561.5 MB
+PASS archive montreal.citymodel 1719 members, 561.5 MB 1s
+Steps: 9 passed, 9 total
+Time:  52s
+       52.91 real        86.33 user         3.59 sys
+          7283556352  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+             1052941  page reclaims
+                  57  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                 247  voluntary context switches
+               81420  involuntary context switches
+            43448570  instructions retired
+            20109406  cycles elapsed
+             3277232  peak memory footprint
+exit 0

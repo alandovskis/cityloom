@@ -1,0 +1,85 @@
+# The base ec6bb6f1, with only scripts/include/tests/test_ci_changes.py taken from the red commit f657f541:
+# no cities/montreal.toml and no cities/** rule in scripts/ci/spec-map.json.
+$ git status --short
+ M scripts/include/tests/test_ci_changes.py
+$ python3 -m unittest -v scripts.include.tests.test_ci_changes.Crates.test_a_citys_config_runs_every_crate_and_no_browser_spec
+test_a_citys_config_runs_every_crate_and_no_browser_spec (scripts.include.tests.test_ci_changes.Crates) ... FAIL
+
+======================================================================
+FAIL: test_a_citys_config_runs_every_crate_and_no_browser_spec (scripts.include.tests.test_ci_changes.Crates)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/base75/scripts/include/tests/test_ci_changes.py", line 259, in test_a_citys_config_runs_every_crate_and_no_browser_spec
+    self.assertIn("cities/montreal.toml", files, "cities/ has no config of Montréal")
+AssertionError: 'cities/montreal.toml' not found in [] : cities/ has no config of Montréal
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (failures=1)
+
+# The same base, now also with cities/montreal.toml from the red commit, but still no cities/** rule in scripts/ci/spec-map.json:
+$ git status --short
+ M scripts/include/tests/test_ci_changes.py
+?? cities/
+$ python3 -m unittest -v scripts.include.tests.test_ci_changes.Crates.test_a_citys_config_runs_every_crate_and_no_browser_spec
+test_a_citys_config_runs_every_crate_and_no_browser_spec (scripts.include.tests.test_ci_changes.Crates) ... 
+======================================================================
+FAIL: test_a_citys_config_runs_every_crate_and_no_browser_spec (scripts.include.tests.test_ci_changes.Crates) [cities/montreal.toml]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/base75/scripts/include/tests/test_ci_changes.py", line 265, in test_a_citys_config_runs_every_crate_and_no_browser_spec
+    self.assertEqual(s.specs, [])
+AssertionError: Lists differ: ['a11y', 'about', 'account', 'account-serv[408 chars]rld'] != []
+
+First list contains 41 additional elements.
+First extra element 0:
+'a11y'
+
++ []
+- ['a11y',
+-  'about',
+-  'account',
+-  'account-server',
+-  'archive',
+-  'calming',
+-  'compare',
+-  'curb',
+-  'delivery',
+-  'design-archive',
+-  'editors',
+-  'edits',
+-  'focus-touch',
+-  'footer',
+-  'green',
+-  'home',
+-  'impact',
+-  'junction',
+-  'junction-a11y',
+-  'language',
+-  'map',
+-  'network',
+-  'projects',
+-  'read-only',
+-  'report',
+-  'restrictions',
+-  'scenarios',
+-  'search',
+-  'serve',
+-  'share',
+-  'shell',
+-  'speed',
+-  'standards',
+-  'stops',
+-  'street',
+-  'street-iso',
+-  'sync',
+-  'templates',
+-  'timeline',
+-  'webgl',
+-  'world']
+
+----------------------------------------------------------------------
+Ran 1 test in 0.007s
+
+FAILED (failures=1)

@@ -1,0 +1,15 @@
+/Users/alex/src/cityloom/worktrees/clm-75-base/data:
+total 1096632
+drwxr-xr-x@  5 alex  staff        160 Nov 25 22:35 .
+drwxr-xr-x@ 30 alex  staff        960 Nov 25 22:34 ..
+drwxr-xr-x@  6 alex  staff        192 Nov 25 22:34 logs
+drwxr-xr-x@  7 alex  staff        224 Nov 25 22:34 metro-work
+-rw-r--r--@  1 alex  staff  561473024 Nov 25 22:35 montreal.citymodel
+
+/Users/alex/src/cityloom/worktrees/clm-75/data:
+total 1096632
+drwxr-xr-x@  5 alex  staff        160 Nov 25 22:36 .
+drwxr-xr-x@ 33 alex  staff       1056 Nov 25 22:26 ..
+drwxr-xr-x@  6 alex  staff        192 Nov 25 22:35 logs
+drwxr-xr-x@  3 alex  staff         96 Nov 25 22:35 metro-work
+-rw-r--r--@  1 alex  staff  561473024 Nov 25 22:36 montreal.citymodel

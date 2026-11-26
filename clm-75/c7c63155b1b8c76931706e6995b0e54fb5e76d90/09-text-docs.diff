@@ -1,0 +1,136 @@
+diff --git a/.env.example b/.env.example
+index 39b1fb31..b5013465 100644
+--- a/.env.example
++++ b/.env.example
+@@ -34,7 +34,7 @@ APPLE_PRIVATE_KEY=
+ # The static server (as before): E2E_HOST (default 127.0.0.1), E2E_PORT or PORT (default 8137), WEB_ROOT (default web),
+ # CACHE_CONTROL (default no-store).
+ 
+-# An area archive (`just pack` makes data/montreal.citymodel): CITYLOOM_AREAS is a folder with exactly one .citymodel file,
++# An area archive (`just pack montreal` makes data/montreal.citymodel): CITYLOOM_AREAS is a folder with exactly one .citymodel file,
+ # DATA_ROOT a folder the server's user can write, where it is unpacked at start-up (a bad archive stops the server).
+ # /data/metro/ is then served from DATA_ROOT/<area>/ instead of WEB_ROOT/data/. Neither set: as before.
+ # CITYLOOM_AREAS=
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 27e3cf53..306d27ba 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -2,7 +2,7 @@
+ 
+ CityLoom is a street, junction and city-map editor in Rust, compiled to WebAssembly and drawn with Leptos 0.8 (client-side rendering). Pages: `web/index.html` (home: the person's projects), `web/about.html` (About CityLoom, with the city of the project opened last behind it), `web/map.html`, `web/street.html`, `web/intersection.html` (and `web/account.html`, `web/credits.html`, `web/timeline.html`, a project's milestones, `web/share.html`, a project's share links or a share link being opened, and `web/compare.html`, two designs (the baseline or a scenario) of one street or junction side by side, with what differs in the second; read-only, opened by the Compare link of a street's or junction's scenario panel). Every page's top bar links Projects (`index.html`) and About (`about.html`), the page's own `aria-current="page"`, and the logo goes to `index.html`; there is no Map link: a map is opened from its project. Streets come from OpenStreetMap; the catalogue's rules, rates and thresholds are synthetic placeholders.
+ 
+-Layout: every crate lives in `crates/` (`cityloom_editor`, the wasm editor, whose `src/` the paths below name as `src/…`; `cityloom_ui`, the controls its pages share, with no wording: `RadioGroup`, `Stepper` and `NumberField`, `Section`, `Confirm`, each word a signal of the caller's, the keys' decisions in `keys.rs`; `cityloom_model`, the street network the importer makes and the street as the city keeps it, `cityloom_report`, `cityloom_report_pdf`, `cityloom_server`, `citymodel_builder`, which also holds the OpenStreetMap importer); the root `Cargo.toml` is only the workspace. The product's `version` is in `crates/cityloom_editor/Cargo.toml`. `web/`, `e2e/`, `scripts/`, `website/` and `data/` stay at the root. Other paths below that start with a crate name (`cityloom_server/…`, `citymodel_builder/…`) are inside `crates/`.
++Layout: every crate lives in `crates/` (`cityloom_editor`, the wasm editor, whose `src/` the paths below name as `src/…`; `cityloom_ui`, the controls its pages share, with no wording: `RadioGroup`, `Stepper` and `NumberField`, `Section`, `Confirm`, each word a signal of the caller's, the keys' decisions in `keys.rs`; `cityloom_model`, the street network the importer makes and the street as the city keeps it, `cityloom_report`, `cityloom_report_pdf`, `cityloom_server`, `citymodel_builder`, which also holds the OpenStreetMap importer); the root `Cargo.toml` is only the workspace. The product's `version` is in `crates/cityloom_editor/Cargo.toml`. `web/`, `e2e/`, `scripts/`, `website/`, `data/` and `cities/` (a city's config for `just prepare`, `cities/<id>.toml`) stay at the root. Other paths below that start with a crate name (`cityloom_server/…`, `citymodel_builder/…`) are inside `crates/`.
+ 
+ ## Commands
+ 
+@@ -14,16 +14,17 @@ just db              # throwaway Postgres in Docker (127.0.0.1:55432), prints th
+ cargo test shell::vm # one module; a full test name also works
+ just check-no-fake   # release server must hold no fake provider (both CI workflows' server-release job)
+ just build           # release wasm + wasm-bindgen into web/pkg (gitignored)
+-just prepare         # downloads Geofabrik's Quebec extract (~1.2 GB) into data/, makes the network tiles in web/data/metro (osmium-tool keeps the roads, the importer reads
+-                     # them once, the network is cut into JSON tiles), packs them into data/montreal.citymodel; all gitignored; args pass through (--refresh). A place no tile holds is "not covered": without tiles no place opens
+-just pack            # citymodel_builder pack only; `cargo run -p citymodel_builder --release -- tiles|pack` runs one step (`fixture` and `import` turn one OSM file into a tile or a network)
++just prepare montreal # the city of cities/montreal.toml: downloads its extract (Geofabrik's Quebec, ~1.2 GB) into data/, makes the network tiles in web/data/metro (osmium-tool keeps the roads,
++                     # the importer reads them once, the network is cut along the city's grid into JSON tiles), packs them into data/montreal.citymodel; all gitignored; --refresh, --extract <path>.
++                     # No city lists the cities. A city is one file, cities/<id>.toml. A place no tile holds is "not covered": without tiles no place opens
++just pack montreal   # citymodel_builder pack only; `cargo run -p citymodel_builder --release -- tiles|pack <city>` runs one step (`fixture` and `import` turn one OSM file into a tile or a network)
+ just e2e-fixtures    # imports e2e/fixtures/*.osm.pbf into e2e/fixtures/generated/*.json (gitignored); the browser recipes run it first
+ just test-scripts    # scripts/include/tests (the issue system's consistency test, the CI selector's, the factory's, the Architecture pages' and the feature list's); CI's Script tests job runs it
+ just e2e-ui          # UI tier of the browser tests (e2e/tiers.json): one page, network stubbed, static server only; no database, no archive; builds first
+ just e2e-integration # integration tier: the real server and a Postgres (needs DATABASE_URL): account-server, share and sync specs; builds first
+ just e2e-archive     # E2E tier: packs the e2e fixtures into target/e2e-archive and runs archive, delivery and serve specs, and the map and street specs again, against a fresh server that unpacks it (E2E_ARCHIVE=1); builds first; E2E_PORT moves the port
+ just e2e             # builds wasm and server, then the three tiers; with arguments only those specs (`just e2e tests/street.spec.ts`), whatever their tier; the integration tier needs DATABASE_URL
+-just deploy          # build and upload to Railway (needs the CLI logged in, `just prepare` tiles, zig; musl build; refuses a fake-provider server)
++just deploy          # build and upload to Railway (needs the CLI logged in, `just prepare montreal` tiles, zig; musl build; refuses a fake-provider server)
+ just check           # everything
+ just format          # rustfmt + Prettier; `just format-check` only checks, as CI does
+ just serve           # server on http://127.0.0.1:8137/ (E2E_PORT moves it); without DATABASE_URL the account side answers 503
+diff --git a/README.md b/README.md
+index a158eaa9..ae934f4d 100644
+--- a/README.md
++++ b/README.md
+@@ -46,14 +46,25 @@ Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first;
+ 
+ ## The Montréal data
+ 
+-One command makes the road tiles below. It first downloads Geofabrik's Quebec extract (about 1.2 GB) into `data/` unless it is there already; `just prepare --refresh` downloads a newer one, and an interrupted download carries on where it stopped when run again:
++One command makes the road tiles below, from the city's config, `cities/montreal.toml`. It first downloads the city's OpenStreetMap extract (Geofabrik's Quebec extract, about 1.2 GB) into `data/` unless it is there already; `just prepare montreal --refresh` downloads a newer one, `just prepare montreal --extract <path>` reads another file instead, and an interrupted download carries on where it stopped when run again:
+ 
+ ```sh
+ brew install osmium-tool   # osmium keeps the roads the tiles are made of
+-just prepare
++just prepare montreal
+ ```
+ 
+-It also imports them and cuts the network into tiles, and packs the tiles into one archive, `data/montreal.citymodel` (a tar with a SHA-256 index); `just pack` packs them again without running the rest.
++It also imports them and cuts the network into tiles, and packs the tiles into one archive, `data/montreal.citymodel` (a tar with a SHA-256 index); `just pack montreal` packs them again without running the rest. `just prepare` with no city, or with one that has no file, lists the cities there are and stops before downloading anything.
++
++### Add a city
++
++A city is one file, `cities/<id>.toml`, checked in; no Rust changes. `just prepare <id>` reads it; `cities/montreal.toml` is an example. Its keys:
++
++- `id`: the file's name, which is also the archive's area name: 1 to 64 lower-case letters, digits and hyphens.
++- `extract_url`: the `http://` or `https://` address of the city's OpenStreetMap extract. Its last part, a plain file name ending in `.osm.pbf`, is the extract's name in `data/`. Two cities share an extract only by giving the same address.
++- `[grid]`: the tiles, in degrees. `west` and `south` are the south-west corner of tile `0_0`; `tile_width` and `tile_height` the size of a tile's core; `columns` and `rows` the number of tiles, west to east and south to north. The grid must lie on the earth and hold at least one tile.
++- `[margin]`: how far a tile reaches past its core, in degrees, `lon` and `lat`. Each must be at least the 400 m an area reaches from its centre, measured at the grid's edge nearest a pole.
++
++Each city keeps its own extract, its own work folder, `data/metro-work/<id>`, and its own archive, `data/<id>.citymodel`; `web/data/metro` holds the tiles of the city prepared last. A file that misses a key, has one it does not know or fails a check is refused before anything is downloaded, with the file and the key named. The builder's test `every_city_file_loads` (`cargo test -p citymodel_builder --test city`) loads every file of `cities/`.
+ 
+ ## Montréal metro tiles
+ 
+diff --git a/crates/cityloom_editor/src/place/CLAUDE.md b/crates/cityloom_editor/src/place/CLAUDE.md
+index ab994e92..0772e2e7 100644
+--- a/crates/cityloom_editor/src/place/CLAUDE.md
++++ b/crates/cityloom_editor/src/place/CLAUDE.md
+@@ -2,6 +2,6 @@
+ 
+ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide rules.
+ 
+-- `area.rs` (`Area`, kept under its position; the catalogue of metropolitan areas: `Metro { id, name (a `Said`, `place-metro-<id>` in `place/i18n`), the box it covers, start }`, `metros()` (default first), `default_metro()`, `metro(id)`, `metro_of(area)` (the one holding the area's centre), `Metro::start()` (the place a new project's map opens on: the editor opens one place about 800 m across, `HALF_M`, never a whole region); Montréal (`MONTREAL`, `"montreal"`) is the only entry, starting on the Plateau; `default_area()` = the default metro's start; `is_montreal` = held by Montréal's box. A second metropolitan area is an entry, its name in both `.ftl` files, and its tiles in the tile index (whose grid is Montréal's: tile names are non-negative `x_y` from `lon0`/`lat0`, and the builder's `tiles` makes Montréal's grid only)), `tiles.rs` (the metro tile index and the tiles that hold a place), `loader.rs` (`Loader`: fetch, merge, cut, keep roads, via ports), `prepare_city` export (the page's project's area, else the default).
++- `area.rs` (`Area`, kept under its position; the catalogue of metropolitan areas: `Metro { id, name (a `Said`, `place-metro-<id>` in `place/i18n`), the box it covers, start }`, `metros()` (default first), `default_metro()`, `metro(id)`, `metro_of(area)` (the one holding the area's centre), `Metro::start()` (the place a new project's map opens on: the editor opens one place about 800 m across, `HALF_M`, never a whole region); Montréal (`MONTREAL`, `"montreal"`) is the only entry, starting on the Plateau; `default_area()` = the default metro's start; `is_montreal` = held by Montréal's box. A second metropolitan area is an entry, its name in both `.ftl` files, and its tiles in the tile index (whose grid is Montréal's: tile names are non-negative `x_y` from `lon0`/`lat0`, and the builder makes one city's grid at a time, from its `cities/<id>.toml`; the tiles served are Montréal's)), `tiles.rs` (the metro tile index and the tiles that hold a place), `loader.rs` (`Loader`: fetch, merge, cut, keep roads, via ports), `prepare_city` export (the page's project's area, else the default).
+ - No place search: a project's metropolitan area is chosen in the create form (`project::vm`, from `metros()`) and fixed then; nothing chooses a place (`CityStore::choose` has no UI caller). The pages open the area of their project: `CityStore::current_area` reads the area the project's record names (`project::context::area_of`); only where there is no such record (root storage, a project not listed, a placeholder, an area that does not parse) the project's `cityloom-area@<id>`, else the default area.
+ - `Loader::load` reads roads from the metro network tiles only: it fetches `data/metro/index.json`, then the tile whose core holds the place's centre and any other listed tile the place's box reaches, merges them by id (`Network::absorb`), cuts the place out (`Network::clip_to` into `area.bounds().frame()`) and keeps it with the tile's checksum plus `cityloom_model::IMPORTER_VERSION`. There is no Overpass and no importer in the browser: a place no tile holds is not covered (`place-not-covered`, nothing kept); roads already kept stand when the index or a tile cannot be had.
+diff --git a/crates/citymodel_builder/CLAUDE.md b/crates/citymodel_builder/CLAUDE.md
+index 8676d23a..d5f7d182 100644
+--- a/crates/citymodel_builder/CLAUDE.md
++++ b/crates/citymodel_builder/CLAUDE.md
+@@ -3,13 +3,15 @@
+ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide rules.
+ 
+ - Prepares an area's data, defines the `.citymodel` archive and holds the OpenStreetMap importer (`importer`, the former `osm_import` crate). Workspace crate, not built to wasm (the wasm build excludes it and `cityloom_server`).
+-- Library `archive` + `metro_index`, deps only `tar`, `sha2`, `thiserror`; the server uses it with default features off. Feature `import` adds the importer (`importer`: osm2streets and its git dependencies, `cityloom_model`); feature `cli` (default) turns on `import` and adds `ureq`, `clap`, `serde_json`, `ctrlc` for the binary. `network_tiles` is gated on `cli`, not `import`, because it needs `serde_json` and `sha2` beside the importer's types.
++- Library `archive` + `metro_index`, deps only `tar`, `sha2`, `thiserror`; the server uses it with default features off. Feature `import` adds the importer (`importer`: osm2streets and its git dependencies, `cityloom_model`); feature `cli` (default) turns on `import` and adds `ureq`, `clap`, `serde_json`, `ctrlc`, and `toml` and `serde` for the cities' configs, for the binary. `network_tiles` is gated on `cli`, not `import`, because it needs `serde_json` and `sha2` beside the importer's types.
+ - **Archive**: plain ustar tar, deterministic (mtime 0, owner 0, mode 0644, fixed member order): `cityloom.idx` first, then `networks/<x>_<y>.json` (a `NetworkTile`; unpacked as `metro/<x>_<y>.json`).
+ - **Index**: binary; magic `CLOOMIDX`, version 2 (a version 1 archive, of OSM PBF road tiles, is refused), flags 0. Header (area name, creation time, source name + replication time, grid `lon0`, `lat0`, `dlon`, `dlat` as in `index.json` plus `nx`, `ny`), entries (kind network, `x`, `y`, size, SHA-256, path), SHA-256 trailer over all before it. Max 1 MiB; area name lower-case letters, digits, hyphens, max 64.
+ - `metro_index` is the one writer of `index.json` (`index_json`), for `tiles` and the server's unpack, so bytes match and keep the shape the app reads (`place/tiles.rs`). Checksums: first 16 hex digits of an entry's SHA-256 (`short_checksum`). `nx`/`ny` are in the archive, not `index.json`.
+-- Binary modules: `progress` (see `just prepare`: pure frame function, ANSI renderer, plain mode, logs and tails, Ctrl-C restores cursor), `download` (resumable), `tiles` (grid and the pipeline's steps), `network_tiles` (cuts the whole network along the grid, writes the JSON tiles), `prepare` (extract, tiles, archive), `commands` (`clap`).
+-- osmium stays external. Commands: `prepare`, `tiles` (`--out` names the tiles' folder), `pack`, `fixture <in.osm|pbf> <out.json>` (one `NetworkTile` of the input's own frame: the e2e fixtures, `just e2e-fixtures`) and `import <in.osm|pbf> <out.json>` (the whole `Network` as JSON, to look at). No `--batch`.
+-- The `tiles` steps: osmium filters (`area`, `highways`, `tracks`, `merge`), `import` (one import of the whole area's filtered roads; several GB of memory), `tiles` (cut into the 51x34 grid, a tile being its core widened by 0.5 km, written `web/data/metro/<x>_<y>.json`, empty ones skipped) and `index` (`index.json` with checksums, names sorted as text). Measured on the real Montréal data (a developer Mac): import, tiles and pack take about 53 s with 7.3 GB peak memory; 1,718 tiles, about 570 MB of JSON (largest 3.06 MB), archive 571.5 MB.
++- Binary modules: `progress` (see `just prepare`: pure frame function, ANSI renderer, plain mode, logs and tails, Ctrl-C restores cursor), `download` (resumable), `city` (a city's config, below), `tiles` (the grid, the margin, their checks and the pipeline's steps), `network_tiles` (cuts the whole network along the grid, writes the JSON tiles), `prepare` (extract, tiles, archive), `commands` (`clap`).
++- **Cities**: the source names no city (`tests/city.rs` fails on one). Each city is one file, `cities/<id>.toml`: `id` (the file's name and the archive's area name), `extract_url`, `[grid]` (`west`, `south`, `tile_width`, `tile_height`, `columns`, `rows`) and `[margin]` (`lon`, `lat`). `city::load` reads one of `city::known` (the files' names; an id is compared with them, never made a path), refuses a missing or unknown field, an id the archive refuses or that is not the file's name, a URL whose last part is not a plain `.osm.pbf` name, another city's file giving the same extract name from another URL, and what `tiles::check` refuses (a number not finite, an empty grid, a grid off the earth, a margin under `AREA_REACH_M`, 400 m, at the grid's most poleward edge); each error starts with the file's path and names the field. A city's extract is `data/<extract name>`, its work folder `data/metro-work/<id>`, its archive `data/<id>.citymodel`. `just prepare montreal` prepares Montréal; every file of `cities/` is loaded by a test.
++- **Constraint**: everything that turns a config's numbers into tiles stays in `src/tiles.rs` (`CityGrid`, `Margin`, `check`, `metro_bounds`, `steps`, `index`) and `src/network_tiles.rs` (`rect`, `cut`), which the deploy's cache key hashes; `city.rs`, `prepare.rs` and `commands.rs` compute, default or rename no number, only pass those types on. `metro_bounds` and `rect` keep their order of operations, so the same config makes the same bytes.
++- osmium stays external. Commands: `prepare <city>` (`--extract <path>` reads another extract, `--refresh` downloads a newer one; no city lists the cities), `tiles <city> [workdir]` (`--extract`; `--out` names the tiles' folder), `pack [<city>]` (the city's area, archive, tiles and extract name unless given; refuses tiles of another grid; without a city, `--area`, `--out`, `--metro` and `--source` are all needed, as `scripts/e2e-archive.sh` gives them), `fixture <in.osm|pbf> <out.json>` (one `NetworkTile` of the input's own frame: the e2e fixtures, `just e2e-fixtures`) and `import <in.osm|pbf> <out.json>` (the whole `Network` as JSON, to look at). No `--batch`.
++- The `tiles` steps: osmium filters (`area`, `highways`, `tracks`, `merge`), `import` (one import of the whole area's filtered roads; several GB of memory), `tiles` (cut along the city's grid, Montréal's 51x34, a tile being its core widened by the margin, Montréal's 0.5 km, written `web/data/metro/<x>_<y>.json`, empty ones skipped) and `index` (`index.json` with checksums, names sorted as text). Measured on the real Montréal data (a developer Mac): import, tiles and pack take about 53 s with 7.3 GB peak memory; 1,718 tiles, about 570 MB of JSON (largest 3.06 MB), archive 571.5 MB.
+ - `importer`: `import` (an OSM file to a `Network`), `import_whole` (also its frame), `import_in` (limited to a box; the tests' reference), `merge.rs` (dual carriageways) and `blocks.rs`. `read_network` runs `convert`, then the carriageways, then `blocks::merge_blocks`, then lays out the lanes and derives the corridors. `blocks.rs` makes the pieces of one block one road, each piece a zone: it merges at a node where exactly two of osm2streets' roads meet (unnamed ones count, so an alley keeps the node), that is not signalled and whose OSM nodes are not tagged `highway=stop|give_way|traffic_signals` (`through_nodes` in `mod.rs`, less any node the carriageway merge folded another into, which `merge_dual_carriageways` returns; osm2streets' kind and its default `Signed` are not used), where two road ends of the network meet, of the same name and type. A ring, or a run whose two ends are one node, is left alone. It raised `IMPORTER_VERSION` to 11. Its tests are one crate, `tests/importer/` (`real_city.rs` follows edits across shifted boxes; `clip_agrees.rs` measures the cut against a clipped import). `cityloom_model::IMPORTER_VERSION` is raised whenever the importer's output changes for the same data.
+ - Signals (`IMPORTER_VERSION` 12, CLM-31): osm2streets puts signals tagged on a way's approach (Montréal's usual mapping) on the next node it splits the way at; where that is only a split of the way (two roads of one street, the same name and type, as `blocks.rs` joins them; the node not tagged signals nor a signalled crossing), `carry_signals_past_splits` in `mod.rs` moves them on to the first node of three or more roads within `SIGNAL_CARRY_M` (40 m), before osm2streets' transformations drop the split with them. Only signals one road alone faces are carried (signals facing a split from both sides stop traffic at it, as at a crossing); the walk stops at a split with signals of its own, at one that only the road it arrives by faces with signals, and at one osm2streets signalled without placing a stop line, and walks through a split faced from both sides or only from the far side. Known limit: osm2streets also marks a `Signal` stop line for any crossing node in a road's first or last 30%, so a crosswalk there counts as facing signals. `fold_nodes` in `merge.rs` keeps `Signals` when either node of a divided road's junction has it (osm2streets calls every other OSM node `Signed`, never none). Signals mapped only on cycleways and paths are not read: the importer keeps those ways out of osm2streets.
+-- CI's deploy job caches `web/data/metro` under a key hashing `src/tiles.rs`, `src/metro_index.rs`, `src/network_tiles.rs`, `src/importer/**` and `cityloom_model/src/**` but not its `street/**` and `catalogue.rs` (the street as the editor keeps it; the importer uses neither); a change to any of them makes the tiles again. A change under `crates/citymodel_builder/**` runs every browser spec.
++- CI's deploy job runs `just prepare montreal` and caches `web/data/metro` under a key hashing `cities/montreal.toml`, `src/tiles.rs`, `src/metro_index.rs`, `src/network_tiles.rs`, `src/importer/**` and `cityloom_model/src/**` but not its `street/**` and `catalogue.rs` (the street as the editor keeps it; the importer uses neither); a change to any of them makes the tiles again. A change under `crates/citymodel_builder/**` runs every browser spec.
+diff --git a/justfile b/justfile
+index 9efbcef1..e0b6cff3 100644
+--- a/justfile
++++ b/justfile
+@@ -130,11 +130,11 @@ sonar-reports:
+     cargo llvm-cov --workspace --exclude cityloom_server --lcov --output-path target/sonar/lcov.info
+     cargo clippy --workspace --message-format=json -- --cap-lints warn > target/sonar/clippy.json
+ 
+-# Make the Montréal metropolitan area's data: download Geofabrik's Quebec extract into data/ if it is not there, keep its roads (needs osmium-tool), import them once into the whole area's network, cut that into network tiles (`<x>_<y>.json`) in web/data/metro and pack them into data/montreal.citymodel. `just prepare --refresh` downloads a newer extract. Runs `citymodel_builder prepare`; arguments go to it.
++# Make a city's data, as its config cities/<city>.toml says (`just prepare montreal`; without a city, the known ones are listed): download its extract into data/ if it is not there, keep its roads (needs osmium-tool), import them once into the whole area's network, cut that along the city's grid into network tiles (`<x>_<y>.json`) in web/data/metro and pack them into data/<city>.citymodel. `--refresh` downloads a newer extract; `--extract <path>` reads another file instead. Runs `citymodel_builder prepare`; arguments go to it.
+ prepare *args:
+     cargo run --release -q -p citymodel_builder -- prepare {{args}}
+ 
+-# Pack the network tiles of web/data/metro into data/montreal.citymodel (`just prepare` does it as its last step): one tar with a SHA-256 index that the server unpacks at start-up (CITYLOOM_AREAS). Arguments go to `citymodel_builder pack`.
++# Pack a city's network tiles of web/data/metro into data/<city>.citymodel (`just pack montreal`; `just prepare` does it as its last step): one tar with a SHA-256 index that the server unpacks at start-up (CITYLOOM_AREAS). Tiles of another grid than the city's are refused. Arguments go to `citymodel_builder pack`; without a city it needs --area, --out, --metro and --source.
+ pack *args:
+     cargo run --release -q -p citymodel_builder -- pack {{args}}
+ 

@@ -1,0 +1,49 @@
+# product_code's output, recorded by the test-writer with a temporary test (never committed) before and after the refactor of ddf5523b:
+# every .rs file of crates/citymodel_builder/src at HEAD (20 files, sorted) and 17 edge inputs.
+$ cmp before.txt after.txt && echo identical
+identical
+$ shasum -a 256 before.txt after.txt
+e69afab9978b0a253746b2218cd7eb9e0fc4d1010fd7f94b652a593bace3b373  before.txt
+e69afab9978b0a253746b2218cd7eb9e0fc4d1010fd7f94b652a593bace3b373  after.txt
+$ wc -c before.txt
+  123596
+$ grep -c "^=== " before.txt   # the sections, one per input
+37
+$ grep "^=== " before.txt
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/archive/index.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/archive/mod.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/archive/pack.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/archive/unpack.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/city.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/commands.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/download.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/importer/blocks.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/importer/merge.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/importer/mod.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/lib.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/main.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/metro_index.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/network_tiles.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/prepare.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/progress/frame.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/progress/mod.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/progress/testing.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/progress/view.rs
+=== /Users/alex/src/cityloom/worktrees/clm-75/crates/citymodel_builder/src/tiles.rs
+=== edge ""
+=== edge "/"
+=== edge "/*"
+=== edge "/* a"
+=== edge "r"
+=== edge "r\""
+=== edge "br#\"x"
+=== edge "'"
+=== edge "'\\"
+=== edge "\""
+=== edge "\"\\"
+=== edge "#[cfg(test)]"
+=== edge "#[cfg(test)] fn a() {"
+=== edge "x'a'y"
+=== edge "a/*b/*c*/d*/e"
+=== edge "r#\"a\"#b"
+=== edge "#[cfg(test)]\nmod t { fn x() {} }\nfn y(){}"

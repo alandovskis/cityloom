@@ -1,0 +1,4 @@
+$ git status --short   # in the worktree, after the refusals of step 4
+(clean: nothing changed or left behind)
+$ git rev-parse HEAD
+c7c63155b1b8c76931706e6995b0e54fb5e76d90

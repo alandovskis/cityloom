@@ -1,0 +1,450 @@
+$ python3 -m unittest -v scripts/include/tests/test_city_docs.py scripts/include/tests/test_ci_changes.py   # at the red commit f657f541
+test_add_a_city_names_the_file_and_every_key (scripts.include.tests.test_city_docs.CityDocs) ... test_montreals_command_is_named (scripts.include.tests.test_city_docs.CityDocs) ... test_no_page_runs_prepare_without_a_city (scripts.include.tests.test_city_docs.CityDocs) ... test_the_builder_notes_describe_the_config (scripts.include.tests.test_city_docs.CityDocs) ... test_the_command_is_shown_with_its_city (scripts.include.tests.test_city_docs.CityDocs) ... test_the_extract_option_is_described (scripts.include.tests.test_city_docs.CityDocs) ... test_the_layout_pages_name_the_cities_folder (scripts.include.tests.test_city_docs.CityDocs) ... test_the_recipe_comments_say_the_city_and_the_options (scripts.include.tests.test_city_docs.CityDocs) ... test_the_runtime_pages_give_each_city_its_own_files (scripts.include.tests.test_city_docs.CityDocs) ... test_the_testing_pages_list_the_city_tests (scripts.include.tests.test_city_docs.CityDocs) ... test_every_crate_has_a_rule (scripts.include.tests.test_ci_changes.Coverage) ... ok
+test_every_source_folder_has_a_rule (scripts.include.tests.test_ci_changes.Coverage) ... ok
+test_every_spec_is_in_a_group (scripts.include.tests.test_ci_changes.Coverage) ... ok
+test_every_spec_is_in_exactly_one_tier (scripts.include.tests.test_ci_changes.Coverage) ... ok
+test_every_top_level_entry_has_a_rule (scripts.include.tests.test_ci_changes.Coverage) ... ok
+test_the_archive_run_repeats_ui_specs_only (scripts.include.tests.test_ci_changes.Coverage) ... ok
+test_the_rules_are_well_formed (scripts.include.tests.test_ci_changes.Coverage) ... ok
+test_the_workflows_ignore_exactly_the_documentation (scripts.include.tests.test_ci_changes.Coverage) ... ok
+test_a_bare_version_bump_runs_every_crate (scripts.include.tests.test_ci_changes.Crates) ... ok
+test_a_change_no_crate_reads_runs_no_crate (scripts.include.tests.test_ci_changes.Crates) ... ok
+test_a_citys_config_runs_every_crate_and_no_browser_spec (scripts.include.tests.test_ci_changes.Crates) ... ok
+test_a_crate_runs_with_what_depends_on_it_however_far (scripts.include.tests.test_ci_changes.Crates) ... ok
+test_a_file_among_changed_crates_does_not_narrow_a_wider_change (scripts.include.tests.test_ci_changes.Crates) ... ok
+test_the_dependents_are_read_from_the_manifests (scripts.include.tests.test_ci_changes.Crates) ... ok
+test_the_server_alone_runs_alone (scripts.include.tests.test_ci_changes.Crates) ... ok
+test_the_server_feature_is_only_asked_when_the_server_is_tested (scripts.include.tests.test_ci_changes.Crates) ... ok
+test_the_wasm_check_leaves_out_what_the_browser_does_not_load (scripts.include.tests.test_ci_changes.Crates) ... ok
+test_the_wasm_exclusions_are_the_justfiles (scripts.include.tests.test_ci_changes.Crates) ... ok
+test_what_every_crate_reads_runs_every_crate (scripts.include.tests.test_ci_changes.Crates) ... ok
+test_star_stays_in_a_folder_and_double_star_crosses (scripts.include.tests.test_ci_changes.Globs) ... ok
+test_a_helper_runs_the_specs_that_import_it (scripts.include.tests.test_ci_changes.PageFiles) ... ok
+test_a_page_runs_its_own_specs_and_the_cross_ones (scripts.include.tests.test_ci_changes.PageFiles) ... ok
+test_every_html_page_names_its_own_specs (scripts.include.tests.test_ci_changes.PageFiles) ... ok
+test_the_map_runtime_runs_the_map_and_the_about_page (scripts.include.tests.test_ci_changes.PageFiles) ... ok
+test_the_scripts_that_only_the_ci_jobs_run_need_no_browser_spec (scripts.include.tests.test_ci_changes.PageFiles) ... ok
+test_what_every_page_loads_runs_every_spec (scripts.include.tests.test_ci_changes.PageFiles) ... ok
+test_ci_yml_is_gone (scripts.include.tests.test_ci_changes.Pipelines) ... ok
+test_main_builds_its_tests_without_debug_info (scripts.include.tests.test_ci_changes.Pipelines) ... ok
+test_main_runs_every_crate (scripts.include.tests.test_ci_changes.Pipelines) ... ok
+test_main_runs_the_host_tests_the_wasm_check_and_the_script_tests_side_by_side (scripts.include.tests.test_ci_changes.Pipelines) ... ok
+test_main_splits_the_ui_tier_over_runners (scripts.include.tests.test_ci_changes.Pipelines) ... ok
+test_only_a_pull_request_is_cancelled_by_a_newer_push (scripts.include.tests.test_ci_changes.Pipelines) ... ok
+test_only_postsubmit_deploys (scripts.include.tests.test_ci_changes.Pipelines) ... ok
+test_only_presubmit_checks_the_version (scripts.include.tests.test_ci_changes.Pipelines) ... ok
+test_postsubmit_runs_on_main_and_by_hand_only (scripts.include.tests.test_ci_changes.Pipelines) ... ok
+test_presubmit_has_the_one_check_to_require (scripts.include.tests.test_ci_changes.Pipelines) ... ok
+test_presubmit_runs_on_pull_requests_only (scripts.include.tests.test_ci_changes.Pipelines) ... ok
+test_the_deploy_waits_for_every_check (scripts.include.tests.test_ci_changes.Pipelines) ... ok
+test_the_e2e_tier_runs_only_after_the_merge (scripts.include.tests.test_ci_changes.Pipelines) ... ok
+test_the_rust_jobs_run_what_the_change_selects (scripts.include.tests.test_ci_changes.Pipelines) ... ok
+test_the_test_builds_carry_no_debug_info (scripts.include.tests.test_ci_changes.Pipelines) ... ok
+test_the_ui_tier_runs_the_specs_the_change_selects (scripts.include.tests.test_ci_changes.Pipelines) ... ok
+test_the_wasm_check_runs_beside_the_host_tests (scripts.include.tests.test_ci_changes.Pipelines) ... ok
+test_only_a_commit_id_or_head_reaches_git (scripts.include.tests.test_ci_changes.Revisions) ... ok
+test_the_pattern_takes_ids_and_head (scripts.include.tests.test_ci_changes.Revisions) ... ok
+test_a_changed_spec_runs_its_own_tier_alone (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_a_changed_spec_runs_itself_alone (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_a_file_no_rule_names_runs_all (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_a_folder_of_src_no_rule_names_runs_all (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_a_helper_of_the_specs_runs_all (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_a_unit_test_file_runs_no_browser_test (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_all_wins_over_a_narrow_file (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_an_unknown_change_needs_a_version_bump (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_anything_else_needs_a_version_bump (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_arguments_for_each_tier (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_ci_configuration_alone_still_runs_every_test (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_documentation_alone_skips_everything (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_documentation_and_ci_configuration_need_no_version_bump (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_documentation_with_code_is_code (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_editor_code_starts_neither_a_database_nor_the_archive (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_no_files_runs_all (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_one_slice_runs_its_specs_and_the_cross_ones (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_shared_code_and_main_run_every_tier (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_shared_code_and_the_build_run_all (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_slices_union (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_the_archive_spec_repeats_the_pages_over_the_archive (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_the_builder_runs_every_spec (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_the_list_of_projects_runs_the_home_specs_and_the_project_store_runs_every_page_that_opens_one (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_the_projects_their_copies_and_the_sync_run_the_share_spec (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_the_server_and_the_sync_run_the_integration_tier (scripts.include.tests.test_ci_changes.Selection) ... ok
+test_a_dependency_change_is_one (scripts.include.tests.test_ci_changes.VersionOnly) ... ok
+test_a_version_bump_is_not_a_change (scripts.include.tests.test_ci_changes.VersionOnly) ... ok
+
+======================================================================
+FAIL: test_add_a_city_names_the_file_and_every_key (scripts.include.tests.test_city_docs.CityDocs) [README.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 133, in test_add_a_city_names_the_file_and_every_key
+    self.assertIsNotNone(text, f"no heading {heading}")
+AssertionError: unexpectedly None : no heading Add a city
+
+======================================================================
+FAIL: test_add_a_city_names_the_file_and_every_key (scripts.include.tests.test_city_docs.CityDocs) [website/docs/getting-started.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 133, in test_add_a_city_names_the_file_and_every_key
+    self.assertIsNotNone(text, f"no heading {heading}")
+AssertionError: unexpectedly None : no heading Add a city
+
+======================================================================
+FAIL: test_add_a_city_names_the_file_and_every_key (scripts.include.tests.test_city_docs.CityDocs) [website/i18n/fr-CA/docusaurus-plugin-content-docs/current/getting-started.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 133, in test_add_a_city_names_the_file_and_every_key
+    self.assertIsNotNone(text, f"no heading {heading}")
+AssertionError: unexpectedly None : no heading Ajouter une ville
+
+======================================================================
+FAIL: test_montreals_command_is_named (scripts.include.tests.test_city_docs.CityDocs) [README.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 104, in test_montreals_command_is_named
+    self.says(read(path), "just prepare montreal")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : 'just prepare montreal' is not said
+
+======================================================================
+FAIL: test_montreals_command_is_named (scripts.include.tests.test_city_docs.CityDocs) [justfile]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 104, in test_montreals_command_is_named
+    self.says(read(path), "just prepare montreal")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : 'just prepare montreal' is not said
+
+======================================================================
+FAIL: test_montreals_command_is_named (scripts.include.tests.test_city_docs.CityDocs) [CLAUDE.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 104, in test_montreals_command_is_named
+    self.says(read(path), "just prepare montreal")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : 'just prepare montreal' is not said
+
+======================================================================
+FAIL: test_montreals_command_is_named (scripts.include.tests.test_city_docs.CityDocs) [crates/citymodel_builder/CLAUDE.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 104, in test_montreals_command_is_named
+    self.says(read(path), "just prepare montreal")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : 'just prepare montreal' is not said
+
+======================================================================
+FAIL: test_montreals_command_is_named (scripts.include.tests.test_city_docs.CityDocs) [website/docs/getting-started.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 104, in test_montreals_command_is_named
+    self.says(read(path), "just prepare montreal")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : 'just prepare montreal' is not said
+
+======================================================================
+FAIL: test_montreals_command_is_named (scripts.include.tests.test_city_docs.CityDocs) [website/docs/architecture/runtime.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 104, in test_montreals_command_is_named
+    self.says(read(path), "just prepare montreal")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : 'just prepare montreal' is not said
+
+======================================================================
+FAIL: test_montreals_command_is_named (scripts.include.tests.test_city_docs.CityDocs) [website/i18n/fr-CA/docusaurus-plugin-content-docs/current/getting-started.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 104, in test_montreals_command_is_named
+    self.says(read(path), "just prepare montreal")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : 'just prepare montreal' is not said
+
+======================================================================
+FAIL: test_montreals_command_is_named (scripts.include.tests.test_city_docs.CityDocs) [website/i18n/fr-CA/docusaurus-plugin-content-docs/current/architecture/runtime.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 104, in test_montreals_command_is_named
+    self.says(read(path), "just prepare montreal")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : 'just prepare montreal' is not said
+
+======================================================================
+FAIL: test_montreals_command_is_named (scripts.include.tests.test_city_docs.CityDocs) [README.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 107, in test_montreals_command_is_named
+    self.says(read(path), "just pack montreal")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : 'just pack montreal' is not said
+
+======================================================================
+FAIL: test_montreals_command_is_named (scripts.include.tests.test_city_docs.CityDocs) [justfile]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 107, in test_montreals_command_is_named
+    self.says(read(path), "just pack montreal")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : 'just pack montreal' is not said
+
+======================================================================
+FAIL: test_montreals_command_is_named (scripts.include.tests.test_city_docs.CityDocs) [.env.example]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 107, in test_montreals_command_is_named
+    self.says(read(path), "just pack montreal")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : 'just pack montreal' is not said
+
+======================================================================
+FAIL: test_no_page_runs_prepare_without_a_city (scripts.include.tests.test_city_docs.CityDocs) [README.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 112, in test_no_page_runs_prepare_without_a_city
+    self.says_no(read(path), "just prepare --")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 90, in says_no
+    self.assertFalse(words in text, f"{words!r} is said")
+AssertionError: True is not false : 'just prepare --' is said
+
+======================================================================
+FAIL: test_no_page_runs_prepare_without_a_city (scripts.include.tests.test_city_docs.CityDocs) [justfile]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 112, in test_no_page_runs_prepare_without_a_city
+    self.says_no(read(path), "just prepare --")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 90, in says_no
+    self.assertFalse(words in text, f"{words!r} is said")
+AssertionError: True is not false : 'just prepare --' is said
+
+======================================================================
+FAIL: test_no_page_runs_prepare_without_a_city (scripts.include.tests.test_city_docs.CityDocs) [website/docs/getting-started.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 112, in test_no_page_runs_prepare_without_a_city
+    self.says_no(read(path), "just prepare --")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 90, in says_no
+    self.assertFalse(words in text, f"{words!r} is said")
+AssertionError: True is not false : 'just prepare --' is said
+
+======================================================================
+FAIL: test_no_page_runs_prepare_without_a_city (scripts.include.tests.test_city_docs.CityDocs) [website/i18n/fr-CA/docusaurus-plugin-content-docs/current/getting-started.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 112, in test_no_page_runs_prepare_without_a_city
+    self.says_no(read(path), "just prepare --")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 90, in says_no
+    self.assertFalse(words in text, f"{words!r} is said")
+AssertionError: True is not false : 'just prepare --' is said
+
+======================================================================
+FAIL: test_no_page_runs_prepare_without_a_city (scripts.include.tests.test_city_docs.CityDocs) [.env.example]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 114, in test_no_page_runs_prepare_without_a_city
+    self.says_no(read(".env.example"), "`just pack` makes")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 90, in says_no
+    self.assertFalse(words in text, f"{words!r} is said")
+AssertionError: True is not false : '`just pack` makes' is said
+
+======================================================================
+FAIL: test_the_builder_notes_describe_the_config (scripts.include.tests.test_city_docs.CityDocs) [crates/citymodel_builder/CLAUDE.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 170, in test_the_builder_notes_describe_the_config
+    self.says(notes, "cities/<id>.toml")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : 'cities/<id>.toml' is not said
+
+======================================================================
+FAIL: test_the_builder_notes_describe_the_config (scripts.include.tests.test_city_docs.CityDocs) [crates/cityloom_editor/src/place/CLAUDE.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 174, in test_the_builder_notes_describe_the_config
+    self.says_no(read(PLACE), "makes Montréal's grid only")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 90, in says_no
+    self.assertFalse(words in text, f"{words!r} is said")
+AssertionError: True is not false : "makes Montréal's grid only" is said
+
+======================================================================
+FAIL: test_the_command_is_shown_with_its_city (scripts.include.tests.test_city_docs.CityDocs) [README.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 98, in test_the_command_is_shown_with_its_city
+    self.assertRegex(rest, r"^(montreal|<city>)( |$)", "the command without its city")
+AssertionError: Regex didn't match: '^(montreal|<city>)( |$)' not found in '' : the command without its city
+
+======================================================================
+FAIL: test_the_command_is_shown_with_its_city (scripts.include.tests.test_city_docs.CityDocs) [CLAUDE.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 98, in test_the_command_is_shown_with_its_city
+    self.assertRegex(rest, r"^(montreal|<city>)( |$)", "the command without its city")
+AssertionError: Regex didn't match: '^(montreal|<city>)( |$)' not found in '' : the command without its city
+
+======================================================================
+FAIL: test_the_command_is_shown_with_its_city (scripts.include.tests.test_city_docs.CityDocs) [website/docs/getting-started.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 98, in test_the_command_is_shown_with_its_city
+    self.assertRegex(rest, r"^(montreal|<city>)( |$)", "the command without its city")
+AssertionError: Regex didn't match: '^(montreal|<city>)( |$)' not found in '' : the command without its city
+
+======================================================================
+FAIL: test_the_command_is_shown_with_its_city (scripts.include.tests.test_city_docs.CityDocs) [website/i18n/fr-CA/docusaurus-plugin-content-docs/current/getting-started.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 98, in test_the_command_is_shown_with_its_city
+    self.assertRegex(rest, r"^(montreal|<city>)( |$)", "the command without its city")
+AssertionError: Regex didn't match: '^(montreal|<city>)( |$)' not found in '' : the command without its city
+
+======================================================================
+FAIL: test_the_extract_option_is_described (scripts.include.tests.test_city_docs.CityDocs) [README.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 140, in test_the_extract_option_is_described
+    self.says(read(path), "--extract")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : '--extract' is not said
+
+======================================================================
+FAIL: test_the_extract_option_is_described (scripts.include.tests.test_city_docs.CityDocs) [crates/citymodel_builder/CLAUDE.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 140, in test_the_extract_option_is_described
+    self.says(read(path), "--extract")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : '--extract' is not said
+
+======================================================================
+FAIL: test_the_extract_option_is_described (scripts.include.tests.test_city_docs.CityDocs) [website/docs/getting-started.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 140, in test_the_extract_option_is_described
+    self.says(read(path), "--extract")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : '--extract' is not said
+
+======================================================================
+FAIL: test_the_extract_option_is_described (scripts.include.tests.test_city_docs.CityDocs) [website/i18n/fr-CA/docusaurus-plugin-content-docs/current/getting-started.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 140, in test_the_extract_option_is_described
+    self.says(read(path), "--extract")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : '--extract' is not said
+
+======================================================================
+FAIL: test_the_layout_pages_name_the_cities_folder (scripts.include.tests.test_city_docs.CityDocs) [website/docs/]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 149, in test_the_layout_pages_name_the_cities_folder
+    self.assertIn("`cities/`", first_cells)
+AssertionError: '`cities/`' not found in ['Folder', '----------', '`crates/`', '`web/`', '`e2e/`', '`scripts/`', '`website/`', '`docs/`', '`deploy/`', '`.github/`', '`.claude/`']
+
+======================================================================
+FAIL: test_the_layout_pages_name_the_cities_folder (scripts.include.tests.test_city_docs.CityDocs) [website/i18n/fr-CA/docusaurus-plugin-content-docs/current/]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 149, in test_the_layout_pages_name_the_cities_folder
+    self.assertIn("`cities/`", first_cells)
+AssertionError: '`cities/`' not found in ['Dossier', '----------', '`crates/`', '`web/`', '`e2e/`', '`scripts/`', '`website/`', '`docs/`', '`deploy/`', '`.github/`', '`.claude/`']
+
+======================================================================
+FAIL: test_the_layout_pages_name_the_cities_folder (scripts.include.tests.test_city_docs.CityDocs) [CLAUDE.md]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 152, in test_the_layout_pages_name_the_cities_folder
+    self.says(layout, "cities/")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : 'cities/' is not said
+
+======================================================================
+FAIL: test_the_recipe_comments_say_the_city_and_the_options (scripts.include.tests.test_city_docs.CityDocs) [cities/]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 121, in test_the_recipe_comments_say_the_city_and_the_options
+    self.says(prepare, word)
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : 'cities/' is not said
+
+======================================================================
+FAIL: test_the_recipe_comments_say_the_city_and_the_options (scripts.include.tests.test_city_docs.CityDocs) [--extract]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 121, in test_the_recipe_comments_say_the_city_and_the_options
+    self.says(prepare, word)
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : '--extract' is not said
+
+======================================================================
+FAIL: test_the_recipe_comments_say_the_city_and_the_options (scripts.include.tests.test_city_docs.CityDocs) [pack]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 123, in test_the_recipe_comments_say_the_city_and_the_options
+    self.says(pack, "just pack montreal")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : 'just pack montreal' is not said
+
+======================================================================
+FAIL: test_the_runtime_pages_give_each_city_its_own_files (scripts.include.tests.test_city_docs.CityDocs) [website/docs/]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 158, in test_the_runtime_pages_give_each_city_its_own_files
+    self.says(text, "data/metro-work/<id>")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : 'data/metro-work/<id>' is not said
+
+======================================================================
+FAIL: test_the_runtime_pages_give_each_city_its_own_files (scripts.include.tests.test_city_docs.CityDocs) [website/i18n/fr-CA/docusaurus-plugin-content-docs/current/]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 158, in test_the_runtime_pages_give_each_city_its_own_files
+    self.says(text, "data/metro-work/<id>")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : 'data/metro-work/<id>' is not said
+
+======================================================================
+FAIL: test_the_testing_pages_list_the_city_tests (scripts.include.tests.test_city_docs.CityDocs) [website/docs/]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 165, in test_the_testing_pages_list_the_city_tests
+    self.says(paragraph_with(read(d + "testing/levels.md"), "`ctrl_c`"), "`city`")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : '`city`' is not said
+
+======================================================================
+FAIL: test_the_testing_pages_list_the_city_tests (scripts.include.tests.test_city_docs.CityDocs) [website/i18n/fr-CA/docusaurus-plugin-content-docs/current/]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 165, in test_the_testing_pages_list_the_city_tests
+    self.says(paragraph_with(read(d + "testing/levels.md"), "`ctrl_c`"), "`city`")
+  File "/private/tmp/claude-501/-Users-alex--claude-spares-spare-LgPa4h/b0454e13-a423-4ebc-ad1e-06fd0bec20b0/scratchpad/red75/scripts/include/tests/test_city_docs.py", line 87, in says
+    self.assertTrue(words in text, f"{words!r} is not said")
+AssertionError: False is not true : '`city`' is not said
+
+----------------------------------------------------------------------
+Ran 82 tests in 0.292s
+
+FAILED (failures=39)
