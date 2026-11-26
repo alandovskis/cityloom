@@ -7,13 +7,16 @@ cargo and Playwright runs are faked; git is real, in a throwaway repository.
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / ".claude" / "factory"))
@@ -1154,6 +1157,19 @@ class TestsGate(unittest.TestCase):
             "  problem: the new test m unittests src/lib.rs::tests::word_is_two catches none of the 3 faults run",
         )
         self.assertNotIn("replace", report.text())
+
+    def test_one_run_gives_the_brief_report_and_writes_the_full_one(self):
+        head = self.tests_commit()
+        runner = self.runner(head, outcomes={"tests::word_is_two": lambda repo: "ok"})
+        full = Path(self.tmp.name) / "full.txt"
+        printed = io.StringIO()
+        built = self.gate(runner)
+        with mock.patch.object(gate, "Gate", lambda repo: built), redirect_stdout(printed):
+            code = gate.main(["tests", "--repo", str(self.repo), "--base", self.base, "--faults", str(self.spec), "--brief", "--report", str(full)])
+        self.assertEqual(code, 1)
+        self.assertNotIn("replace", printed.getvalue())
+        self.assertIn("caught nothing: m unittests src/lib.rs::tests::word_is_two", printed.getvalue())
+        self.assertIn("not caught by any new test: crates/m/src/street.rs: replace word -> usize with 0", full.read_text())
 
     def test_a_fault_that_does_not_compile_is_counted_and_dropped(self):
         head = self.tests_commit()

@@ -526,6 +526,12 @@ class Report:
     pages: List[str] = field(default_factory=list)
     proof: List[str] = field(default_factory=list)  # the tests gate's faults, and the faults gate's entries
 
+    def brief(self) -> "Report":
+        """The report without the faults (the tests gate's, for the test-writer): the new tests, those that caught
+        nothing, the notes on the proof, and the problems."""
+        kept = [p for p in self.proof if p.startswith(("caught nothing:", "the faults"))]
+        return Report(self.gate, self.problems, self.new_tests, self.pages, kept)
+
     def text(self) -> str:
         lines = [f"{'PASS' if not self.problems else 'FAIL'} {self.gate} gate"]
         lines += [f"  new test: {t}" for t in self.new_tests]
@@ -933,8 +939,8 @@ class Gate:
         for test in report.new_tests:
             if not proof.caught[test]:
                 report.problems.append(f"the new test {test} catches none of the {proof.ran[test]} faults run")
-        report.proof = notes + proof.lines(brief)
-        return report
+        report.proof = notes + proof.lines()
+        return report.brief() if brief else report
 
     def _run_tests(self, base: str, head: str, changed: List[str], report: Report) -> Tuple[List[str], List[str], dict]:
         """Rules 3 and 4. The new Rust and browser tests (head's listing less the base's), and the head's Playwright
@@ -1206,17 +1212,15 @@ class _Proof:
         self.left_out: List[str] = []
         self.not_run = 0
 
-    def lines(self, brief: bool) -> List[str]:
-        """The report's lines. Brief (for the test-writer) names the tests that caught nothing, and no fault."""
+    def lines(self) -> List[str]:
+        """The report's lines: each test and the faults it caught, then the faults by what came of them."""
         lines = []
         for test in self.tests:
             found = self.caught[test]
             if not found:
                 lines.append(f"caught nothing: {test}")
-            elif not brief:
+            else:
                 lines.append(f"caught: {test}: {_count(len(found), 'fault')}, the first: " + "; ".join(found[:CAUGHT_ENOUGH]))
-        if brief:
-            return lines
         lines += [f"not caught by any new test: {f}" for f in self.uncaught]
         lines += [f"did not compile: {f}" for f in self.no_compile]
         lines += [f"hung: {f}" for f in self.hung]
@@ -1258,6 +1262,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--faults", help="the plan's faults: its ## Faults JSON, or the plan (tests and faults)")
     parser.add_argument("--proved", help="tests: the head the faults were last run at, kept over a rebase that changed nothing they rest on")
     parser.add_argument("--brief", action="store_true", help="tests: name no fault in the report (for the test-writer)")
+    parser.add_argument("--report", help="tests: also write the full report to this file (with --brief, from the same run)")
     parser.add_argument("--browser", action="store_true", help="faults: the plan has browser tests (a lower limit)")
     args = parser.parse_args(argv)
     if args.gate != "faults" and not args.base:
@@ -1267,7 +1272,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         gate = Gate(Path(args.repo))
         if args.gate == "tests":
-            report = gate.tests(args.base, Path(args.faults), proved=args.proved, brief=args.brief)
+            report = gate.tests(args.base, Path(args.faults), proved=args.proved)
+            if args.report:
+                Path(args.report).write_text(report.text() + "\n", encoding="utf-8")
+            if args.brief:
+                report = report.brief()
         elif args.gate == "faults":
             report = gate.faults(Path(args.faults), browser=args.browser)
         elif args.gate == "red":
