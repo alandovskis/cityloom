@@ -64,7 +64,7 @@ pub fn known(root: &Path) -> Vec<String> {
     let mut ids: Vec<String> = entries
         .filter_map(|entry| entry.ok().map(|e| e.path()))
         .filter(|path| path.is_file() && path.extension().is_some_and(|e| e == EXTENSION))
-        .filter_map(|path| path.file_stem().and_then(|s| s.to_str()).map(str::to_string))
+        .filter_map(|path| path.file_stem().and_then(std::ffi::OsStr::to_str).map(str::to_string))
         .collect();
     ids.sort();
     ids
