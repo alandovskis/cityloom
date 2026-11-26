@@ -33,7 +33,7 @@ Skip to step 4 when a `**Factory · green**` record names `<wt>`'s HEAD.
 
 Dispatch the `implement` agent with `<wt>`, the issue's key, title, description and comments, the plan, the red record's sha and its gate report, and on a later round the green gate's problems or the review's findings (the `factory-review` skill sends you back here with them). Do not write the code yourself. The guard of `.claude/settings.json` refuses its edits to the tests; it may still try, and the green gate catches whatever got through.
 
-It returns `{ head, commits, version, checks, notes }`, or `{ dispute }`: a test it believes is wrong. A dispute is handed back, quoting it whole: a person decides whether the test or the implementer is right, and changes the test in `<wt>` if it is the test (a new commit with the `Factory-Red` trailer, then a new red record by hand or by running step 2).
+It returns `{ head, commits, version, checks, notes }`, or `{ dispute }`: a test it believes is wrong, or a dependency between slices the plan did not name, which the dependency guard refuses. A dispute is handed back, quoting it whole: a person decides whether the test or the implementer is right, and changes the test (or the guard's table) in `<wt>` if it is the test (a new commit with the `Factory-Red` trailer, then a new red record by hand or by running step 2).
 
 ## 4. The green gate
 

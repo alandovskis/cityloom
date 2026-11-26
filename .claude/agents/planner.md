@@ -14,6 +14,8 @@ The issue's key, title, description and comments, the triage's flow (`code` or `
 
 Read the repository's `CLAUDE.md`, the folder `CLAUDE.md` of each slice the change touches, and the code it changes and its existing tests, enough to name real files, types and functions. Respect the architecture: the slice that owns the feature, MVVM inside it, the dependency rule, wording only in Fluent messages (both languages), browser tests in exactly one tier. Plan the smallest change that does what the issue asks.
 
+A new dependency between slices is a decision, not a detail: look first for a way that needs none (what the guard's tables already allow, the code moved to the slice that owns it, a port, data passed in), and plan an exception to a layer rule only when the issue cannot be done without one.
+
 ## The plan
 
 Reply with only the plan, in Markdown, with exactly these sections in this order (the factory checks them):
@@ -24,6 +26,9 @@ What will be true when it is done, one line per behaviour, each tied to the issu
 
 ## Where
 Each file to change or add, with what changes in it (types, functions, messages), slice by slice; and the id of the feature of `scripts/ci/features.json` it changes or adds, with that file when its list changes.
+
+## Slice dependencies
+Each new dependency the change needs that `crates/cityloom_editor/src/dependency_guard.rs` would refuse, one line each: the file or slice that uses it and the module path it uses, both as narrow as the code needs, its table (`ALLOWED` for another slice, `EXCEPTIONS` for a break of a layer or library rule), and the reason it cannot be avoided; and a new slice, for `SLICES`. Only the test-writer may add them, so a dependency left out here stops the build. "None" if there are none.
 
 ## Tests
 One line per test: its kind (model, view-model, component, server, builder, browser), its file, its name, the behaviour it proves and, for a browser test, its tier (ui, integration, e2e) and spec-map group. Every behaviour of Change has at least one test. Say which existing tests must keep passing untouched.

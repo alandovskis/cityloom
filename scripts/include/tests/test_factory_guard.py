@@ -46,6 +46,7 @@ class Worktree(unittest.TestCase):
             "scripts/check-version.sh",
             ".claude/factory/gate.py",
             "crates/cityloom_editor/src/i18n_guard.rs",
+            "crates/cityloom_editor/src/dependency_guard.rs",
         ]:
             for tool, key in (("Write", "file_path"), ("Edit", "file_path"), ("MultiEdit", "file_path"), ("NotebookEdit", "notebook_path")):
                 with self.subTest(path=path, tool=tool):
@@ -63,6 +64,9 @@ class Worktree(unittest.TestCase):
         path = {"file_path": str(self.root / "e2e/tests/street.spec.ts")}
         self.assertIsNone(self.call("Write", path, agent="test-writer"))
         self.assertIsNone(self.call("Write", path, agent=None))
+        # The red commit allows a dependency the plan names.
+        guarded = {"file_path": str(self.root / "crates/cityloom_editor/src/dependency_guard.rs")}
+        self.assertIsNone(self.call("Edit", guarded, agent="test-writer"))
 
     def test_a_path_is_read_against_its_own_worktree(self):
         nested = self.root / "deeper"
@@ -84,6 +88,7 @@ class Worktree(unittest.TestCase):
             "git restore crates/m/src/tests.rs",
             "perl -pi -e 's/a/b/' crates/m/src/tests.rs",
             "python3 -c \"open('e2e/tests/a.spec.ts','w')\"",
+            "sed -i '' 's/a/b/' crates/cityloom_editor/src/dependency_guard.rs",
         ]:
             with self.subTest(command):
                 self.assertIsNotNone(self.call("Bash", {"command": command}))

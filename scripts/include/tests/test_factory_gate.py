@@ -196,6 +196,7 @@ class TestFiles(unittest.TestCase):
             ".claude/settings.json",
             "crates/cityloom_editor/src/i18n_guard.rs",
             "crates/cityloom_editor/src/layout_guard.rs",
+            "crates/cityloom_editor/src/dependency_guard.rs",
             "crates/cityloom_editor/src/shared/contrast.rs",
         ]:
             with self.subTest(path):
@@ -604,6 +605,16 @@ class Gates(unittest.TestCase):
                 "e2e/tiers.json: changed since the red commit, and only the test-writer may change it",
             ],
         )
+
+    def test_the_green_gate_refuses_a_change_to_the_dependency_guards_tables(self):
+        # The tables are outside the guard's #[cfg(test)] block, so only its place in the guarded set protects them.
+        guard = "crates/cityloom_editor/src/dependency_guard.rs"
+        for table in ("ALLOWED", "EXCEPTIONS"):
+            with self.subTest(table):
+                red = self.red_commit({guard: f"const {table}: &[Entry] = &[];\n"})
+                head = commit(self.repo, {guard: f"const {table}: &[Entry] = &[ENTRY];\n"}, "Allow")
+                report = gate.Gate(self.repo, self.passing_runner(head)).green(self.base, red)
+                self.assertEqual(report.problems, [f"{guard}: changed since the red commit, and only the test-writer may change it"])
 
     def test_the_green_gate_refuses_a_failing_test(self):
         red, green = self.green_setup()

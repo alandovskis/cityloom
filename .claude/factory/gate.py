@@ -66,6 +66,7 @@ GUARDED = TEST_FILES + (
     ".claude/**",
     "crates/cityloom_editor/src/i18n_guard.rs",
     "crates/cityloom_editor/src/layout_guard.rs",
+    "crates/cityloom_editor/src/dependency_guard.rs",
     "crates/cityloom_editor/src/shared/contrast.rs",
 )
 
