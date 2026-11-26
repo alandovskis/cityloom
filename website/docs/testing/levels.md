@@ -83,7 +83,8 @@ raised whenever the importer's output changes for the same data.
 
 `just test-scripts` runs `python3 -m unittest discover -s scripts/include/tests`, with the standard library only. The
 tests are `test_ci_changes.py` (CI's change selector, and that every spec is in one tier and one group),
-`test_factory_config.py`, `test_factory_gate.py` and `test_factory_guard.py` (the software factory),
+`test_factory_config.py`, `test_factory_gate.py`, `test_factory_guard.py` and `test_factory_faults.py` (the software
+factory; the last, the faults its tests flow puts into the code),
 `test_issue_system.py` (the labels, the issue forms and the labeler rules agree), `test_architecture_docs.py` (the
 Architecture pages name every slice, storage key and server table, in both languages) and `test_features.py` (the
 feature list is whole, and the share of Rust tests that no feature names stays within its limit).

@@ -77,4 +77,10 @@ avec `--cap-lints warn`. Il n’a pas de `-D warnings`.
   - `green` : chaque test réussit avec `-D warnings`, la mise en forme et la version tiennent, et aucun fichier de
     test, bloc `#[cfg(test)]`, vérification ou fichier de l’usine n’a changé depuis le commit rouge;
   - `docs` : seule la documentation a changé, chaque page a sa page dans l’autre langue, et le site passe Prettier et
-    se construit.
+    se construit;
+  - `tests`, pour un billet qui ne demande que des tests d’un code qui fonctionne déjà : seuls des tests ont changé
+    (et la ligne de version), chaque test existant est tel qu’il était, chaque test réussit comme pour `green`, et chaque
+    nouveau test échoue sous au moins un défaut du code que le plan nomme (par mutation : la barrière introduit chaque
+    défaut, tiré de `.claude/factory/faults.py` et de `cargo-mutants`, exécute les nouveaux tests et le retire);
+  - `faults` : avant qu’un plan de ce flux soit publié, chaque fonction, message et déclaration que ses défauts nomment
+    existe et donne un défaut. Elle ne construit rien.
