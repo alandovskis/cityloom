@@ -1,0 +1,25 @@
+$ python3 -m unittest -v scripts/include/tests/test_architecture_docs.py
+test_a_table_of_a_later_migration_left_out_is_named_with_each_page (scripts.include.tests.test_architecture_docs.DatabaseTable) ... ok
+test_a_tree_whose_pages_name_every_table_passes (scripts.include.tests.test_architecture_docs.DatabaseTable) ... ok
+test_an_altered_table_is_not_a_new_one (scripts.include.tests.test_architecture_docs.DatabaseTable) ... ok
+test_a_damaged_copy_named_in_any_cell_of_the_table_counts (scripts.include.tests.test_architecture_docs.KeyTable) ... ok
+test_a_key_left_out_of_one_language_is_named_with_that_page (scripts.include.tests.test_architecture_docs.KeyTable) ... ok
+test_a_key_with_a_suffix_is_named_by_its_row_with_a_placeholder (scripts.include.tests.test_architecture_docs.KeyTable) ... ok
+test_a_literal_that_is_not_a_key_is_not_counted (scripts.include.tests.test_architecture_docs.KeyTable) ... ok
+test_a_tree_whose_pages_name_every_key_passes (scripts.include.tests.test_architecture_docs.KeyTable) ... ok
+test_code_after_a_test_block_is_still_read (scripts.include.tests.test_architecture_docs.KeyTable) ... ok
+test_keys_of_the_tests_are_not_counted (scripts.include.tests.test_architecture_docs.KeyTable) ... ok
+test_a_file_of_src_is_not_a_slice (scripts.include.tests.test_architecture_docs.SliceTable) ... ok
+test_a_slice_left_out_of_one_language_is_named_with_that_page (scripts.include.tests.test_architecture_docs.SliceTable) ... ok
+test_a_slice_named_only_in_the_prose_does_not_count (scripts.include.tests.test_architecture_docs.SliceTable) ... ok
+test_a_tree_whose_pages_name_every_slice_passes (scripts.include.tests.test_architecture_docs.SliceTable) ... ok
+test_every_literal_said_not_to_be_a_key_is_still_in_the_code (scripts.include.tests.test_architecture_docs.TheRepository) ... ok
+test_the_browser_data_page_names_every_key_in_both_languages (scripts.include.tests.test_architecture_docs.TheRepository) ... ok
+test_the_checks_find_something_to_check (scripts.include.tests.test_architecture_docs.TheRepository) ... ok
+test_the_database_page_names_every_table_in_both_languages (scripts.include.tests.test_architecture_docs.TheRepository) ... ok
+test_the_overview_names_every_slice_in_both_languages (scripts.include.tests.test_architecture_docs.TheRepository) ... ok
+
+----------------------------------------------------------------------
+Ran 19 tests in 3.478s
+
+OK

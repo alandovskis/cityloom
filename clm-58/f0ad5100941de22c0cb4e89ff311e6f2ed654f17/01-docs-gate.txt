@@ -1,0 +1,14 @@
+$ npx prettier --ignore-path ../.prettierignore --check ../website
+$ npm run build
+PASS docs gate
+  page: CLAUDE.md
+  page: website/docs/architecture/index.md
+  page: website/docs/coding-style.md
+  page: website/docs/project-layout.md
+  page: website/docs/testing/index.md
+  page: website/docs/testing/levels.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/architecture/index.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/coding-style.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/project-layout.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/testing/index.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/testing/levels.md
