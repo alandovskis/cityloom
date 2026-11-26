@@ -1,0 +1,21 @@
+$ grep -n -B2 -A2 "cities/montreal.toml\|just prepare" .github/workflows/postsubmit.yml   # at 4bff968a (unchanged since main, #296)
+366-      # modules, and the importer that makes the network they are cut from (citymodel_builder's importer module, and
+367-      # cityloom_model, which holds the network's shape and IMPORTER_VERSION, but not its street and catalogue modules,
+368:      # the street as the editor keeps it, which the importer does not use), and cities/montreal.toml, which will hold
+369-      # Montréal's grid (CLM-75) and changes nothing in the key until it exists. A change to any of them makes the tiles
+370-      # again; a change to the progress display, the archive, the street model or a dependency does not.
+--
+374-          path: |
+375-            web/data/metro
+376:          key: tiles-${{ hashFiles('crates/citymodel_builder/src/tiles.rs', 'crates/citymodel_builder/src/metro_index.rs', 'crates/citymodel_builder/src/network_tiles.rs', 'crates/citymodel_builder/src/importer/**', 'cities/montreal.toml', 'crates/cityloom_model/src/**', '!crates/cityloom_model/src/street/**', '!crates/cityloom_model/src/catalogue.rs') }}
+377-      - if: steps.tiles.outputs.cache-hit != 'true'
+378-        run: |
+--
+382-          # the network is cut into tiles. Once the cities are config files, prepare takes one (CLM-75); before, it would
+383-          # read the name as the extract's path. The else can go once CLM-75 has shipped.
+384:          if [ -f cities/montreal.toml ]; then just prepare montreal; else just prepare; fi
+385-
+386-      - run: npm install --global @railway/cli@${{ env.RAILWAY_CLI_VERSION }}
+
+$ git diff ec6bb6f1..HEAD --stat -- .github/
+(empty: this branch does not change the workflow)
