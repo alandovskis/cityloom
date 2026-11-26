@@ -33,53 +33,31 @@ qui possède la fonctionnalité.
 | `sync/`        | Conserve le travail d’une personne connectée sur le serveur, quand elle l’a choisi, et le fusionne entre ses appareils.                                                                                                                                                                                                |
 | `timeline/`    | Les jalons d’un projet et leur page, `timeline.html`.                                                                                                                                                                                                                                                                  |
 
-Une tranche peut utiliser le `model` d’une autre tranche (la jonction utilise celui de la rue, la ville les deux,
-`sync::local` utilise `project::model`), `city::store`, `city::binding`, `city::projection`, `city::edits`,
-`restriction::store`, `standards::model` et `standards::store` (rue), `place::area` (et
-`place::Bounds`, le cadre que donne `Area::bounds` et que prend `city::projection`), `project::copies` (le partage, pour
-la copie d’un aménagement partagé; le shell, pour faire d’une copie un projet de la personne), `project::context` (le
-projet dans lequel une page est ouverte, et s’il est affiché en lecture seule) et `shared`. Elle n’utilise jamais le
-modèle de vue, les vues ni les textes d’une autre tranche, ni ses autres modules, sauf comme le dit cette section :
+Une tranche peut utiliser le `model` d’une autre tranche, les modules ouverts à toute tranche (`city::store`,
+`city::binding`, `city::projection`, `city::edits`, `restriction::store`, `place::area` et `place::Bounds`, et
+`sync::hub`) et `shared`. Elle n’utilise jamais le modèle de vue, les vues ni les textes d’une autre tranche, ni ses
+autres modules, sauf là où [`dependency_guard.rs`](https://github.com/alandovskis/cityloom/blob/main/crates/cityloom_editor/src/dependency_guard.rs) le permet (voir [Les gardes](../testing/levels.md#les-gardes)).
+`shared` n’utilise aucune tranche. `lib.rs` est la racine de composition : il peut utiliser toute tranche, et une page
+faite de plusieurs tranches y est assemblée (voir [Pages et points d’entrée](#pages-et-points-dentrée)).
 
-- Le panneau de l’archive. La page Compte (`account/mod.rs`) le construit avec `archive::vm::ArchiveVm::for_page` et le
-  monte avec `archive::view::ArchiveView`. Le menu Partager du shell construit un `ArchiveVm::for_page` pour son
-  exportation (`shell/view.rs`).
-- Le tiroir du shell. Les tiroirs des notes de la page de rue (`street/view/notes_tray.rs`) et de la page de jonction
-  (`junction/view/notes_tray.rs`) sont faits avec `shell::tray`.
-- Le montage du shell. Les pages de rue, de jonction, de carte et de compte montent le shell avec `shell::mount`, en
-  indiquant avec `shell::NotesAtStart` comment leurs notes s’ouvrent. Sa cible est un `shell::Target`, que mettent en
-  œuvre `StreetVm`, `JunctionVm` et `MapVm`; la page Compte et une jonction qui ne peut pas être dessinée lui donnent un
-  `shell::Bare`.
-- Le dessin d’une zone. La carte utilise `restriction::draw`, la machine à états pure qui dessine le contour d’une zone
-  (`map/vm/mod.rs`, `map/vm/areas.rs`, `map/view/mod.rs`, `map/view/areas_view.rs`).
-- Le rapport. `map/vm/report.rs` dessine ses figures avec `street::view::drawing` et `junction::view::figure`.
-- Un test du shell, qui construit un `street::vm::StreetVm`.
+Pour permettre une nouvelle dépendance, ajoutez une entrée au tableau `ALLOWED` de la garde. Une entrée a un `by`, un
+`uses` et un `why` :
 
-De `street/`, `junction/` et `map/`, une autre tranche n’utilise que ce qui se trouve sous `model/`, sauf pour le
-rapport et ce test du shell.
+- `by` : qui peut l’utiliser, le dossier d’une tranche, un fichier (`map/vm/report.rs`) ou `*`, toute tranche;
+- `uses` : des chemins de modules d’une autre tranche, chacun couvrant ce qui se trouve sous lui (`*::model` est le
+  modèle de toute tranche);
+- `why` : la raison.
 
-Les tests utilisent aussi davantage des autres tranches, pour mettre en place ce qu’ils testent :
+La garde échoue sur une utilisation d’une autre tranche qu’aucune entrée ne permet, sur une entrée que rien n’utilise,
+sur une entrée dont la raison est vide, et sur un dossier de `src/` qui n’est pas dans sa liste `SLICES` : une nouvelle
+tranche va dans `SLICES`. Le code des tests en est exempté : un élément sous `#[cfg(test)]`, et un fichier dont la
+déclaration `mod` s’y trouve.
 
-- `project::ProjectStore` et `project::store::PROJECTS_KEY` : les tests de l’archive, de la ville, de la jonction, de
-  la carte, du partage, du shell, de la rue et de la synchronisation.
-- `restriction::fixtures` : les tests de la ville, de la carte et de la rue.
-- `shell::view::i18n_keys` : les tests du compte, de la jonction, de la carte et des projets.
-- `sync::SyncVm` et `sync::Status` : les tests du compte.
-- `sync::tests` (`Device`, `ServerSim`, `device`, `ada`, `T0`), `sync::local::ids`, `share::links::ProjectShares`,
-  `share::store` et `timeline::store` : les tests des projets.
-- `city::scenario::Action` : les tests de la rue et de la jonction.
-
-Quelques magasins sont aussi utilisés d’une tranche à l’autre. `sync::local` utilise `project::store` et
-`project::migrate::{legacy_waiting, legacy_kept, area_moved}`. `project::store` utilise `city::edits`, `city::store` et
-`restriction::store`. `sync::local` et `project::store` utilisent `timeline::store`. La page Compte (`account/mod.rs`)
-exécute `project::migrate::move_legacy_work` avant de synchroniser.
-
-Les magasins et les éditeurs utilisent aussi `sync::model` (`Id`, `Kind`, `Change`, `Origin`, `Report`, `mark`), qui ne
-dépend que de `shared`. Le shell construit `sync::SyncVm`; toute autre tranche n’accède à la synchronisation que par
-`sync::hub` et `sync::model`. `shared` ne dépend d’aucune tranche.
-
-Une page faite de plusieurs tranches est assemblée dans `lib.rs`, la racine de composition, qui peut utiliser toute
-tranche (voir [Pages et points d’entrée](#pages-et-points-dentrée)).
+La garde lit des noms, et non des éléments résolus : un élément qu’une tranche réexporte compte comme un élément de
+cette tranche. Elle accepte les cycles entre tranches. Son commentaire d’en-tête énumère toutes ses limites. Elle ne
+tient pas non plus deux habitudes plus étroites. `sync::model` n’utilise aucune autre tranche, seulement `shared` et le
+`hub` de sa propre tranche; les magasins et les éditeurs l’utilisent (`Id`, `Kind`, `Change`, `Origin`, `Report`,
+`mark`). Seule la tranche de la rue utilise `standards::model`.
 
 ## Couches dans une tranche
 
@@ -100,6 +78,13 @@ un lecteur d’écran (`text.rs`), les machines à états du clavier (`keys.rs`)
 (`watch.rs`); dans la tranche de la carte, il contient les modèles de vue secondaires, la caméra, le rapport et ce qui
 est construit pour la carte. `view/` contient les vues Leptos, le dessin SVG et les tests des composants
 (`view/tests.rs`).
+
+[`dependency_guard.rs`](https://github.com/alandovskis/cityloom/blob/main/crates/cityloom_editor/src/dependency_guard.rs) tient aussi les couches. Dans `street/`, `junction/` et `map/`, le modèle n’utilise ni le
+modèle de vue ni les vues de sa tranche, le modèle de vue n’utilise pas les vues, et aucun des deux ne prend la tranche
+entière. Dans toute tranche, le modèle (`model.rs`, `model/`) ne nomme ni Leptos ni les crates du navigateur
+(`web_sys`, `js_sys`, `gloo`, `wasm_bindgen` et leurs familles). Le modèle de vue (`vm.rs`, `vm/`) ne nomme ni les
+crates du navigateur, même par Leptos, ni `document()` et `window()` de Leptos. Le tableau `EXCEPTIONS` de la garde
+laisse passer un manquement, avec sa raison.
 
 Les autres tranches gardent leurs fichiers côte à côte à leur racine : `model.rs`, `vm.rs`, `view.rs`, `text.rs`,
 `tests.rs` et `i18n/`, selon leurs besoins. Le shell garde son `vm.rs`, ses vues Leptos et `tests.rs` côte à côte.
@@ -125,7 +110,10 @@ Chaque page de `web/` a un script qui charge le module de l’éditeur et appell
 | `share.html`        | `share.js`    | `mount_share` (`lib.rs`) : les liens de partage d’un projet, ou un lien de partage qu’on ouvre. |
 | `compare.html`      | `compare.js`  | `mount_compare` (`lib.rs`) : deux conceptions d’une même rue ou jonction.                       |
 
-`credits.html` ne charge aucun module. Chaque script monte ensuite le shell (`mount_shell`). Les pages qui ouvrent la
+`credits.html` ne charge aucun module. Chaque script monte ensuite le shell (`mount_shell`). Sa cible est un
+`shell::Target`, que mettent en œuvre `StreetVm`, `JunctionVm` et `MapVm`; la page À propos lui donne le `MapVm` de sa
+ville. Les pages d’accueil, de la chronologie, du partage et Compte, et une jonction qui ne peut pas être dessinée, lui
+donnent un `shell::Bare`; la page de comparaison lui donne un `CompareTarget` qui en enveloppe un. Les pages qui ouvrent la
 ville (`about.js`, `map.js`, `app.js`, `junction.js` et `compare.js`) appellent `prepare_city` (`place/mod.rs`) avant de
 l’ouvrir : cette fonction obtient les routes de la zone où la personne travaille, à moins qu’elles ne soient déjà
 conservées.
@@ -133,8 +121,13 @@ conservées.
 `lib.rs` est la racine de composition, où les tranches peuvent se rencontrer. La page d’accueil est
 `project::mount_list`, à qui l’on remet `share::links::ProjectShares` de la tranche du partage comme
 `project::model::ProjectLinks`, pour que les liens de partage d’un projet prennent fin avant lui. La page À propos
-exécute `project::migrate::move_legacy_work`, puis `map::mount_about`. Les pages de la chronologie, du partage et de
+exécute `project::migrate::move_legacy_work`, puis `map::mount_about`; ainsi, la tranche des projets n’utilise la page
+d’aucune autre tranche. Les pages de la chronologie, du partage et de
 comparaison y sont aussi assemblées, et `i18n_for` y inscrit les messages de chaque tranche.
+
+Une page qui n’est dans aucun projet et qui synchronise exécute d’abord `project::migrate::move_legacy_work`, qui
+déplace le travail d’avant les projets dans le premier projet : la page d’accueil (par `ProjectsVm::new_with`), la page
+À propos, la page Compte (`account/mod.rs`) et la page de partage quand elle ouvre un lien.
 
 Une page d’un projet s’ouvre dans celui-ci (`project::context::open_page`) : le projet que son adresse nomme avec
 `?project=<id>`, sinon celui ouvert en dernier. S’il n’y en a aucun, la page va à `index.html?missing=1`. Les liens

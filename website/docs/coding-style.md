@@ -99,8 +99,10 @@ rule here that says what a layer does not use is about the code outside tests.
 
 ### Model
 
-- A model (`model.rs`, `model/`) names neither Leptos nor the browser (`web_sys`, `js_sys`, `wasm_bindgen`), and holds
-  no signal. Example: `street/model/pick.rs` (`Pick`). **Review**
+- A model (`model.rs`, `model/`) names neither Leptos nor the browser (`web_sys`, `js_sys`, `gloo`, `wasm_bindgen`),
+  and holds no signal. Example: `street/model/pick.rs` (`Pick`); `dependency_guard.rs`
+  (`a_model_that_names_leptos_or_the_browser_breaks_a_rule`). **Guard** (`dependency_guard.rs`) for naming Leptos and
+  the browser's crates, **Review** for a signal held through another type.
 - The models of the street and the junction name no port and no store, so they read and keep nothing outside the
   page's memory. Of the other models, `archive/model.rs`, `share/model.rs` and `sync/model.rs` take the `Storage`
   port, and `map/model/corridor.rs` takes a `CityStore`. Example: `street/model/mod.rs` (`Editor`). **Review**
@@ -110,7 +112,8 @@ rule here that says what a layer does not use is about the code outside tests.
   **Guard** (`i18n_guard.rs`) against a literal that looks like words in the files of its `MIGRATED` list, **Review**
   for the rest.
 - A model uses no view-model, view or `text.rs` of any slice. Example: `map/model/corridor.rs` (`plan`), which uses
-  other models. **Review**
+  other models. **Guard** (`dependency_guard.rs`) for another slice's, and for its own slice's in `street/`,
+  `junction/` and `map/`, **Review** for the rest.
 
 ### View-model
 
@@ -124,10 +127,13 @@ rule here that says what a layer does not use is about the code outside tests.
 - A getter often gives what is ready to show, in the page's language. In the street and the junction, much of it comes
   as the `Said`s of the model's view (`View`, `JView`), which the Leptos views put into words. Example:
   `project/vm.rs` (`Row`, which `rows` gives). **Review**
-- The files of the view-models (`vm.rs`, `vm/`) name no `web_sys`, `js_sys` or `wasm_bindgen`: the browser is behind
-  the ports (see [Ports](architecture/index.md#ports)). Example: `project/vm.rs` (`ProjectsVm`). **Review**
+- The files of the view-models (`vm.rs`, `vm/`) name no `web_sys`, `js_sys`, `gloo` or `wasm_bindgen`, nor Leptos's
+  `document()` and `window()`: the browser is behind the ports (see [Ports](architecture/index.md#ports)). Example:
+  `project/vm.rs` (`ProjectsVm`); `dependency_guard.rs` (`a_view_model_that_names_the_browser_breaks_a_rule`).
+  **Guard** (`dependency_guard.rs`)
 - A view-model uses no view, except `map/vm/report.rs`, which draws the report's figures with functions of the
-  street's and the junction's views. Example: `project/vm.rs` (`ProjectsVm`). **Review**
+  street's and the junction's views. Example: `project/vm.rs` (`ProjectsVm`). **Guard** (`dependency_guard.rs`) in
+  `street/`, `junction/` and `map/` and for another slice's views, **Review** for the rest.
 - A view-model that takes the ports is tested natively against their fakes, through `test_ports()`,
   `test_ports_with_time()` or another helper of `shared/ports.rs` (see [View-model
   tests](testing/levels.md#view-model-tests)). Example: `standards/tests.rs` (`setup`). **Review**

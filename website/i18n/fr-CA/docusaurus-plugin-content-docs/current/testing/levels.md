@@ -129,6 +129,10 @@ Les gardes sont des tests sur le code lui-même. Ils s’exécutent avec les tes
   quelques fichiers laissés de côté, chacun avec sa raison), sur un identifiant de message utilisé qui n’est pas dans
   les deux langues, sur un fichier d’une tranche traduite qui n’est dans aucune des deux listes, et sur une entrée
   morte d’`ALLOWED_LITERALS` ou de `NOT_MESSAGE_IDS`.
+- **`dependency_guard.rs`** échoue sur une utilisation d’une autre tranche que son tableau `ALLOWED` ne permet pas, sur
+  un manquement à une règle des couches ou des bibliothèques que son tableau `EXCEPTIONS` ne laisse pas passer, sur une
+  entrée que rien n’utilise ou qui n’a pas de raison, et sur un dossier de `src/` qui n’est pas dans `SLICES`. Le code
+  des tests en est exempté.
 - **`layout_guard.rs`** garde les fichiers de `street/`, `junction/` et `map/` dans `model/`, `vm/` et `view/` : leur
   racine ne contient que `mod.rs`, `CLAUDE.md` et `i18n/`.
 - **`ui_guard.rs`** échoue quand une tranche dessine elle-même un groupe de boutons radio, des boutons plus et moins, une
@@ -140,4 +144,4 @@ Les gardes sont des tests sur le code lui-même. Ils s’exécutent avec les tes
 - **`no_plaintext.rs`** (dans les tests du serveur) lit chaque colonne de `users`, `identities`, `sessions`, `work` et
   `shares` en octets bruts et n’y trouve rien de ce avec quoi la personne s’est connectée.
 
-Les cinq premiers sont des modules `#[cfg(test)]` de l’éditeur.
+Les six premiers sont des modules `#[cfg(test)]` de l’éditeur.

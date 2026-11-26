@@ -92,10 +92,12 @@ Dans une tranche d’édition, `model.rs` contient les règles, `vm.rs` le modè
 lecteur d’écran, `tests.rs` les tests, et `i18n/en.ftl` et `i18n/fr.ftl` les messages; les vues sont à côté. Dans les
 trois plus grandes tranches, `street/`, `junction/` et `map/`, chaque couche a son propre dossier, `model/`, `vm/` et
 `view/` (avec `model/mod.rs`, `vm/mod.rs` et `view/mod.rs` à la place de `model.rs`, `vm.rs` et `view.rs`, et les tests
-dans `view/tests.rs`); seuls `mod.rs`, `i18n/` et `CLAUDE.md` restent à la racine de la tranche. Cinq fichiers se
+dans `view/tests.rs`); seuls `mod.rs`, `i18n/` et `CLAUDE.md` restent à la racine de la tranche. Six fichiers se
 trouvent au sommet de `src/` :
 
 - `lib.rs` : les points d’entrée qu’appellent les pages (`mount_*`) et le registre des messages de toutes les tranches.
+- `dependency_guard.rs` : un test qui échoue quand une tranche utilise une autre tranche d’une façon que son tableau
+  `ALLOWED` ne permet pas, ou quand une couche utilise ce que ses règles lui interdisent.
 - `i18n_guard.rs` : un test qui échoue quand un fichier traduit contient ses propres mots au lieu d’un message.
 - `layout_guard.rs` : un test qui échoue quand un fichier est laissé à la racine de `street/`, `junction/` ou
   `map/` au lieu d’être dans l’une de ses couches.
