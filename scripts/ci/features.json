@@ -423,7 +423,8 @@
       "code": [
         "crates/citymodel_builder/src/*.rs",
         "crates/citymodel_builder/src/archive/**/*.rs",
-        "crates/citymodel_builder/src/progress/**/*.rs"
+        "crates/citymodel_builder/src/progress/**/*.rs",
+        "crates/citymodel_builder/tests/*.rs"
       ],
       "specs": ["archive"]
     },

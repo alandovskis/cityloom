@@ -1,0 +1,23 @@
+# The Montréal metropolitan area: what `just prepare montreal` reads.
+
+# The city's id: this file's name, and the area name of its archive.
+id = "montreal"
+# The OpenStreetMap extract it is cut from; its file name in data/ follows from this.
+extract_url = "https://download.geofabrik.de/north-america/canada/quebec/quebec-latest.osm.pbf"
+
+# To -73.09 east and 45.81 north: the metropolitan area and some country round it.
+[grid]
+# The south-west corner of tile 0_0, in degrees.
+west = -74.4
+south = 45.2
+# The size of a tile's core, in degrees: about 2 km square at this latitude.
+tile_width = 0.0257
+tile_height = 0.018
+# The number of tiles, west to east and south to north.
+columns = 51
+rows = 34
+
+# The margin round a tile's core, in degrees: 0.5 km, wider than the 0.4 km an area reaches from its centre.
+[margin]
+lon = 0.0064
+lat = 0.0045

@@ -1,17 +1,32 @@
 mod support;
 
 use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use citymodel_builder::archive::{self, read_index};
 use citymodel_builder::prepare::{self, PrepareJob};
 use citymodel_builder::progress::StepError;
-use support::{Reply, fake_tool, quiet_progress, serve};
+use support::{Reply, fake_tool, montreal, quiet_progress, serve};
+
+/// Montréal's job in `root`, with `osmium` for osmium and its output in `root/out`.
+fn job(root: &Path, osmium: &str) -> PrepareJob {
+    PrepareJob {
+        city: montreal(),
+        extract: root.join("data/quebec-latest.osm.pbf"),
+        refresh: false,
+        osmium: osmium.to_string(),
+        work: root.join("work"),
+        metro: root.join("out/metro"),
+        root: root.to_path_buf(),
+        archive: root.join("out/montreal.citymodel"),
+    }
+}
 
 #[test]
 fn the_steps_are_the_scripts_and_pack_is_last() {
-    let steps = prepare::steps(std::path::Path::new("/data/quebec-latest.osm.pbf"));
+    let steps = prepare::steps(&job(Path::new("/"), "osmium"));
     let keys: Vec<_> = steps.iter().map(|s| s.key).collect();
     assert_eq!(keys, ["extract", "area", "highways", "tracks", "merge", "import", "tiles", "index", "pack"]);
     let groups: Vec<_> = steps.iter().map(|s| (s.group, s.subject.as_str())).collect();
@@ -38,10 +53,10 @@ fn megabytes_reads_like_the_script() {
 }
 
 /// Runs `get_extract` as the only step of a display; returns the result and the plain output.
-fn get(dir: &std::path::Path, refresh: bool, url: &str) -> (Result<(), StepError>, String) {
-    let extract = dir.join("data/quebec-latest.osm.pbf");
-    let (progress, sink) = quiet_progress(prepare::steps(&extract), dir);
-    let result = progress.step("extract", |ctx| prepare::get_extract(ctx, &extract, refresh, url));
+fn get(dir: &Path, refresh: bool, url: &str) -> (Result<(), StepError>, String) {
+    let job = job(dir, "osmium");
+    let (progress, sink) = quiet_progress(prepare::steps(&job), dir);
+    let result = progress.step("extract", |ctx| prepare::get_extract(ctx, &job.extract, refresh, url));
     progress.close();
     (result, sink.text())
 }
@@ -97,23 +112,10 @@ fn the_whole_pipeline_runs_in_order_against_fake_tools() {
         root,
         "osmium",
         // the import needs real OSM data: osmium's merge writes a small extract of the Plateau as the roads
-        &format!(
-            r#"if [ "$1" = merge ]; then cp '{}' "$5"; fi"#,
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../e2e/fixtures/plateau.osm.pbf").display()
-        ),
+        &format!(r#"if [ "$1" = merge ]; then cp '{}' "$5"; fi"#, Path::new(env!("CARGO_MANIFEST_DIR")).join("../../e2e/fixtures/plateau.osm.pbf").display()),
     );
-    let out = root.join("out");
-    let job = PrepareJob {
-        extract: root.join("data/quebec-latest.osm.pbf"),
-        refresh: false,
-        url: "http://127.0.0.1:1/never".into(),
-        osmium: osmium.display().to_string(),
-        work: root.join("work"),
-        metro: out.join("metro"),
-        root: root.to_path_buf(),
-        archive: out.join("montreal.citymodel"),
-    };
-    let (progress, sink) = quiet_progress(prepare::steps(&job.extract), root);
+    let job = job(root, osmium.to_str().unwrap());
+    let (progress, sink) = quiet_progress(prepare::steps(&job), root);
     prepare::run_job(&progress, &job).unwrap();
     progress.close();
     let text = sink.text();
@@ -138,7 +140,7 @@ fn the_whole_pipeline_runs_in_order_against_fake_tools() {
     assert_eq!((header.grid.nx, header.grid.ny), (51, 34));
 
     let passes: Vec<_> = text.lines().filter(|l| l.starts_with("PASS ")).map(|l| l.split(' ').nth(1).unwrap().to_string()).collect();
-    let groups: Vec<_> = prepare::steps(&job.extract).iter().map(|s| s.group.to_string()).collect();
+    let groups: Vec<_> = prepare::steps(&job).iter().map(|s| s.group.to_string()).collect();
     assert_eq!(passes.len(), 9, "{text}");
     assert_eq!(passes, groups, "{text}");
     let subjects: Vec<_> = text.lines().filter(|l| l.starts_with("PASS ")).map(|l| l.split(' ').nth(2).unwrap().to_string()).collect();
@@ -154,18 +156,8 @@ fn a_failed_step_stops_the_pipeline_before_pack() {
     fs::write(root.join("data/quebec-latest.osm.pbf"), b"x").unwrap();
     // osmium fails, so the road tiles cannot be made.
     let osmium = fake_tool(root, "osmium", "echo boom >&2; exit 1");
-    let out = root.join("out");
-    let job = PrepareJob {
-        extract: root.join("data/quebec-latest.osm.pbf"),
-        refresh: false,
-        url: "http://127.0.0.1:1/never".into(),
-        osmium: osmium.display().to_string(),
-        work: root.join("work"),
-        metro: out.join("metro"),
-        root: root.to_path_buf(),
-        archive: out.join("montreal.citymodel"),
-    };
-    let (progress, sink) = quiet_progress(prepare::steps(&job.extract), root);
+    let job = job(root, osmium.to_str().unwrap());
+    let (progress, sink) = quiet_progress(prepare::steps(&job), root);
     let result = prepare::run_job(&progress, &job);
     progress.close();
     let text = sink.text();

@@ -253,6 +253,18 @@ class Crates(unittest.TestCase):
         self.assertEqual(s.wasm_args, "-p cityloom_editor -p cityloom_report -p cityloom_report_pdf")
         self.assertTrue(s.wasm)
 
+    def test_a_citys_config_runs_every_crate_and_no_browser_spec(self):
+        # The builder's tests load every file of cities/; the specs' road data is the e2e fixtures', not a city's.
+        files = sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / "cities").glob("*.toml"))
+        self.assertIn("cities/montreal.toml", files, "cities/ has no config of Montréal")
+        for f in files:
+            with self.subTest(f):
+                s = pick(f)
+                self.assertIsNone(s.crates)
+                self.assertTrue(s.rust and s.version)
+                self.assertEqual(s.specs, [])
+                self.assertFalse(s.browser)
+
     def test_a_change_no_crate_reads_runs_no_crate(self):
         for f in ("e2e/tests/street.spec.ts", "scripts/include/tests/test_ci_changes.py", "website/docs/a.md"):
             with self.subTest(f):

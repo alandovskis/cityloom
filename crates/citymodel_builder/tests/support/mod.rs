@@ -6,8 +6,57 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use citymodel_builder::city::City;
+use citymodel_builder::metro_index::Grid;
 use citymodel_builder::progress::testing::SharedBuf;
 use citymodel_builder::progress::{Progress, Spec};
+use citymodel_builder::tiles::{CityGrid, Margin};
+
+/// Montréal's grid and margin, as they were before they came from a file.
+pub const MONTREAL_GRID: Grid = Grid { lon0: -74.4, lat0: 45.2, dlon: 0.0257, dlat: 0.018, nx: 51, ny: 34 };
+pub const MONTREAL_MARGIN: Margin = Margin { lon: 0.0064, lat: 0.0045 };
+
+/// Montréal as a config gives it, its extract at an address nothing listens on.
+pub fn montreal() -> City {
+    City {
+        id: "montreal".into(),
+        extract_url: "http://127.0.0.1:1/quebec-latest.osm.pbf".into(),
+        grid: CityGrid { west: -74.4, south: 45.2, tile_width: 0.0257, tile_height: 0.018, columns: 51, rows: 34 },
+        margin: MONTREAL_MARGIN,
+    }
+}
+
+/// A made-up city's config, valid as the file `cities/testville.toml`. The margin is about 630 m by 670 m.
+pub const TESTVILLE: &str = r#"
+id = "testville"
+extract_url = "http://127.0.0.1:1/extracts/testville-latest.osm.pbf"
+
+[grid]
+west = 10.0
+south = 45.0
+tile_width = 0.02
+tile_height = 0.015
+columns = 3
+rows = 2
+
+[margin]
+lon = 0.008
+lat = 0.006
+"#;
+
+/// Writes `root/cities/<id>.toml`; returns its path.
+pub fn write_city(root: &Path, id: &str, text: &str) -> PathBuf {
+    let dir = root.join("cities");
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join(format!("{id}.toml"));
+    fs::write(&path, text).unwrap();
+    path
+}
+
+/// `TESTVILLE` for another id, so with its own extract too.
+pub fn city_named(id: &str) -> String {
+    TESTVILLE.replace("testville", id)
+}
 
 /// A script named `name` in `dir` that appends its arguments, one invocation per line, to `dir/<name>.log` and then
 /// runs `body` (shell, `$LOG` is that file). Returns the directory to put on a command line as the program's path.

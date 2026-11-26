@@ -4,10 +4,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use cityloom_model::NetworkTile;
-use citymodel_builder::metro_index::{index_json, short_checksum};
-use citymodel_builder::tiles::{self, TilesJob};
+use citymodel_builder::metro_index::{Grid, index_json, short_checksum};
+use citymodel_builder::tiles::{self, Margin, TilesJob};
 use sha2::{Digest, Sha256};
-use support::{calls, fake_tool, quiet_progress};
+use support::{MONTREAL_GRID, MONTREAL_MARGIN, calls, fake_tool, quiet_progress};
 
 const HIGHWAYS: &str = "motorway,motorway_link,trunk,trunk_link,primary,primary_link,secondary,secondary_link,tertiary,tertiary_link,unclassified,residential,living_street,service,pedestrian";
 
@@ -25,12 +25,12 @@ fn merge_writes(roads: &Path) -> String {
 #[test]
 fn the_metro_bounds_are_the_doubles_python_computed() {
     // The values came from the former Python metro_tiles' arithmetic (python3, 2026-10-17).
-    assert_eq!(tiles::metro_bounds(), "-74.4064,45.1955,-73.08290000000001,45.816500000000005");
+    assert_eq!(tiles::metro_bounds(&MONTREAL_GRID, &MONTREAL_MARGIN), "-74.4064,45.1955,-73.08290000000001,45.816500000000005");
 }
 
 #[test]
 fn the_steps_are_the_scripts_then_the_import() {
-    let steps: Vec<_> = tiles::steps().into_iter().map(|s| (s.key, s.group, s.subject)).collect();
+    let steps: Vec<_> = tiles::steps(&MONTREAL_GRID).into_iter().map(|s| (s.key, s.group, s.subject)).collect();
     let expected = [
         ("area", "roads", "metro area"),
         ("highways", "roads", "highways"),
@@ -41,8 +41,6 @@ fn the_steps_are_the_scripts_then_the_import() {
         ("index", "tiles", "index"),
     ];
     assert_eq!(steps, expected.map(|(k, g, s)| (k, g, s.to_string())));
-    let grid = tiles::grid();
-    assert_eq!((grid.nx, grid.ny), (51, 34));
 }
 
 #[test]
@@ -50,7 +48,18 @@ fn the_index_lists_the_tiles_as_the_archive_orders_them() {
     // by name as text, as the archive's members are (`networks/10_0.json` before `networks/9_1.json`), so the
     // index.json the server writes when it unpacks is the same bytes as this one
     let named = |names: &[&str]| names.iter().map(|n| (n.to_string(), format!("sum{n}"))).collect::<Vec<_>>();
-    assert_eq!(tiles::index(named(&["0_0", "9_1", "9_10", "10_0"])), index_json(&tiles::grid(), &named(&["0_0", "10_0", "9_1", "9_10"])));
+    assert_eq!(tiles::index(&MONTREAL_GRID, named(&["0_0", "9_1", "9_10", "10_0"])), index_json(&MONTREAL_GRID, &named(&["0_0", "10_0", "9_1", "9_10"])));
+}
+
+#[test]
+fn the_bounds_steps_and_index_are_the_given_grids() {
+    let grid = Grid { lon0: -0.5, lat0: 51.3, dlon: 0.029, dlat: 0.018, nx: 5, ny: 3 };
+    // as Python adds them up
+    assert_eq!(tiles::metro_bounds(&grid, &Margin { lon: 0.0073, lat: 0.0051 }), "-0.5073,51.2949,-0.3477,51.3591");
+    let subjects: Vec<_> = tiles::steps(&grid).into_iter().map(|s| (s.key, s.subject)).collect();
+    assert!(subjects.contains(&("tiles", "cutting 15 tiles".to_string())), "{subjects:?}");
+    let named = vec![("0_0".to_string(), "ab".to_string())];
+    assert_eq!(tiles::index(&grid, named.clone()), index_json(&grid, &named));
 }
 
 struct Setup {
@@ -68,11 +77,20 @@ impl Setup {
     }
     fn run(&self, osmium_body: &str) -> (Result<(), citymodel_builder::progress::StepError>, String) {
         let osmium = fake_tool(self.dir.path(), "osmium", osmium_body);
-        let (progress, sink) = quiet_progress(tiles::steps(), self.dir.path());
+        let (progress, sink) = quiet_progress(tiles::steps(&MONTREAL_GRID), self.dir.path());
         let source = self.dir.path().join("quebec.osm.pbf");
         let work = self.dir.path().join("work");
         let out = self.dir.path().join("out");
-        let job = TilesJob { source: &source, work: &work, out: &out, osmium: osmium.to_str().unwrap() };
+        let job = TilesJob {
+            source: &source,
+            work: &work,
+            out: &out,
+            osmium: osmium.to_str().unwrap(),
+            grid: MONTREAL_GRID,
+            margin: MONTREAL_MARGIN,
+            url: "http://127.0.0.1:1/extracts/testville-latest.osm.pbf",
+            extract_name: "testville-latest.osm.pbf",
+        };
         let result = tiles::run(&progress, &job);
         progress.close();
         (result, sink.text())
@@ -138,7 +156,7 @@ fn the_roads_are_imported_and_cut_into_network_tiles_with_their_index() {
     assert!(frames.windows(2).all(|w| w[0] == w[1]));
     // the index lists the tiles by name as text (`names` is so sorted), the order of the archive's members, so the
     // index.json the server writes when it unpacks is the same bytes
-    assert_eq!(fs::read_to_string(out.join("index.json")).unwrap(), index_json(&tiles::grid(), &named));
+    assert_eq!(fs::read_to_string(out.join("index.json")).unwrap(), index_json(&MONTREAL_GRID, &named));
 }
 
 #[test]
@@ -169,9 +187,18 @@ fn a_missing_source_is_a_clear_error() {
     fs::remove_file(s.dir.path().join("quebec.osm.pbf")).unwrap();
     let (result, _) = s.run("true");
     let error = result.unwrap_err();
-    assert_eq!(error.lines[0], format!("{} does not exist. Download the Quebec extract first (about 1.2 GB):", s.p("quebec.osm.pbf")));
-    assert_eq!(error.lines[1], "curl -L -o quebec-latest.osm.pbf https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf");
+    assert!(error.lines[0].starts_with(&format!("{} does not exist.", s.p("quebec.osm.pbf"))), "{:?}", error.lines);
     assert!(calls(s.dir.path(), "osmium").is_empty());
+}
+
+#[test]
+fn a_missing_extract_names_the_citys_url_and_file() {
+    let s = Setup::new();
+    fs::remove_file(s.dir.path().join("quebec.osm.pbf")).unwrap();
+    let (result, _) = s.run("true");
+    let error = result.unwrap_err();
+    assert_eq!(error.lines[0], format!("{} does not exist. Download the extract first:", s.p("quebec.osm.pbf")));
+    assert_eq!(error.lines[1], "curl -L -o testville-latest.osm.pbf http://127.0.0.1:1/extracts/testville-latest.osm.pbf");
 }
 
 #[test]

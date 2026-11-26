@@ -1,5 +1,7 @@
 pub mod archive;
 #[cfg(feature = "cli")]
+pub mod city;
+#[cfg(feature = "cli")]
 pub mod commands;
 #[cfg(feature = "cli")]
 pub mod download;

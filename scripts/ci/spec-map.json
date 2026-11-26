@@ -31,6 +31,7 @@
     { "paths": ["crates/cityloom_editor/src/archive/**"], "specs": ["@archive", "@share", "@cross"] },
     { "paths": ["crates/cityloom_editor/src/share/**"], "specs": ["@share", "@home", "@cross"] },
     { "paths": ["crates/citymodel_builder/**"], "specs": "all" },
+    { "paths": ["cities/**"], "specs": "none" },
     { "paths": ["crates/cityloom_report/**", "crates/cityloom_report_pdf/**"], "specs": ["@map"] },
     { "paths": ["web/street.html", "web/app.js"], "specs": ["@street", "@cross"] },
     { "paths": ["web/editor.css", "web/tray.css"], "specs": ["@street", "@junction", "@cross"] },

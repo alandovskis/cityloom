@@ -38,11 +38,50 @@ const SUFFIX: &str = ".json";
 /// The tiles osmium cut before the importer made them; removed with the old tiles.
 const OLD_SUFFIX: &str = ".osm.pbf";
 
+/// How far an area reaches from its centre (the editor's `place::area::HALF_M`), which a margin must be wide enough for.
+pub const AREA_REACH_M: f64 = 0.0;
+
+/// A city's grid, as its config file gives it: the south-west corner of tile 0_0, the size of a tile's core (degrees)
+/// and the number of tiles.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CityGrid {
+    pub west: f64,
+    pub south: f64,
+    pub tile_width: f64,
+    pub tile_height: f64,
+    pub columns: u16,
+    pub rows: u16,
+}
+
+impl CityGrid {
+    pub fn grid(&self) -> Grid {
+        todo!()
+    }
+}
+
+/// The margin round a tile's core, in degrees.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Margin {
+    pub lon: f64,
+    pub lat: f64,
+}
+
+/// What is wrong with a city's config: the field, as `grid.west`, and why.
+pub struct FieldError {
+    pub field: &'static str,
+    pub reason: String,
+}
+
+/// Whether tiles can be made of this grid and margin.
+pub fn check(_grid: &CityGrid, _margin: &Margin) -> Result<(), FieldError> {
+    todo!()
+}
+
 pub fn grid() -> Grid {
     Grid { lon0: LON0, lat0: LAT0, dlon: DLON, dlat: DLAT, nx: NX, ny: NY }
 }
 
-pub fn steps() -> Vec<Spec> {
+pub fn steps(_grid: &Grid) -> Vec<Spec> {
     let spec = |key, group, subject: &str| Spec { key, group, subject: subject.to_string() };
     vec![
         spec("area", "roads", "metro area"),
@@ -56,7 +95,7 @@ pub fn steps() -> Vec<Spec> {
 }
 
 /// The box of the whole metro area, `W,S,E,N`, as osmium's `-b` reads it.
-pub fn metro_bounds() -> String {
+pub fn metro_bounds(_grid: &Grid, _margin: &Margin) -> String {
     let (west, south) = (LON0 - MARGIN_LON, LAT0 - MARGIN_LAT);
     let (east, north) = (LON0 + f64::from(NX) * DLON + MARGIN_LON, LAT0 + f64::from(NY) * DLAT + MARGIN_LAT);
     format!("{west},{south},{east},{north}")
@@ -67,6 +106,11 @@ pub struct TilesJob<'a> {
     pub work: &'a Path,
     pub out: &'a Path,
     pub osmium: &'a str,
+    pub grid: Grid,
+    pub margin: Margin,
+    /// Where the extract is downloaded from, and its file name: for the error when it is missing.
+    pub url: &'a str,
+    pub extract_name: &'a str,
 }
 
 /// The osmium command with arguments that are strings and paths alike.
@@ -94,7 +138,7 @@ fn tile_files(dir: &Path) -> Result<Vec<PathBuf>, StepError> {
 
 /// The `index.json` of the tiles `named` (name, short checksum), listed by name as text: the order of the archive's
 /// members, from which the server writes its `index.json` when it unpacks, so the two are the same bytes.
-pub fn index(mut named: Vec<(String, String)>) -> String {
+pub fn index(_grid: &Grid, mut named: Vec<(String, String)>) -> String {
     named.sort();
     index_json(&grid(), &named)
 }
@@ -114,7 +158,7 @@ pub fn run(p: &Progress, job: &TilesJob) -> Result<(), StepError> {
             ]));
         }
         fs::create_dir_all(job.work)?;
-        s.run(command(job, &[&"extract", &"-b", &metro_bounds(), &job.source, &"-o", &metro, &overwrite]))
+        s.run(command(job, &[&"extract", &"-b", &metro_bounds(&job.grid, &job.margin), &job.source, &"-o", &metro, &overwrite]))
     })?;
     p.step("highways", |s| s.run(command(job, &[&"tags-filter", &metro, &format!("w/highway={HIGHWAYS},{TRACKS}"), &"-o", &streets, &overwrite])))?;
     p.step("tracks", |s| {
@@ -141,7 +185,7 @@ pub fn run(p: &Progress, job: &TilesJob) -> Result<(), StepError> {
             fs::remove_file(old)?;
         }
         fs::create_dir_all(job.out)?;
-        let tiles = network_tiles::cut(&network, &frame, &grid());
+        let tiles = network_tiles::cut(&network, &frame, &grid(), &job.margin);
         // the tiles hold all of the network they need, so it goes before they are written
         drop(network);
         let named = network_tiles::write(job.out, &tiles)?;
@@ -153,7 +197,7 @@ pub fn run(p: &Progress, job: &TilesJob) -> Result<(), StepError> {
         Ok(named)
     })?;
     p.step("index", |_| {
-        fs::write(job.out.join("index.json"), index(named))?;
+        fs::write(job.out.join("index.json"), index(&job.grid, named))?;
         Ok(())
     })
 }

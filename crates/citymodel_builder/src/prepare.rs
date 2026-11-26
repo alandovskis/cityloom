@@ -5,10 +5,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::city::City;
 use crate::commands::{self, PackJob};
 use crate::download::download;
 use crate::progress::{Progress, Spec, StepCtx, StepError, exit_on_ctrl_c};
-use crate::tiles::{self, TilesJob};
+use crate::tiles::{self, CityGrid, Margin, TilesJob};
 
 const ARCHIVE_NAME: &str = "montreal.citymodel";
 pub use crate::progress::megabytes;
@@ -16,15 +17,16 @@ pub const URL: &str = "https://download.geofabrik.de/north-america/canada/quebec
 
 /// What the command was asked, as the command line says it.
 pub struct PrepareArgs {
+    pub city: Option<String>,
     pub extract: Option<PathBuf>,
     pub refresh: bool,
 }
 
 /// Everything `run_job` touches, so a test points the tools and the folders at temporary ones.
 pub struct PrepareJob {
+    pub city: City,
     pub extract: PathBuf,
     pub refresh: bool,
-    pub url: String,
     pub osmium: String,
     /// osmium's intermediate files.
     pub work: PathBuf,
@@ -35,10 +37,10 @@ pub struct PrepareJob {
 }
 
 /// What the run does, in order: the script's steps and the archive last.
-pub fn steps(extract: &Path) -> Vec<Spec> {
-    let name = extract.file_name().unwrap_or_default().to_string_lossy().into_owned();
+pub fn steps(job: &PrepareJob) -> Vec<Spec> {
+    let name = job.extract.file_name().unwrap_or_default().to_string_lossy().into_owned();
     let mut all = vec![Spec { key: "extract", group: "extract", subject: name }];
-    all.extend(tiles::steps());
+    all.extend(tiles::steps(&tiles::grid()));
     all.extend(commands::pack_steps(Path::new(ARCHIVE_NAME)));
     all
 }
@@ -57,10 +59,20 @@ pub fn get_extract(ctx: &StepCtx, extract: &Path, refresh: bool, url: &str) -> R
     Ok(())
 }
 
-/// The whole pipeline through `p`, whose steps are `steps(&job.extract)`.
+/// The whole pipeline through `p`, whose steps are `steps(job)`.
 pub fn run_job(p: &Progress, job: &PrepareJob) -> Result<(), StepError> {
-    p.step("extract", |ctx| get_extract(ctx, &job.extract, job.refresh, &job.url))?;
-    tiles::run(p, &TilesJob { source: &job.extract, work: &job.work, out: &job.metro, osmium: &job.osmium })?;
+    p.step("extract", |ctx| get_extract(ctx, &job.extract, job.refresh, &job.city.extract_url))?;
+    let tiles_job = TilesJob {
+        source: &job.extract,
+        work: &job.work,
+        out: &job.metro,
+        osmium: &job.osmium,
+        grid: tiles::grid(),
+        margin: Margin { lon: tiles::MARGIN_LON, lat: tiles::MARGIN_LAT },
+        url: URL,
+        extract_name: "quebec-latest.osm.pbf",
+    };
+    tiles::run(p, &tiles_job)?;
     let pack = PackJob {
         out: job.archive.clone(),
         area: "montreal".into(),
@@ -73,21 +85,36 @@ pub fn run_job(p: &Progress, job: &PrepareJob) -> Result<(), StepError> {
     commands::run_pack(p, &pack)
 }
 
+/// The job the command line asks for, with the city's paths under `root`; nothing is downloaded or written.
+pub fn job(_root: &Path, _args: PrepareArgs) -> Result<PrepareJob, String> {
+    todo!()
+}
+
+/// The command in `root`. The error is the exit code.
+pub fn run_at(_root: &Path, _args: PrepareArgs) -> Result<(), i32> {
+    todo!()
+}
+
 /// The command: the default job for `args`, run under a display on stderr. The error is the exit code.
 pub fn run(args: PrepareArgs) -> Result<(), i32> {
     let root = commands::repo_root();
     let job = PrepareJob {
+        city: City {
+            id: "montreal".into(),
+            extract_url: URL.into(),
+            grid: CityGrid { west: tiles::LON0, south: tiles::LAT0, tile_width: tiles::DLON, tile_height: tiles::DLAT, columns: tiles::NX, rows: tiles::NY },
+            margin: Margin { lon: tiles::MARGIN_LON, lat: tiles::MARGIN_LAT },
+        },
         // An absolute path, so it cannot be read by a tool it is handed to as an option.
         extract: commands::absolute(&args.extract.unwrap_or_else(|| root.join("data/quebec-latest.osm.pbf"))),
         refresh: args.refresh,
-        url: URL.into(),
         osmium: "osmium".into(),
         work: root.join("data/metro-work"),
         metro: root.join("web/data/metro"),
         root: root.clone(),
         archive: root.join("data").join(ARCHIVE_NAME),
     };
-    let progress = Arc::new(Progress::stderr(steps(&job.extract), root.join("data/logs"), root));
+    let progress = Arc::new(Progress::stderr(steps(&job), root.join("data/logs"), root));
     exit_on_ctrl_c(&progress).expect("the Ctrl-C handler");
     let result = run_job(&progress, &job);
     progress.close();

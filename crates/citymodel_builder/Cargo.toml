@@ -37,6 +37,10 @@ serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 cityloom_editor = { path = "../cityloom_editor" }
 
 [[test]]
+name = "city"
+required-features = ["cli"]
+
+[[test]]
 name = "commands"
 required-features = ["cli"]
 
