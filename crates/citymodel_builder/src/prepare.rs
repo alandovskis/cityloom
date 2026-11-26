@@ -1,19 +1,18 @@
-//! The `prepare` command: the Quebec extract (downloaded if it is not kept), the network tiles and the
-//! archive, in one display. It replaces the former Python `prepare`, with the pack step added last.
+//! The `prepare` command: a city's extract (downloaded if it is not kept), its network tiles and its archive, in one
+//! display, all as the city's config (`city`) says. It replaces the former Python `prepare`, with the pack step added
+//! last.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::city::City;
+use crate::city::{self, City};
 use crate::commands::{self, PackJob};
 use crate::download::download;
 use crate::progress::{Progress, Spec, StepCtx, StepError, exit_on_ctrl_c};
-use crate::tiles::{self, CityGrid, Margin, TilesJob};
+use crate::tiles::{self, TilesJob};
 
-const ARCHIVE_NAME: &str = "montreal.citymodel";
 pub use crate::progress::megabytes;
-pub const URL: &str = "https://download.geofabrik.de/north-america/canada/quebec/quebec-latest.osm.pbf";
 
 /// What the command was asked, as the command line says it.
 pub struct PrepareArgs {
@@ -40,8 +39,8 @@ pub struct PrepareJob {
 pub fn steps(job: &PrepareJob) -> Vec<Spec> {
     let name = job.extract.file_name().unwrap_or_default().to_string_lossy().into_owned();
     let mut all = vec![Spec { key: "extract", group: "extract", subject: name }];
-    all.extend(tiles::steps(&tiles::grid()));
-    all.extend(commands::pack_steps(Path::new(ARCHIVE_NAME)));
+    all.extend(tiles::steps(&job.city.grid.grid()));
+    all.extend(commands::pack_steps(&job.archive));
     all
 }
 
@@ -67,56 +66,56 @@ pub fn run_job(p: &Progress, job: &PrepareJob) -> Result<(), StepError> {
         work: &job.work,
         out: &job.metro,
         osmium: &job.osmium,
-        grid: tiles::grid(),
-        margin: Margin { lon: tiles::MARGIN_LON, lat: tiles::MARGIN_LAT },
-        url: URL,
-        extract_name: "quebec-latest.osm.pbf",
+        grid: job.city.grid.grid(),
+        margin: job.city.margin,
+        url: &job.city.extract_url,
+        extract_name: job.city.extract_name(),
     };
     tiles::run(p, &tiles_job)?;
     let pack = PackJob {
         out: job.archive.clone(),
-        area: "montreal".into(),
+        area: job.city.id.clone(),
         metro: job.metro.clone(),
         source: job.extract.file_name().unwrap_or_default().to_string_lossy().into_owned(),
         source_time: commands::source_time(&job.extract, &job.osmium),
         created: commands::now(),
-        grid: Some(tiles::grid()),
+        grid: Some(job.city.grid.grid()),
     };
     commands::run_pack(p, &pack)
 }
 
 /// The job the command line asks for, with the city's paths under `root`; nothing is downloaded or written.
-pub fn job(_root: &Path, _args: PrepareArgs) -> Result<PrepareJob, String> {
-    todo!()
-}
-
-/// The command in `root`. The error is the exit code.
-pub fn run_at(_root: &Path, _args: PrepareArgs) -> Result<(), i32> {
-    todo!()
-}
-
-/// The command: the default job for `args`, run under a display on stderr. The error is the exit code.
-pub fn run(args: PrepareArgs) -> Result<(), i32> {
-    let root = commands::repo_root();
-    let job = PrepareJob {
-        city: City {
-            id: "montreal".into(),
-            extract_url: URL.into(),
-            grid: CityGrid { west: tiles::LON0, south: tiles::LAT0, tile_width: tiles::DLON, tile_height: tiles::DLAT, columns: tiles::NX, rows: tiles::NY },
-            margin: Margin { lon: tiles::MARGIN_LON, lat: tiles::MARGIN_LAT },
-        },
-        // An absolute path, so it cannot be read by a tool it is handed to as an option.
-        extract: commands::absolute(&args.extract.unwrap_or_else(|| root.join("data/quebec-latest.osm.pbf"))),
+pub fn job(root: &Path, args: PrepareArgs) -> Result<PrepareJob, String> {
+    let city = city::choose(root, args.city.as_deref())?;
+    // An absolute path, so it cannot be read by a tool it is handed to as an option.
+    let extract = args.extract.map_or_else(|| city.extract(root), |given| commands::absolute(&given));
+    Ok(PrepareJob {
+        extract,
         refresh: args.refresh,
         osmium: "osmium".into(),
-        work: root.join("data/metro-work"),
+        work: city.work(root),
         metro: root.join("web/data/metro"),
-        root: root.clone(),
-        archive: root.join("data").join(ARCHIVE_NAME),
-    };
-    let progress = Arc::new(Progress::stderr(steps(&job), root.join("data/logs"), root));
+        root: root.to_path_buf(),
+        archive: city.archive(root),
+        city,
+    })
+}
+
+/// The command in `root`: the job for `args`, run under a display on stderr. A city that cannot be had is said
+/// before anything is shown, downloaded or written. The error is the exit code.
+pub fn run_at(root: &Path, args: PrepareArgs) -> Result<(), i32> {
+    let job = job(root, args).map_err(|error| {
+        eprintln!("{error}");
+        1
+    })?;
+    let progress = Arc::new(Progress::stderr(steps(&job), root.join("data/logs"), root.to_path_buf()));
     exit_on_ctrl_c(&progress).expect("the Ctrl-C handler");
     let result = run_job(&progress, &job);
     progress.close();
     result.map_err(|_| 1)
+}
+
+/// The command in the repository. The error is the exit code.
+pub fn run(args: PrepareArgs) -> Result<(), i32> {
+    run_at(&commands::repo_root(), args)
 }

@@ -13,20 +13,20 @@ use sha2::{Digest, Sha256};
 
 use crate::metro_index::{Grid, short_checksum};
 use crate::progress::StepError;
-use crate::tiles::{MARGIN_LAT, MARGIN_LON, Margin};
+use crate::tiles::Margin;
 
 /// The box a road is looked for in, widened by this much (degrees, about a tenth of a millimetre), so that rounding
 /// cannot leave out a road `reaching` would keep: the box only chooses the roads `reaching` is asked about.
 const SLACK: f64 = 1e-9;
 
 /// Tile `x`, `y`'s core widened by the margin, as a frame.
-fn rect(grid: &Grid, _margin: &Margin, x: u16, y: u16) -> Frame {
+fn rect(grid: &Grid, margin: &Margin, x: u16, y: u16) -> Frame {
     let (x, y) = (f64::from(x), f64::from(y));
     Frame {
-        south: grid.lat0 + y * grid.dlat - MARGIN_LAT,
-        west: grid.lon0 + x * grid.dlon - MARGIN_LON,
-        north: grid.lat0 + (y + 1.0) * grid.dlat + MARGIN_LAT,
-        east: grid.lon0 + (x + 1.0) * grid.dlon + MARGIN_LON,
+        south: grid.lat0 + y * grid.dlat - margin.lat,
+        west: grid.lon0 + x * grid.dlon - margin.lon,
+        north: grid.lat0 + (y + 1.0) * grid.dlat + margin.lat,
+        east: grid.lon0 + (x + 1.0) * grid.dlon + margin.lon,
     }
 }
 
@@ -55,8 +55,8 @@ pub fn cut(network: &Network, frame: &Frame, grid: &Grid, margin: &Margin) -> Ve
         if grid.nx == 0 || grid.ny == 0 || !(west.is_finite() && east.is_finite() && south.is_finite() && north.is_finite()) {
             continue;
         }
-        for x in span(west, east, grid.lon0, grid.dlon, MARGIN_LON, grid.nx) {
-            for y in span(south, north, grid.lat0, grid.dlat, MARGIN_LAT, grid.ny) {
+        for x in span(west, east, grid.lon0, grid.dlon, margin.lon, grid.nx) {
+            for y in span(south, north, grid.lat0, grid.dlat, margin.lat, grid.ny) {
                 let r = rect(grid, margin, x, y);
                 if west <= r.east + SLACK && east >= r.west - SLACK && south <= r.north + SLACK && north >= r.south - SLACK {
                     candidates[usize::from(x) * usize::from(grid.ny) + usize::from(y)].push(i);

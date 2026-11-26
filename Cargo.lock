@@ -787,12 +787,14 @@ dependencies = [
  "ctrlc",
  "geom",
  "osm2streets",
+ "serde",
  "serde_json",
  "sha2 0.11.1",
  "streets_reader",
  "tar",
  "tempfile",
  "thiserror 2.0.21",
+ "toml",
  "ureq",
 ]
 
