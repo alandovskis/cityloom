@@ -520,7 +520,7 @@ mod pick_tests {
     use crate::shared::i18n::Locale;
     use crate::shared::ports::{RecordingAnnouncer, test_ports_with_time};
     use crate::street::model::{Calming, Instance, Piece, PlanThing, Street, StreetExt, ZoneEnd, ZoneFrame, zoned};
-    use crate::street::model::{CalmingKind, CalmingKindExt, StopKind, Use};
+    use crate::street::model::{CalmingKind, CalmingKindExt, Green, GreenKind, Stop, StopKind, TreeSize, Use};
     use crate::street::vm::add_menu::Item;
     use crate::street::vm::level::Level;
 
@@ -1066,5 +1066,194 @@ mod pick_tests {
             let stop = objects(&r).into_iter().find(|o| matches!(o.0, PlanThing::Stop { .. })).unwrap();
             assert_eq!((stop.1, stop.2), (0, stop_mm), "{from_end:?}: as a stretch picked from the left end would");
         }
+    }
+
+    /// The sample street `LEN` long, anchored at `from_end`, with a stop at 30 m to 42 m on the right, a raised table at
+    /// 20 m to 27 m and a tree at 45 m to 46 m, each counted from `from_end`.
+    fn with_things(from_end: ZoneEnd) -> Street {
+        Street {
+            from_end,
+            length_mm: Some(LEN),
+            stops: vec![Stop { side: Side::Right, from_mm: 30_000, length_mm: 12_000, kind: StopKind::Curb, shelter: false, name: None }],
+            calming: vec![Calming { from_mm: 20_000, length_mm: 7_000, kind: CalmingKind::Table, first: None }],
+            green: vec![Green { kind: GreenKind::Tree, from_mm: 45_000, length_mm: 1_000, offset_mm: 1_500, width_mm: 1_000, size: Some(TreeSize::M) }],
+            ..sample()
+        }
+    }
+
+    fn is_stop(t: PlanThing) -> bool {
+        matches!(t, PlanThing::Stop { .. })
+    }
+
+    fn is_calming(t: PlanThing) -> bool {
+        matches!(t, PlanThing::Calming { .. })
+    }
+
+    fn is_green(t: PlanThing) -> bool {
+        matches!(t, PlanThing::Green { .. })
+    }
+
+    /// The one thing on the plan that `is` says, `(thing, from, to)` from the plan's left end.
+    fn thing(r: &Rig, is: fn(PlanThing) -> bool) -> (PlanThing, i32, i32) {
+        let things = objects(r);
+        let mut found = things.iter().copied().filter(|o| is(o.0));
+        let one = found.next().unwrap_or_else(|| panic!("no such thing: {things:?}"));
+        assert!(found.next().is_none(), "one such thing: {things:?}");
+        one
+    }
+
+    /// Where the thing `is` says lies on the plan.
+    fn span(r: &Rig, is: fn(PlanThing) -> bool) -> (i32, i32) {
+        let (_, from, to) = thing(r, is);
+        (from, to)
+    }
+
+    fn revisions(r: &Rig) -> usize {
+        r.vm.view_now().revisions.len()
+    }
+
+    /// Drags the thing `is` says, which lies at `from_mm` on a street anchored at its first end, pressed at `grab_mm`:
+    /// begun 1 m on, it is a drag of that thing from where it lies; 2 m on, it lies 2 m on, quietly, with no revision;
+    /// let go there, it is kept as one revision, announced once; dragged 2 m more and given up, it is back, with no
+    /// revision and nothing said.
+    fn dragged_quietly_kept_once_or_put_back(is: fn(PlanThing) -> bool, from_mm: i32, length_mm: i32, grab_mm: i32) {
+        let r = rig_of(&with_things(ZoneEnd::First), ZoneEnd::First);
+        let (t, from, to) = thing(&r, is);
+        assert_eq!((from, to), (from_mm, from_mm + length_mm));
+        let px = |mm: i32| f64::from(mm) / 100.0;
+        let press = PlanPress::Thing { thing: t, at_mm: grab_mm };
+        let g = r.vm.plan_press(press, px(grab_mm));
+        r.said.take();
+        let before = revisions(&r);
+        // Begun.
+        let g = r.vm.plan_move(&g, px(grab_mm + 1_000), grab_mm + 1_000);
+        assert_eq!(g, PlanGesture::Thing { thing: t, from_mm, grab_mm });
+        // Moved: it follows the pointer, shown and not said.
+        let g = r.vm.plan_move(&g, px(grab_mm + 2_000), grab_mm + 2_000);
+        let moved = (from_mm + 2_000, from_mm + 2_000 + length_mm);
+        assert_eq!(span(&r, is), moved, "it follows the pointer");
+        assert!(r.said.take().is_empty(), "quiet while it lasts");
+        assert_eq!(revisions(&r), before, "no revision while it lasts");
+        // Kept as one edit.
+        r.vm.plan_release(g, grab_mm + 2_000);
+        assert_eq!(span(&r, is), moved, "kept where it was let go");
+        assert_eq!(revisions(&r), before + 1, "one revision");
+        assert_eq!(r.said.take().len(), 1, "the move is announced once");
+        // Given up halfway: put back.
+        let grab = grab_mm + 2_000;
+        let press = PlanPress::Thing { thing: thing(&r, is).0, at_mm: grab };
+        let g = r.vm.plan_press(press, px(grab));
+        r.said.take();
+        let g = r.vm.plan_move(&g, px(grab + 1_000), grab + 1_000);
+        let g = r.vm.plan_move(&g, px(grab + 2_000), grab + 2_000);
+        assert_eq!(span(&r, is), (moved.0 + 2_000, moved.1 + 2_000), "it follows the pointer again");
+        r.vm.plan_cancel(g);
+        assert_eq!(span(&r, is), moved, "back where it was");
+        assert_eq!(revisions(&r), before + 1, "no new revision");
+        assert!(r.said.take().is_empty(), "nothing said");
+    }
+
+    #[test]
+    fn a_stop_dragged_on_the_plan_follows_the_pointer_quietly_and_is_kept_as_one_edit_or_put_back() {
+        dragged_quietly_kept_once_or_put_back(is_stop, 30_000, 12_000, 31_000);
+    }
+
+    #[test]
+    fn a_raised_element_dragged_on_the_plan_follows_the_pointer_quietly_and_is_kept_as_one_edit_or_put_back() {
+        dragged_quietly_kept_once_or_put_back(is_calming, 20_000, 7_000, 21_000);
+    }
+
+    #[test]
+    fn a_planting_dragged_on_the_plan_follows_the_pointer_quietly_and_is_kept_as_one_edit_or_put_back() {
+        dragged_quietly_kept_once_or_put_back(is_green, 45_000, 1_000, 45_500);
+    }
+
+    #[test]
+    fn a_second_drag_while_a_stop_a_raised_element_or_a_planting_is_dragged_is_refused_with_its_row_s_reason() {
+        let cases: [(fn(PlanThing) -> bool, i32, &str); 3] = [
+            (is_stop, 31_000, "Finish the drag before changing the stops."),
+            (is_calming, 21_000, "Finish the drag before changing the raised tables."),
+            (is_green, 45_500, "Finish the drag before changing the trees and planting."),
+        ];
+        let px = |mm: i32| f64::from(mm) / 100.0;
+        for (is, grab, reason) in cases {
+            let r = rig_of(&with_things(ZoneEnd::First), ZoneEnd::First);
+            let before = revisions(&r);
+            let (t, from, to) = thing(&r, is);
+            let first = r.vm.plan_press(PlanPress::Thing { thing: t, at_mm: grab }, px(grab));
+            let first = r.vm.plan_move(&first, px(grab + 1_000), grab + 1_000);
+            let first = r.vm.plan_move(&first, px(grab + 2_000), grab + 2_000);
+            assert!(matches!(first, PlanGesture::Thing { .. }), "{reason}: {first:?}");
+            let moved = (from + 2_000, to + 2_000);
+            assert_eq!(span(&r, is), moved, "{reason}");
+            r.said.take();
+            // The same thing pressed again and moved past the threshold, while the first drag lasts.
+            let again = grab + 2_000;
+            let second = r.vm.plan_press(PlanPress::Thing { thing: t, at_mm: again }, px(again));
+            let second = r.vm.plan_move(&second, px(again + 1_000), again + 1_000);
+            assert_eq!(second, PlanGesture::Refused, "{reason}");
+            assert_eq!(r.said.take(), [reason]);
+            assert_eq!(span(&r, is), moved, "{reason}: the refused drag moves nothing");
+            r.vm.plan_release(second, again + 1_000);
+            assert_eq!(span(&r, is), moved, "{reason}: letting go of the refused drag changes nothing");
+            assert_eq!(revisions(&r), before, "{reason}: no revision yet");
+            assert!(r.said.take().is_empty(), "{reason}: nothing more said");
+            // The first drag still ends as one edit.
+            r.vm.plan_release(first, grab + 2_000);
+            assert_eq!(span(&r, is), moved, "{reason}");
+            assert_eq!(revisions(&r), before + 1, "{reason}: the first drag is kept as one revision");
+        }
+    }
+
+    #[test]
+    fn a_boundary_pressed_while_a_thing_is_dragged_is_refused_and_says_why() {
+        let s = Street {
+            calming: vec![Calming { from_mm: 5_000, length_mm: 7_000, kind: CalmingKind::Table, first: None }],
+            ..street(&[0, 20_000, 40_000], &[0, 100, 0], ZoneEnd::First)
+        };
+        let r = rig_of(&s, ZoneEnd::First);
+        assert_eq!(boundaries(&r), [20_000, 40_000]);
+        let before = revisions(&r);
+        let (t, from, to) = thing(&r, is_calming);
+        assert_eq!((from, to), (5_000, 12_000));
+        let table = r.vm.plan_press(PlanPress::Thing { thing: t, at_mm: 6_000 }, 60.0);
+        let table = r.vm.plan_move(&table, 70.0, 7_000);
+        let table = r.vm.plan_move(&table, 80.0, 8_000);
+        assert!(matches!(table, PlanGesture::Thing { .. }), "{table:?}");
+        assert_eq!(span(&r, is_calming), (7_000, 14_000));
+        r.said.take();
+        let g = r.vm.plan_press(PlanPress::Boundary { zone: 1 }, 200.0);
+        let g = r.vm.plan_move(&g, 230.0, 23_000);
+        assert_eq!(g, PlanGesture::Refused);
+        assert_eq!(r.said.take(), ["Finish the drag before changing the street."]);
+        assert_eq!(boundaries(&r), [20_000, 40_000], "the boundary stays");
+        let g = r.vm.plan_move(&g, 250.0, 25_000);
+        assert_eq!(boundaries(&r), [20_000, 40_000], "the boundary stays as the pointer moves on");
+        r.vm.plan_release(g, 25_000);
+        assert_eq!(boundaries(&r), [20_000, 40_000], "the boundary stays once let go");
+        assert!(r.said.take().is_empty(), "nothing more said");
+        assert_eq!(revisions(&r), before);
+        // The table's drag still ends as one edit.
+        r.vm.plan_release(table, 8_000);
+        assert_eq!(span(&r, is_calming), (7_000, 14_000));
+        assert_eq!(revisions(&r), before + 1);
+    }
+
+    #[test]
+    fn on_a_street_anchored_at_its_last_end_a_stop_a_raised_element_and_a_planting_move_with_the_pointer() {
+        let r = rig_of(&with_things(ZoneEnd::Last), ZoneEnd::Last);
+        assert_eq!(span(&r, is_stop), (18_000, 30_000));
+        assert_eq!(span(&r, is_calming), (33_000, 40_000));
+        assert_eq!(span(&r, is_green), (14_000, 15_000));
+        drag(&r, PlanPress::Thing { thing: thing(&r, is_stop).0, at_mm: 19_000 }, 19_000, 21_000);
+        assert_eq!(span(&r, is_stop), (20_000, 32_000), "the stop moves rightward on the plan");
+        drag(&r, PlanPress::Thing { thing: thing(&r, is_calming).0, at_mm: 34_000 }, 34_000, 36_000);
+        assert_eq!(span(&r, is_calming), (35_000, 42_000), "the table moves rightward on the plan");
+        drag(&r, PlanPress::Thing { thing: thing(&r, is_green).0, at_mm: 14_500 }, 14_500, 16_500);
+        assert_eq!(span(&r, is_green), (16_000, 17_000), "the tree moves rightward on the plan");
+        let s = r.vm.read(|e| e.snapshot());
+        assert_eq!(s.stops[0].from_mm, 28_000, "anchored, from the last end");
+        assert_eq!(s.calming[0].from_mm, 18_000, "anchored, from the last end");
+        assert_eq!(s.green[0].from_mm, 43_000, "anchored, from the last end");
     }
 }
