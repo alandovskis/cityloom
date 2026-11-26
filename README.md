@@ -46,14 +46,25 @@ Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first;
 
 ## The Montréal data
 
-One command makes the road tiles below. It first downloads Geofabrik's Quebec extract (about 1.2 GB) into `data/` unless it is there already; `just prepare --refresh` downloads a newer one, and an interrupted download carries on where it stopped when run again:
+One command makes the road tiles below, from the city's config, `cities/montreal.toml`. It first downloads the city's OpenStreetMap extract (Geofabrik's Quebec extract, about 1.2 GB) into `data/` unless it is there already; `just prepare montreal --refresh` downloads a newer one, `just prepare montreal --extract <path>` reads another file instead, and an interrupted download carries on where it stopped when run again:
 
 ```sh
 brew install osmium-tool   # osmium keeps the roads the tiles are made of
-just prepare
+just prepare montreal
 ```
 
-It also imports them and cuts the network into tiles, and packs the tiles into one archive, `data/montreal.citymodel` (a tar with a SHA-256 index); `just pack` packs them again without running the rest.
+It also imports them and cuts the network into tiles, and packs the tiles into one archive, `data/montreal.citymodel` (a tar with a SHA-256 index); `just pack montreal` packs them again without running the rest. `just prepare` with no city, or with one that has no file, lists the cities there are and stops before downloading anything.
+
+### Add a city
+
+A city is one file, `cities/<id>.toml`, checked in; no Rust changes. `just prepare <id>` reads it; `cities/montreal.toml` is an example. Its keys:
+
+- `id`: the file's name, which is also the archive's area name: 1 to 64 lower-case letters, digits and hyphens.
+- `extract_url`: the `http://` or `https://` address of the city's OpenStreetMap extract. Its last part, a plain file name ending in `.osm.pbf`, is the extract's name in `data/`. Two cities share an extract only by giving the same address.
+- `[grid]`: the tiles, in degrees. `west` and `south` are the south-west corner of tile `0_0`; `tile_width` and `tile_height` the size of a tile's core; `columns` and `rows` the number of tiles, west to east and south to north. The grid must lie on the earth and hold at least one tile.
+- `[margin]`: how far a tile reaches past its core, in degrees, `lon` and `lat`. Each must be at least the 400 m an area reaches from its centre, measured at the grid's edge nearest a pole.
+
+Each city keeps its own extract, its own work folder, `data/metro-work/<id>`, and its own archive, `data/<id>.citymodel`; `web/data/metro` holds the tiles of the city prepared last. A file that misses a key, has one it does not know or fails a check is refused before anything is downloaded, with the file and the key named. The builder's test `every_city_file_loads` (`cargo test -p citymodel_builder --test city`) loads every file of `cities/`.
 
 ## Montréal metro tiles
 

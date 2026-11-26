@@ -42,14 +42,44 @@ routes de compte répondent 503 et les pages n’ont pas de session ouverte.
 ## Données cartographiques
 
 ```sh
-just prepare
+just prepare montreal
 ```
 
 La recette exécute `citymodel_builder`, l’outil Rust du dépôt (`cargo run -p citymodel_builder -- prepare`; ses arguments
-sont ceux de la recette). Il télécharge dans `data/` l’extrait du Québec de Geofabrik s’il n’y est pas déjà (environ 1,2 Go;
-`just prepare --refresh` en prend un plus récent). Elle conserve ensuite les routes de la région métropolitaine (nécessite `osmium-tool`), les importe en une fois avec osm2streets et
-découpe le réseau de rues obtenu en tuiles JSON dans `web/data/metro` (environ 1 700 tuiles, environ 570 Mo). Enfin, il les réunit dans une seule archive, `data/montreal.citymodel`, un fichier tar muni d’un index SHA-256 que le serveur extrait au démarrage.
-Git ignore les tuiles et l’archive.
+sont ceux de la recette), pour la ville de `cities/montreal.toml`. Elle télécharge dans `data/` l’extrait OpenStreetMap
+de la ville, l’extrait du Québec de Geofabrik, s’il n’y est pas déjà (environ 1,2 Go; `just prepare montreal --refresh`
+en prend un plus récent, et `just prepare montreal --extract <path>` lit un autre fichier à sa place). Elle conserve
+ensuite les routes de la région métropolitaine (nécessite `osmium-tool`), les importe en une fois avec osm2streets et
+découpe le réseau de rues obtenu selon la grille de la ville en tuiles JSON dans `web/data/metro` (environ 1 700 tuiles,
+environ 570 Mo). Enfin, elle les réunit dans une seule archive, `data/montreal.citymodel`, un fichier tar muni d’un index
+SHA-256 que le serveur extrait au démarrage. Git ignore les tuiles et l’archive. `just pack montreal` empaquette de
+nouveau les tuiles sans le reste.
+
+`just prepare` sans ville, ou avec une ville qui n’a pas de fichier dans `cities/`, énumère les villes connues et
+s’arrête avant de télécharger quoi que ce soit.
+
+### Ajouter une ville
+
+Une ville est un seul fichier de configuration, `cities/<id>.toml`, versionné; en ajouter une ne change aucun code Rust.
+`just prepare <id>` le lit, et `cities/montreal.toml` en est un exemple. Ses clés :
+
+- `id` : le nom du fichier, qui est aussi le nom de zone de l’archive : de 1 à 64 lettres minuscules, chiffres et
+  traits d’union.
+- `extract_url` : l’adresse `http://` ou `https://` de l’extrait OpenStreetMap de la ville. Sa dernière partie, un
+  simple nom de fichier qui se termine par `.osm.pbf`, est le nom de l’extrait dans `data/`. Deux villes partagent un
+  extrait seulement si elles donnent la même adresse.
+- `[grid]` : les tuiles, en degrés. `west` et `south` sont le coin sud-ouest de la tuile `0_0`; `tile_width` et
+  `tile_height`, la taille du cœur d’une tuile; `columns` et `rows`, le nombre de tuiles, d’ouest en est et du sud au
+  nord. La grille doit se trouver sur la Terre et contenir au moins une tuile.
+- `[margin]` : la marge, soit la distance jusqu’où une tuile s’étend au-delà de son cœur, en degrés, `lon` et `lat`.
+  Chacune doit valoir au moins les 400 m qu’un lieu couvre depuis son centre, mesurés au bord de la grille le plus près
+  d’un pôle.
+
+Chaque ville garde son propre extrait, son propre dossier de travail, `data/metro-work/<id>`, et sa propre archive de
+zone, `data/<id>.citymodel`; `web/data/metro` contient les tuiles de la dernière ville préparée. Un fichier auquel il
+manque une clé, qui en a une inconnue ou qui échoue à une vérification est refusé avant tout téléchargement, avec le
+fichier et la clé nommés. Le test `every_city_file_loads` de l’outil (`cargo test -p citymodel_builder --test city`)
+charge chaque fichier de `cities/`, de sorte qu’une nouvelle ville est vérifiée avec les autres tests.
 
 L’ouverture d’un lieu exige les tuiles de routes : sans elles, aucun lieu ne s’ouvre, y compris celui par défaut, et la page qui l’ouvre indique que le lieu n’est pas couvert.
 

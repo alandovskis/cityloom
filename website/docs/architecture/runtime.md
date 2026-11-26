@@ -11,24 +11,28 @@ on the [overview](./index.md). The paths of the editor's files are relative to `
 
 ## From OpenStreetMap to tiles
 
-The street network is prepared ahead of time by `citymodel_builder`, never in the browser. `just prepare` runs every
-step: it downloads Geofabrik's Quebec extract into `data/` unless it is already there, keeps the roads with osmium-tool,
-imports them once with osm2streets, cuts the network into tiles, and packs the tiles into the area archive.
+The street network is prepared ahead of time by `citymodel_builder`, never in the browser, one city at a time. A city
+is a configuration file, `cities/<id>.toml`, that gives its OpenStreetMap extract's address, its grid of tiles and their
+margin. `just prepare montreal` runs every step for Montréal: it downloads the city's extract, Geofabrik's Quebec
+extract, into `data/` unless it is already there, keeps the roads with osmium-tool, imports them once with osm2streets,
+cuts the network along the city's grid into tiles, and packs the tiles into the city's area archive.
 
 ```mermaid
 flowchart LR
   geofabrik[Geofabrik]
-  subgraph prepare [just prepare]
-    extract["Quebec extract<br/>data/quebec-latest.osm.pbf"]
+  config["The city's config<br/>cities/&lt;id&gt;.toml"]
+  subgraph prepare [just prepare &lt;id&gt;]
+    extract["The city's extract<br/>data/quebec-latest.osm.pbf for Montréal"]
     subgraph tiles [citymodel_builder tiles]
-      roads["The area's roads<br/>data/metro-work"]
+      roads["The area's roads<br/>data/metro-work/&lt;id&gt;"]
       network["The whole area's network<br/>in memory"]
       metro["Network tiles and index.json<br/>web/data/metro"]
     end
-    subgraph pack [citymodel_builder pack, just pack]
-      archive["Area archive<br/>data/montreal.citymodel"]
+    subgraph pack [citymodel_builder pack, just pack &lt;id&gt;]
+      archive["Area archive<br/>data/&lt;id&gt;.citymodel"]
     end
   end
+  config -- extract_url, grid, margin --> prepare
   geofabrik -- download --> extract
   extract -- osmium-tool --> roads
   roads -- importer --> network
@@ -37,29 +41,32 @@ flowchart LR
 ```
 
 - osmium-tool is a program of its own, not part of the repository. It keeps the roads of the metropolitan area (the
-  steps `area`, `highways`, `tracks` and `merge`), in `data/metro-work`.
+  steps `area`, `highways`, `tracks` and `merge`), in `data/metro-work/<id>`, so cities do not overwrite each other's
+  files.
 - The importer, `citymodel_builder::importer` (feature `import`), runs osm2streets over the whole area's filtered roads
   in one import.
-- The network is cut into a grid of 51 by 34 tiles, each its core widened by 0.5 km, written as
-  `web/data/metro/<x>_<y>.json`. `index.json` lists them with their checksums.
+- The network is cut along the city's grid, each tile its core widened by the city's margin (Montréal's: 51 by 34
+  tiles, a margin of 0.5 km), written as `web/data/metro/<x>_<y>.json`. `index.json` lists them with their checksums.
+  `web/data/metro` holds the tiles of the city prepared last.
 - The archive is one deterministic tar: `cityloom.idx` (magic `CLOOMIDX`, version 2, a SHA-256 trailer), then
   `networks/<x>_<y>.json`.
 
-`just pack` runs only the last step. `cargo run -p citymodel_builder --release -- tiles` or `-- pack` runs one step.
+`just pack <id>` runs only the last step, and refuses tiles of another grid than the city's.
+`cargo run -p citymodel_builder --release -- tiles <id>` or `-- pack <id>` runs one step.
 The steps write their logs in `data/logs`.
 
 Who uses what the steps make:
 
 - The editor reads the tiles from `/data/metro/` (see [A page opening](#a-page-opening)).
 - The `deploy` job of `.github/workflows/postsubmit.yml` runs on a push to main once every check passed. It keeps
-  `web/data/metro` in a cache whose key hashes the sources that make the tiles. When the cache misses, it installs
-  osmium-tool and runs `just prepare`. It then runs `just deploy`, which uploads `web/` with the tiles in it, not the
+  `web/data/metro` in a cache whose key hashes `cities/montreal.toml` and the sources that make the tiles. When the cache misses, it installs
+  osmium-tool and runs `just prepare montreal`. It then runs `just deploy`, which uploads `web/` with the tiles in it, not the
   archive.
 - A server reads the archive only when `CITYLOOM_AREAS` names a folder holding exactly one `.citymodel`. At start-up it
   checks the archive and unpacks it into `DATA_ROOT/<area>/` (`lib.rs::unpack_areas` in `cityloom_server`), and serves
   `/data/metro/` from there. Without it, `/data/metro/` comes from `web/data/`.
 - The E2E tier of the browser tests (`just e2e-archive`) packs `e2e/fixtures/generated/plateau.json` with
-  `citymodel_builder pack` into `target/e2e-archive`, and runs against a server that unpacks it.
+  `citymodel_builder pack`, given no city but `--area`, `--out`, `--metro` and `--source`, into `target/e2e-archive`, and runs against a server that unpacks it.
 
 ## The deployed system
 

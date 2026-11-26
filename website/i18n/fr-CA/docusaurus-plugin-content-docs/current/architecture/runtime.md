@@ -12,25 +12,29 @@ l’éditeur sont relatifs à `crates/cityloom_editor/src/`.
 
 ## D’OpenStreetMap aux tuiles
 
-Le réseau de rues est préparé à l’avance par `citymodel_builder`, jamais dans le navigateur. `just prepare` exécute
-toutes les étapes : il télécharge dans `data/` l’extrait du Québec de Geofabrik s’il n’y est pas déjà, garde les routes
-avec osmium-tool, les importe en une fois avec osm2streets, découpe le réseau en tuiles et empaquette les tuiles dans
-l’archive de zone.
+Le réseau de rues est préparé à l’avance par `citymodel_builder`, jamais dans le navigateur, une ville à la fois. Une
+ville est un fichier de configuration, `cities/<id>.toml`, qui donne l’adresse de son extrait OpenStreetMap, sa grille
+de tuiles et leur marge. `just prepare montreal` exécute toutes les étapes pour Montréal : il télécharge dans `data/`
+l’extrait de la ville, l’extrait du Québec de Geofabrik, s’il n’y est pas déjà, garde les routes avec osmium-tool, les
+importe en une fois avec osm2streets, découpe le réseau en tuiles selon la grille de la ville et empaquette les tuiles
+dans l’archive de zone de la ville.
 
 ```mermaid
 flowchart LR
   geofabrik[Geofabrik]
-  subgraph prepare [just prepare]
-    extract["Extrait du Québec<br/>data/quebec-latest.osm.pbf"]
+  config["La configuration de la ville<br/>cities/&lt;id&gt;.toml"]
+  subgraph prepare [just prepare &lt;id&gt;]
+    extract["L’extrait de la ville<br/>data/quebec-latest.osm.pbf pour Montréal"]
     subgraph tiles [citymodel_builder tiles]
-      roads["Les routes de la région<br/>data/metro-work"]
+      roads["Les routes de la région<br/>data/metro-work/&lt;id&gt;"]
       network["Le réseau de toute la région<br/>en mémoire"]
       metro["Tuiles du réseau et index.json<br/>web/data/metro"]
     end
-    subgraph pack [citymodel_builder pack, just pack]
-      archive["Archive de zone<br/>data/montreal.citymodel"]
+    subgraph pack [citymodel_builder pack, just pack &lt;id&gt;]
+      archive["Archive de zone<br/>data/&lt;id&gt;.citymodel"]
     end
   end
+  config -- extract_url, grid, margin --> prepare
   geofabrik -- téléchargement --> extract
   extract -- osmium-tool --> roads
   roads -- importateur --> network
@@ -39,29 +43,32 @@ flowchart LR
 ```
 
 - osmium-tool est un programme à part, qui ne fait pas partie du dépôt. Il garde les routes de la région métropolitaine
-  (les étapes `area`, `highways`, `tracks` et `merge`), dans `data/metro-work`.
+  (les étapes `area`, `highways`, `tracks` et `merge`), dans `data/metro-work/<id>`, de sorte que les villes
+  n’écrasent pas les fichiers les unes des autres.
 - L’importateur, `citymodel_builder::importer` (fonctionnalité `import`), exécute osm2streets sur les routes filtrées de
   toute la région, en une seule importation.
-- Le réseau est découpé en une grille de 51 sur 34 tuiles, chacune étant son cœur élargi de 0,5 km, écrites sous la
-  forme `web/data/metro/<x>_<y>.json`. `index.json` les énumère avec leurs sommes de contrôle.
+- Le réseau est découpé selon la grille de la ville, chaque tuile étant son cœur élargi de la marge de la ville (pour
+  Montréal : 51 sur 34 tuiles, une marge de 0,5 km), écrites sous la forme `web/data/metro/<x>_<y>.json`.
+  `index.json` les énumère avec leurs sommes de contrôle. `web/data/metro` contient les tuiles de la dernière ville
+  préparée.
 - L’archive est un seul fichier tar déterministe : `cityloom.idx` (nombre magique `CLOOMIDX`, version 2, un bloc final
   SHA-256), puis `networks/<x>_<y>.json`.
 
-`just pack` n’exécute que la dernière étape. `cargo run -p citymodel_builder --release -- tiles` ou `-- pack` exécute
-une seule étape. Les étapes écrivent leurs journaux dans `data/logs`.
+`just pack <id>` n’exécute que la dernière étape, et refuse les tuiles d’une autre grille que celle de la ville.
+`cargo run -p citymodel_builder --release -- tiles <id>` ou `-- pack <id>` exécute une seule étape. Les étapes écrivent leurs journaux dans `data/logs`.
 
 Qui se sert de ce que produisent les étapes :
 
 - L’éditeur lit les tuiles à `/data/metro/` (voir [Ouverture d’une page](#ouverture-dune-page)).
 - La tâche `deploy` de `.github/workflows/postsubmit.yml` s’exécute lors d’un envoi sur main, une fois toutes les
-  vérifications réussies. Elle garde `web/data/metro` dans un cache dont la clé est un hachage des sources qui font les
-  tuiles. Quand le cache manque, elle installe osmium-tool et exécute `just prepare`. Elle exécute ensuite
+  vérifications réussies. Elle garde `web/data/metro` dans un cache dont la clé est un hachage de `cities/montreal.toml` et des
+  sources qui font les tuiles. Quand le cache manque, elle installe osmium-tool et exécute `just prepare montreal`. Elle exécute ensuite
   `just deploy`, qui téléverse `web/` avec les tuiles, mais pas l’archive.
 - Un serveur ne lit l’archive que si `CITYLOOM_AREAS` désigne un dossier qui contient exactement un `.citymodel`. Au
   démarrage, il vérifie l’archive, l’extrait dans `DATA_ROOT/<area>/` (`lib.rs::unpack_areas` dans `cityloom_server`)
   et sert `/data/metro/` à partir de là. Sans elle, `/data/metro/` vient de `web/data/`.
 - Le niveau E2E des tests dans le navigateur (`just e2e-archive`) empaquette `e2e/fixtures/generated/plateau.json` avec
-  `citymodel_builder pack` dans `target/e2e-archive`, et s’exécute contre un serveur qui l’extrait.
+  `citymodel_builder pack`, sans ville mais avec `--area`, `--out`, `--metro` et `--source`, dans `target/e2e-archive`, et s’exécute contre un serveur qui l’extrait.
 
 ## Le système déployé
 

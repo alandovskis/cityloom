@@ -69,7 +69,7 @@ Les tests du serveur sont dans `crates/cityloom_server/tests/` : `api`, `areas`
 
 ## Tests de `citymodel_builder` et de `cityloom_model`
 
-`crates/citymodel_builder/tests/` contient les tests de la chaîne (`archive`, `commands`, `ctrl_c`, `download`,
+`crates/citymodel_builder/tests/` contient les tests de la chaîne (`archive`, `city`, `commands`, `ctrl_c`, `download`,
 `prepare`, `progress` et `tiles`) et ceux de l’importateur, qui forment une seule caisse de tests, `tests/importer/` :
 `import.rs`, `real_city.rs`, `clip_agrees.rs` et `projection.rs`, avec de petits extraits OpenStreetMap comme
 `boulevard.osm` et `split_block.osm`. Les tests de `cityloom_model` sont dans le code (voir
