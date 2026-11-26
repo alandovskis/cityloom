@@ -44,7 +44,8 @@ Every issue in flight that waits for no person runs down the line at once, each 
 | planned, worktree or not | `factory-plan` step 4 if no worktree, then `factory-build` (from the test-writer, or the writer in the docs flow) |
 | red, not green | `factory-build` step 3 |
 | docs flow, commits but no `docs` record at the head | `factory-build` step D2 |
-| green (docs flow: `docs` record), not reviewed at the head | `factory-review` |
+| tests flow, commits but no `tests` record at the head | `factory-build` step T2 |
+| green (docs flow: `docs` record; tests flow: `tests` record), not reviewed at the head | `factory-review` |
 | reviewed and passed at the head | `factory-evidence` |
 
 A station that hands back ends that issue's turn; the others go on. Do not do a station's work yourself: each station's skill dispatches its own agent.
@@ -68,6 +69,7 @@ At the end of the pass, the table of every issue: key, title, where it is, what 
 | "The test is clearly wrong, let the implementer fix it" | A dispute goes to a person. Nobody but the test-writer changes a test. |
 | "It's documentation, it needs no gate" | The docs flow has its own: only the docs gate's `PASS` goes on. |
 | "This doc issue also needs a small code change" | Then it is the code flow's. The docs flow changes only documentation. |
+| "This test caught no fault; the faults are wrong, I'll pass it" | Only the tests gate's `PASS` goes on. The planner may revise the faults once; after that it is a hand-back. |
 | "It was approved before the last push" | Only an approval of the current head counts. |
 | "The deploy failed, a quick fix will do" | Label, hand back, move on. |
 | "The issue in Backlog looks easy, I'll take it now" | `linear.fallback` is read only when nothing in `linear.intake` is ready, in its order, through the queue. |

@@ -67,4 +67,10 @@ the site to GitHub Pages from `main`. A change to `docs/**` or to a `*.md` outsi
   - `green`: every test passes with `-D warnings`, formatting and the version hold, and no test file, `#[cfg(test)]`
     block, check or factory file changed since the red commit;
   - `docs`: only documentation changed, every page has its page in the other language, and the site passes Prettier
-    and builds.
+    and builds;
+  - `tests`, for an issue that asks only for tests of code that already works: only tests changed (and the version
+    line), every existing test is as it was, every test passes as for `green`, and each new test fails under at least
+    one fault of the code the plan names (mutation: the gate puts each fault in, from `.claude/factory/faults.py` and
+    `cargo-mutants`, runs the new tests and takes it back);
+  - `faults`: before a plan of that flow is posted, every function, message and declaration its faults name is there
+    and yields a fault. It builds nothing.

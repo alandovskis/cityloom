@@ -10,7 +10,7 @@ Decides whether one CityLoom issue can go down the factory's line without a pers
 ## Steps
 
 1. Read the issue: `get_issue` (title, description, labels, `gitBranchName`) and `list_comments` (every page). Read `run` and `evidence` from the configuration.
-2. Dispatch the `triage` agent with the key, title, description, the comments (author, date and body each) and `run` and `evidence`. Do not judge the issue yourself. It returns `{ verdict, flow, howToBuild, howToTest, howToExercise, question? }`, `flow` being `code` or `docs` (README, **Two flows**). A reply that is not that JSON: dispatch it once more; a second bad reply is handed back (below) as "triage gave no verdict".
+2. Dispatch the `triage` agent with the key, title, description, the comments (author, date and body each) and `run` and `evidence`. Do not judge the issue yourself. It returns `{ verdict, flow, howToBuild, howToTest, howToExercise, question? }`, `flow` being `code`, `docs` or `tests` (README, **Three flows**). A reply that is not that JSON: dispatch it once more; a second bad reply is handed back (below) as "triage gave no verdict".
 3. Record the verdict on **this issue only**:
 
 | Verdict | Label added | Comment |

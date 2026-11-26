@@ -89,8 +89,9 @@ ce que produit l’importateur change pour les mêmes données.
 
 `just test-scripts` exécute `python3 -m unittest discover -s scripts/include/tests`, avec la bibliothèque standard
 seulement. Les tests sont `test_ci_changes.py` (le sélecteur de changements de l’intégration continue, et le fait que
-chaque spécification est dans un seul niveau et un seul groupe), `test_factory_config.py`, `test_factory_gate.py` et
-`test_factory_guard.py` (l’usine logicielle), `test_issue_system.py` (les étiquettes, les formulaires de billets et
+chaque spécification est dans un seul niveau et un seul groupe), `test_factory_config.py`, `test_factory_gate.py`,
+`test_factory_guard.py` et `test_factory_faults.py` (l’usine logicielle; le dernier, les défauts que son flux de tests
+introduit dans le code), `test_issue_system.py` (les étiquettes, les formulaires de billets et
 les règles d’étiquetage concordent), `test_architecture_docs.py` (les pages d’Architecture nomment chaque tranche, clé
 de stockage et table du serveur, dans les deux langues) et `test_features.py` (la liste des fonctionnalités est
 complète, et la part des tests Rust qu’aucune fonctionnalité ne nomme reste dans sa limite).

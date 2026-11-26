@@ -15,7 +15,12 @@ The head must be the one the latest `**Factory · review <k>: pass**` record nam
 2. **Green**: the `**Factory · green**` record's gate report for the head, as a text file: every test passing. When the change has new Rust tests, add `cargo test <each new test>` run at the head, its output as a text file.
 3. **The app**: what the plan's `## Change` says a person sees, exercised as the triage's `howToExercise` says, by `run`, captured as `evidence` says: for a browser behaviour, run its spec (`E2E_PORT=<port> just e2e tests/<spec>.spec.ts`, the issue's port: README, **Side by side**) and keep its screenshots and trace, or drive the page and take screenshots of each step and its result. A change with nothing to see (server, model) is evidenced by its tests' output alone, and the PR says so.
 
-**The docs flow** (README, **Two flows**) has no red and no green report. Its steps are:
+**The tests flow** (README, **Three flows**) has no red report and nothing new to see in the app: what it proves is that each new test passes and can fail. Its steps are:
+
+1. **The gate**: the `**Factory · tests**` record's full report for the head, as a text file: each new test, the faults it caught, and the faults no new test caught.
+2. **The tests at the head**, each new test's own output: for a Rust test, `cargo test <its name> -- --exact` in `<wt>`, as a text file; for a browser test, `E2E_PORT=<port> npx playwright test tests/<spec>.spec.ts:<line> --trace on` from `<wt>/e2e`, keeping its output and the screenshots its trace holds (`npx playwright show-trace` is not needed: unzip the trace and keep its screenshots), as files.
+
+**The docs flow** has no red and no green report. Its steps are:
 
 1. **The gate**: the `**Factory · docs**` record's gate report for the head, as a text file: the pages changed, nothing else, and the site built.
 2. **The pages**, as a reader sees them: in `<wt>`, `just docs-build`, then serve the build on the issue's port, since other issues may be serving theirs (`cd website && npx docusaurus serve --no-open --port <port>`), and for each page of the site the branch adds or changes, a full-page screenshot in English and in fr-CA (`cd e2e && npx playwright screenshot --full-page http://localhost:<port>/cityloom/<page> <file>`, and `.../cityloom/fr-CA/<page>`), one capture per page and language; stop the server after. A changed file outside the site (`docs/`, a `CLAUDE.md`, a README) is evidenced by its text at the head, as a file.
@@ -41,7 +46,7 @@ A file's link is `https://github.com/<github.repo>/raw/<evidenceBranch>/clm-<n>/
 
 ## 4. The pull request
 
-Open it as the App from the issue's branch, against `github.base`, titled as the repository's merged PRs are (`<what it does> (<version>) (CLM-<n>)`; docs flow, which raises no version: `<what it documents> (CLM-<n>)`), with this body:
+Open it as the App from the issue's branch, against `github.base`, titled as the repository's merged PRs are (`<what it does> (<version>) (CLM-<n>)`, a tests-flow PR saying what its tests check; docs flow, which raises no version: `<what it documents> (CLM-<n>)`), with this body:
 
 ```
 Part of CLM-<n>: <issue title>
@@ -50,7 +55,7 @@ Part of CLM-<n>: <issue title>
 One line per line of the plan's Change.
 
 ## Proof
-For each behaviour, its evidence steps: the step's number and caption, then the capture (an image, or the text in a code block with a link to its file). The red report shows each new test failing and the green report the same test passing: say so, test by test. Docs flow: the docs gate's report, then each page in English and fr-CA.
+For each behaviour, its evidence steps: the step's number and caption, then the capture (an image, or the text in a code block with a link to its file). The red report shows each new test failing and the green report the same test passing: say so, test by test. Docs flow: the docs gate's report, then each page in English and fr-CA. Tests flow: a table of each new test and one fault it caught (from the gate's report), then the gate's report and each test's own output at the head; and under Unknowns, the faults no new test caught and the issues filed for bugs the tests found.
 
 ## Risk
 - Surface: what the diff touches (the pages, the stored data and its version, the server, the build).
@@ -67,14 +72,14 @@ What was not checked and why, and the reviewer's testNotes. If nothing: "no unkn
 The plan's Out of scope.
 
 ## Reviewers
-- Intent and code: the person who approves. Built by the software factory: test-writer, implement, reviewer and evidence-check agents; the red and green gates passed. (Docs flow: writer, reviewer and evidence-check agents; the docs gate passed.)
+- Intent and code: the person who approves. Built by the software factory: test-writer, implement, reviewer and evidence-check agents; the red and green gates passed. (Docs flow: writer, reviewer and evidence-check agents; the docs gate passed. Tests flow: test-writer, reviewer and evidence-check agents; the tests gate passed, each new test catching a fault.)
 ```
 
 ending with the attribution lines the session gives for pull requests. Then post `**Factory · PR** <url>` on the issue and move it to `linear.states.review`.
 
 ## 5. Ready for approval
 
-Dispatch the `merge` agent with the PR's number, `<wt>` and the issue's `E2E_PORT` (README, **Side by side**), in the background: it brings the PR up to date with `main`, fixes failing checks and SonarCloud issues on the branch, and hands it back green and `CLEAN`; it never merges. If it changed the head, run the green gate on the new head (`factory-build` step 4, which posts a new green record and pushes nothing new; docs flow: the docs gate, step D2) and capture, check and publish again (steps 1 to 3), then replace the PR's Proof with `gh pr edit <pr> --body-file <file>`, as the App. A STOP from the merge agent is a hand-back, quoting its report.
+Dispatch the `merge` agent with the PR's number, `<wt>` and the issue's `E2E_PORT` (README, **Side by side**), in the background: it brings the PR up to date with `main`, fixes failing checks and SonarCloud issues on the branch, and hands it back green and `CLEAN`; it never merges. If it changed the head, run the green gate on the new head (`factory-build` step 4, which posts a new green record and pushes nothing new; docs flow: the docs gate, step D2; tests flow: the tests gate, step T2, with `--proved <sha>`, the sha of the last `**Factory · tests**` record, which keeps that proof when the rebase changed nothing it rests on and runs the faults again otherwise) and capture, check and publish again (steps 1 to 3), then replace the PR's Proof with `gh pr edit <pr> --body-file <file>`, as the App. A STOP from the merge agent is a hand-back, quoting its report.
 
 The PR now waits for a person's approval on its head.
 

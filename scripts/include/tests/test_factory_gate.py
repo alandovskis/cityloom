@@ -7,13 +7,16 @@ cargo and Playwright runs are faked; git is real, in a throwaway repository.
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / ".claude" / "factory"))
@@ -845,11 +848,671 @@ class DocsGate(unittest.TestCase):
         self.assertEqual(report.text(), f"PASS docs gate\n  page: {EN}/signals.md")
 
 
+class TestCode(unittest.TestCase):
+    """What the tests flow counts as test code (rule 1) and as an existing test (rule 2)."""
+
+    def test_only_items_built_for_tests_alone_are_test_code(self):
+        src = (
+            "pub fn a() {}\n"
+            "#[cfg(test)]\nmod tests { fn t() {} }\n"
+            "#[cfg(all(test, not(target_arch = \"wasm32\")))]\nmod native { fn n() {} }\n"
+            '#[cfg(any(test, feature = "test-provider"))]\npub mod fake { pub fn f() {} }\n'
+            "#[cfg(not(test))]\nfn real() {}\n"
+            "#[cfg(all(not(test), unix))]\nfn unix() {}\n"
+        )
+        kept = gate.without_test_code(src)
+        self.assertNotIn("mod tests", kept)
+        self.assertNotIn("mod native", kept)
+        self.assertIn("pub mod fake", kept)
+        self.assertIn("fn real", kept)
+        self.assertIn("fn unix", kept)
+
+    def test_each_test_function_with_its_attributes(self):
+        src = (
+            "#[cfg(test)]\nmod tests {\n"
+            "    #[test]\n    fn one() { assert!(true); }\n\n"
+            "    /// Slow.\n    #[ignore]\n    #[test]\n    fn two() {}\n\n"
+            "    #[sqlx::test]\n    async fn three(pool: PgPool) { let _ = pool; }\n"
+            "    fn helper() {}\n}\n"
+        )
+        self.assertEqual(
+            gate.test_functions(src),
+            [
+                ("one", "#[test]\n    fn one() { assert!(true); }"),
+                ("two", "/// Slow.\n    #[ignore]\n    #[test]\n    fn two() {}"),
+                ("three", "#[sqlx::test]\n    async fn three(pool: PgPool) { let _ = pool; }"),
+            ],
+        )
+
+    def test_each_playwright_test_by_its_title(self):
+        src = (
+            'import { test, expect } from "./fixtures";\n'
+            'test.describe("Street", () => {\n'
+            '  test("adds a lane", async ({ page }) => {\n    await expect(page).toHaveTitle("a (b)");\n  });\n'
+            "  test.skip('drops a lane', async () => {});\n"
+            "  // test(\"commented\", () => {});\n"
+            "});\n"
+            "test(`opens`, async () => { await go(\")\"); });\n"
+        )
+        self.assertEqual(
+            [title for title, _ in gate.playwright_tests(src)],
+            ["adds a lane", "drops a lane", "opens"],
+        )
+        self.assertTrue(gate.playwright_tests(src)[1][1].startswith("test.skip('drops a lane'"))
+        self.assertTrue(gate.playwright_tests(src)[2][1].endswith('await go(")"); })'))
+
+    def test_only_the_editors_version_line_may_change(self):
+        toml = '[package]\nname = "cityloom_editor"\nversion = "0.1.0"\n\n[dependencies]\nserde = { version = "1" }\n'
+        lock = '[[package]]\nname = "cityloom_editor"\nversion = "0.1.0"\n\n[[package]]\nname = "serde"\nversion = "1.0.0"\n'
+        path, lockfile = "crates/cityloom_editor/Cargo.toml", "Cargo.lock"
+        self.assertTrue(gate.version_only(path, toml, toml.replace('"0.1.0"', '"0.1.1"')))
+        self.assertFalse(gate.version_only(path, toml, toml.replace('"1"', '"2"')))
+        self.assertTrue(gate.version_only(lockfile, lock, lock.replace('"0.1.0"', '"0.1.1"')))
+        self.assertFalse(gate.version_only(lockfile, lock, lock.replace('"1.0.0"', '"1.0.1"')))
+
+    def test_a_test_binary_is_labelled_as_cargo_test_names_it(self):
+        artifact = {
+            "reason": "compiler-artifact",
+            "package_id": "path+file:///w/crates/cityloom_model#0.1.0",
+            "manifest_path": "/w/crates/cityloom_model/Cargo.toml",
+            "target": {"kind": ["test"], "name": "import", "src_path": "/w/crates/cityloom_model/tests/import.rs"},
+            "profile": {"test": True},
+            "executable": "/w/target/debug/deps/import-89abcdef01234567",
+        }
+        self.assertEqual(gate.test_binaries(json.dumps(artifact) + "\n")["import tests/import.rs"].package, "cityloom_model")
+        artifact.update(
+            package_id="path+file:///w/crates/x#cityloom_ui@0.2.0",
+            manifest_path="/w/crates/x/Cargo.toml",
+            target={"kind": ["lib"], "name": "cityloom_ui", "src_path": "/w/crates/x/src/lib.rs"},
+            executable="/w/target/debug/deps/cityloom_ui-0123456789abcdef",
+        )
+        binary = gate.test_binaries("noise\n" + json.dumps(artifact) + "\n")["cityloom_ui unittests src/lib.rs"]
+        self.assertEqual((binary.package, binary.cwd), ("cityloom_ui", "/w/crates/x"))
+
+
+PRODUCT = """\
+pub fn word() -> usize {
+    2
+}
+
+pub fn other() -> bool {
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn keeps() {}
+}
+"""
+
+NEW_TEST = "    #[test]\n    fn keeps() {}\n\n    #[test]\n    fn word_is_two() { assert_eq!(super::word(), 2); }\n"
+
+MUTANTS = [
+    {
+        "file": "crates/m/src/street.rs",
+        "package": "m",
+        "function": {"function_name": "word"},
+        "name": f"crates/m/src/street.rs:2:5: replace word -> usize with {value}",
+        "replacement": value,
+        "span": {"start": {"line": 2, "column": 5}, "end": {"line": 2, "column": 6}},
+    }
+    for value in ("0", "1")
+] + [
+    {
+        "file": "crates/m/src/street.rs",
+        "package": "m",
+        "function": {"function_name": "other"},
+        "name": "crates/m/src/street.rs:6:5: replace other -> bool with false",
+        "replacement": "false",
+        "span": {"start": {"line": 6, "column": 5}, "end": {"line": 6, "column": 9}},
+    }
+]
+
+BINARY = "     Running unittests src/lib.rs (deps/m-0123456789abcdef)\n"
+EXE = "target/debug/deps/m-0123456789abcdef"
+
+
+def word_is_two(repo: Path) -> str:
+    return "ok" if "pub fn word() -> usize {\n    2\n}" in (repo / "crates/m/src/street.rs").read_text() else "failed"
+
+
+class TestsRunner:
+    """Answers what the tests gate runs. cargo's and Playwright's listings and full runs come from tables by commit;
+    a test run alone, at any time, is judged by `outcomes` from the files as they are then, so a fault the gate
+    applies really changes what the test sees. git runs for real."""
+
+    def __init__(self, repo: Path, **tables):
+        self.repo = repo
+        self.version = tables.get("version", "cargo-mutants 27.1.0")
+        self.mutants = tables.get("mutants", MUTANTS)
+        self.listings = tables.get("listings", {})
+        self.runs = tables.get("runs", {})
+        self.outcomes = tables.get("outcomes", {"tests::word_is_two": word_is_two})
+        self.playwright = tables.get("playwright", {})
+        self.browser = tables.get("browser", {})
+        self.commands: list[tuple[str, ...]] = []
+        self.envs: list[dict] = []
+        self.timeouts: list = []
+        self.pkg_seen: list[str] = []
+
+    def __call__(self, cmd, cwd, env=None, timeout=None):
+        self.commands.append(tuple(cmd))
+        self.envs.append(env or {})
+        self.timeouts.append(timeout)
+        head = git(self.repo, "rev-parse", "HEAD")
+        product = (self.repo / "crates/m/src/street.rs").read_text()
+        if cmd[0].endswith("cargo-mutants"):
+            if "--version" in cmd:
+                return 0, self.version
+            files = [cmd[i + 1] for i, a in enumerate(cmd) if a == "--file"]
+            return 0, json.dumps([m for m in self.mutants if m["file"] in files])
+        if cmd[:2] == ["cargo", "test"] and "--no-run" in cmd:
+            if "NOT RUST" in product:
+                return 101, "error[E0308]: mismatched types\nerror: could not compile `m` (lib test)\n"
+            artifact = {
+                "reason": "compiler-artifact",
+                "package_id": f"path+file://{self.repo}/crates/m#0.1.0",
+                "manifest_path": str(self.repo / "crates/m/Cargo.toml"),
+                "target": {"kind": ["lib"], "name": "m", "src_path": str(self.repo / "crates/m/src/lib.rs")},
+                "profile": {"test": True},
+                "executable": str(self.repo / EXE),
+            }
+            return 0, json.dumps(artifact) + "\n"
+        if cmd[:2] == ["cargo", "test"]:
+            if "--list" in cmd:
+                return 0, self.listings[head]
+            return self.runs[head]
+        if cmd[0].endswith(EXE):
+            outcome = self.outcomes[cmd[1]](self.repo)
+            if outcome == "hang":
+                return gate.TIMED_OUT, "running 1 test\n"
+            if outcome == "ok":
+                return 0, f"running 1 test\ntest {cmd[1]} ... ok\n\ntest result: ok. 1 passed; 0 failed\n"
+            return 101, f"running 1 test\ntest {cmd[1]} ... FAILED\npanicked at src/street.rs\ntest result: FAILED. 0 passed; 1 failed\n"
+        if cmd[0] == "scripts/target-dir.sh":
+            return 0, str(self.repo / "target") + "\n"
+        if cmd[0].endswith("wasm-bindgen"):
+            (self.repo / "web/pkg/cityloom_editor.js").write_text("level 1\n")
+            return 0, ""
+        if cmd[:3] == ["npx", "playwright", "test"]:
+            if "--list" in cmd:
+                report = self.playwright[(head, True)]
+            elif any(":" in a and a.startswith("tests/") for a in cmd):
+                self.pkg_seen.append((self.repo / "web/pkg/cityloom_editor.js").read_text())
+                report = playwright_report(*[(f, t, judge(self.repo)) for f, t, judge in self.browser[head]])
+            else:
+                report = self.playwright[(head, False)]
+            Path(env["PLAYWRIGHT_JSON_OUTPUT_FILE"]).write_text(json.dumps(report), encoding="utf-8")
+            failed = any(s == "unexpected" for s in gate.playwright_results(report).values())
+            return (1 if failed else 0), ""
+        return 0, ""
+
+    def exe_runs(self) -> list[tuple[str, ...]]:
+        return [c for c in self.commands if c[0].endswith(EXE)]
+
+
+class FakeClock:
+    def __init__(self, step: float):
+        self.now, self.step = 0.0, step
+
+    def __call__(self) -> float:
+        self.now += self.step
+        return self.now
+
+
+class TestsGate(unittest.TestCase):
+    """The tests flow's gate: a branch that adds only tests, every one passing, each catching a fault of the code the
+    plan names. cargo, cargo-mutants and Playwright are faked; git and the faults are real."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self.tmp.name) / "wt"
+        self.repo.mkdir()
+        git(self.repo, "init", "-q", "-b", "work")
+        self.base = commit(
+            self.repo,
+            {
+                ".gitignore": "web/pkg/\ntarget/\n",
+                "crates/m/src/street.rs": PRODUCT,
+                "crates/m/Cargo.toml": '[package]\nname = "m"\nversion = "0.1.0"\n',
+                "crates/cityloom_editor/Cargo.toml": '[package]\nname = "cityloom_editor"\nversion = "0.1.0"\n',
+                "Cargo.lock": '[[package]]\nname = "cityloom_editor"\nversion = "0.1.0"\n\n[[package]]\nname = "m"\nversion = "0.1.0"\n',
+                "web/app.css": ":root {\n  --panel: #fff;\n}\n",
+                "e2e/tests/street.spec.ts": 'test("adds a lane", async () => {});\n',
+                "e2e/tests/fixtures.ts": "export const a = 1;\n",
+            },
+            "base",
+        )
+        self.spec = Path(self.tmp.name) / "faults.json"
+        self.write_spec({"rust": [{"file": "crates/m/src/street.rs", "functions": ["word", "other"]}]})
+        os.environ.setdefault("DATABASE_URL", "postgres://unused")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write_spec(self, spec: dict) -> None:
+        self.spec.write_text(json.dumps(spec), encoding="utf-8")
+
+    def raise_version(self) -> dict[str, str]:
+        return {
+            "crates/cityloom_editor/Cargo.toml": '[package]\nname = "cityloom_editor"\nversion = "0.1.1"\n',
+            "Cargo.lock": '[[package]]\nname = "cityloom_editor"\nversion = "0.1.1"\n\n[[package]]\nname = "m"\nversion = "0.1.0"\n',
+        }
+
+    def tests_commit(self, extra: dict[str, str] | None = None, test: str = NEW_TEST) -> str:
+        files = {"crates/m/src/street.rs": PRODUCT.replace("    #[test]\n    fn keeps() {}\n", test)}
+        files.update(self.raise_version())
+        files.update(extra or {})
+        return commit(self.repo, files, "Test the word")
+
+    def runner(self, head: str, **tables) -> TestsRunner:
+        listing = BINARY + "tests::keeps: test\n"
+        tables.setdefault("listings", {self.base: listing, head: listing + "tests::word_is_two: test\n"})
+        tables.setdefault("runs", {head: (0, BINARY + "test tests::keeps ... ok\ntest tests::word_is_two ... ok\n")})
+        return TestsRunner(self.repo, **tables)
+
+    def gate(self, runner, clock=None) -> gate.Gate:
+        return gate.Gate(self.repo, runner, clock=clock or FakeClock(1.0))
+
+    def test_a_new_test_that_catches_a_fault_passes(self):
+        head = self.tests_commit()
+        runner = self.runner(head)
+        report = self.gate(runner).tests(self.base, self.spec)
+        self.assertEqual(report.problems, [])
+        self.assertEqual(report.new_tests, ["m unittests src/lib.rs::tests::word_is_two"])
+        text = report.text()
+        self.assertIn("caught: m unittests src/lib.rs::tests::word_is_two: 2 faults", text)
+        self.assertIn("crates/m/src/street.rs: replace word -> usize with 0", text)
+        self.assertIn("not caught by any new test: crates/m/src/street.rs: replace other -> bool with false", text)
+        # Rule 4 builds as CI does; the faults are built without denying warnings (a fault leaves a parameter unused).
+        full = [e for c, e in zip(runner.commands, runner.envs) if c[:2] == ("cargo", "test") and "--no-fail-fast" in c]
+        self.assertTrue(full and all(e.get("RUSTFLAGS") == "-D warnings" for e in full))
+        self.assertIn(("just", "format-check"), runner.commands)
+        self.assertIn(("scripts/check-version.sh", self.base), runner.commands)
+        self.assertIn(("just", "test-scripts"), runner.commands)
+        # Each new test runs alone, by its full name, in its own process: once with no fault, then once per fault.
+        self.assertEqual(len(runner.exe_runs()), 4)
+        self.assertEqual(runner.exe_runs()[0][1:], ("tests::word_is_two", "--exact", "--test-threads=1"))
+        # Everything is put back.
+        self.assertEqual(git(self.repo, "status", "--porcelain"), "")
+        self.assertEqual((self.repo / "crates/m/src/street.rs").read_text(), PRODUCT.replace("    #[test]\n    fn keeps() {}\n", NEW_TEST))
+        self.assertFalse(gate.Gate(self.repo).note_path().exists())
+
+    def test_a_new_test_that_catches_nothing_fails(self):
+        head = self.tests_commit()
+        runner = self.runner(head, outcomes={"tests::word_is_two": lambda repo: "ok"})
+        report = self.gate(runner).tests(self.base, self.spec)
+        self.assertEqual(report.problems, ["the new test m unittests src/lib.rs::tests::word_is_two catches none of the 3 faults run"])
+
+    def test_the_brief_report_names_the_tests_and_no_fault(self):
+        head = self.tests_commit()
+        runner = self.runner(head, outcomes={"tests::word_is_two": lambda repo: "ok"})
+        report = self.gate(runner).tests(self.base, self.spec, brief=True)
+        self.assertEqual(
+            report.text(),
+            "FAIL tests gate\n"
+            "  new test: m unittests src/lib.rs::tests::word_is_two\n"
+            "  caught nothing: m unittests src/lib.rs::tests::word_is_two\n"
+            "  problem: the new test m unittests src/lib.rs::tests::word_is_two catches none of the 3 faults run",
+        )
+        self.assertNotIn("replace", report.text())
+
+    def test_one_run_gives_the_brief_report_and_writes_the_full_one(self):
+        head = self.tests_commit()
+        runner = self.runner(head, outcomes={"tests::word_is_two": lambda repo: "ok"})
+        full = Path(self.tmp.name) / "full.txt"
+        printed = io.StringIO()
+        built = self.gate(runner)
+        with mock.patch.object(gate, "Gate", lambda repo: built), redirect_stdout(printed):
+            code = gate.main(["tests", "--repo", str(self.repo), "--base", self.base, "--faults", str(self.spec), "--brief", "--report", str(full)])
+        self.assertEqual(code, 1)
+        self.assertNotIn("replace", printed.getvalue())
+        self.assertIn("caught nothing: m unittests src/lib.rs::tests::word_is_two", printed.getvalue())
+        self.assertIn("not caught by any new test: crates/m/src/street.rs: replace word -> usize with 0", full.read_text())
+
+    def test_a_fault_that_does_not_compile_is_counted_and_dropped(self):
+        head = self.tests_commit()
+        mutants = MUTANTS + [dict(MUTANTS[0], name="crates/m/src/street.rs:2:5: replace word -> usize with NOT RUST", replacement="NOT RUST")]
+        runner = self.runner(head, mutants=mutants)
+        report = self.gate(runner).tests(self.base, self.spec)
+        self.assertEqual(report.problems, [])
+        self.assertIn("did not compile: crates/m/src/street.rs: replace word -> usize with NOT RUST", report.text())
+
+    def test_a_fault_that_hangs_a_test_is_hung_and_caught_by_no_one(self):
+        head = self.tests_commit()
+        hang = lambda repo: "hang" if "    1\n" in (repo / "crates/m/src/street.rs").read_text() else word_is_two(repo)  # noqa: E731
+        runner = self.runner(head, outcomes={"tests::word_is_two": hang})
+        report = self.gate(runner).tests(self.base, self.spec)
+        self.assertEqual(report.problems, [])
+        self.assertIn("hung: crates/m/src/street.rs: replace word -> usize with 1 (m unittests src/lib.rs::tests::word_is_two)", report.text())
+        self.assertIn("caught: m unittests src/lib.rs::tests::word_is_two: 1 fault", report.text())
+        # Under a fault, a test is killed after a minute, or four times its own time if that is longer.
+        timeouts = [t for c, t in zip(runner.commands, runner.timeouts) if c[0].endswith(EXE)]
+        self.assertEqual(set(timeouts[1:]), {60})
+
+    def test_a_test_that_caught_three_is_not_run_again(self):
+        head = self.tests_commit()
+        five = [dict(MUTANTS[0], name=f"crates/m/src/street.rs:2:5: replace word -> usize with {v}", replacement=str(v)) for v in range(3, 8)]
+        runner = self.runner(head, mutants=five)
+        self.write_spec({"rust": [{"file": "crates/m/src/street.rs", "functions": ["word"]}]})
+        report = self.gate(runner).tests(self.base, self.spec)
+        self.assertEqual(len(runner.exe_runs()), 1 + 3)
+        self.assertIn("caught: m unittests src/lib.rs::tests::word_is_two: 3 faults", report.text())
+        self.assertIn("not run, every new test had caught three: 2 faults", report.text())
+
+    def test_at_most_forty_faults_run_for_native_tests(self):
+        head = self.tests_commit()
+        many = [dict(MUTANTS[2], name=f"crates/m/src/street.rs:6:5: replace other -> bool with false /* {k} */", replacement=f"false /* {k} */") for k in range(45)]
+        runner = self.runner(head, mutants=many)
+        self.write_spec({"rust": [{"file": "crates/m/src/street.rs", "functions": ["other"]}]})
+        report = self.gate(runner).tests(self.base, self.spec)
+        self.assertEqual(len(runner.exe_runs()), 1 + 40)
+        self.assertIn("left out by the limit: 5 faults", report.text())
+
+    def test_no_fault_starts_thirty_minutes_after_the_first(self):
+        head = self.tests_commit()
+        runner = self.runner(head)
+        report = self.gate(runner, clock=FakeClock(1000.0)).tests(self.base, self.spec)
+        self.assertIn("left out by the limit:", report.text())
+        self.assertLess(len(runner.exe_runs()), 4)
+
+    def test_a_change_to_product_code_is_refused_before_any_fault(self):
+        head = self.tests_commit({"crates/m/src/other.rs": "pub fn x() {}\n"})
+        runner = self.runner(head)
+        report = self.gate(runner).tests(self.base, self.spec)
+        self.assertEqual(report.problems, ["crates/m/src/other.rs: not a test, and the tests flow changes only tests"])
+        self.assertEqual(runner.exe_runs(), [])
+
+    def test_product_code_beside_new_tests_in_one_file_is_refused(self):
+        head = commit(
+            self.repo,
+            dict(self.raise_version(), **{"crates/m/src/street.rs": PRODUCT.replace("    2\n", "    3 - 1\n").replace("    #[test]\n    fn keeps() {}\n", NEW_TEST)}),
+            "Also change the code",
+        )
+        report = self.gate(self.runner(head)).tests(self.base, self.spec)
+        self.assertEqual(report.problems, ["crates/m/src/street.rs: product code changed, and only test code (#[cfg(test)]) may"])
+
+    def test_a_test_only_module_in_a_file_of_its_own_is_test_code(self):
+        module = {
+            "crates/m/src/lib.rs": "pub mod street;\n#[cfg(test)]\nmod street_cases;\n",
+            "crates/m/src/street_cases.rs": "#[test]\nfn more() {}\n",
+        }
+        head = self.tests_commit(module)
+        report = self.gate(self.runner(head)).tests(self.base, self.spec)
+        # A new lib.rs is product code; the module it declares for tests alone is not.
+        self.assertEqual(report.problems, ["crates/m/src/lib.rs: not a test, and the tests flow changes only tests"])
+        git(self.repo, "reset", "-q", "--hard", self.base)
+        self.base = commit(self.repo, {"crates/m/src/lib.rs": "pub mod street;\n"}, "a lib")
+        head = self.tests_commit(module)
+        report = self.gate(self.runner(head)).tests(self.base, self.spec)
+        self.assertEqual(report.problems, [])
+
+    def test_more_than_the_version_line_of_the_lockfile_is_refused(self):
+        head = self.tests_commit({"Cargo.lock": '[[package]]\nname = "cityloom_editor"\nversion = "0.1.1"\n\n[[package]]\nname = "m"\nversion = "0.2.0"\n'})
+        report = self.gate(self.runner(head)).tests(self.base, self.spec)
+        self.assertEqual(report.problems, ["Cargo.lock: changes more than the version line of cityloom_editor"])
+
+    def test_checks_the_factory_and_documentation_are_refused_whatever_matches_a_test_file(self):
+        head = self.tests_commit(
+            {
+                ".claude/factory/tests/x.py": "x\n",
+                "scripts/ci/features.json": "{}\n",
+                "scripts/ci/spec-map.json": "{}\n",
+                "e2e/tiers.json": "{}\n",
+                "crates/cityloom_editor/src/shared/contrast.rs": "#[test]\nfn t() {}\n",
+                "crates/cityloom_editor/src/i18n_guard.rs": "\n",
+                "website/docs/testing.md": "# x\n",
+            }
+        )
+        report = self.gate(self.runner(head)).tests(self.base, self.spec)
+        self.assertEqual(
+            report.problems,
+            [
+                ".claude/factory/tests/x.py: a check or the factory's own file, which the tests flow may not change",
+                "crates/cityloom_editor/src/i18n_guard.rs: a check or the factory's own file, which the tests flow may not change",
+                "website/docs/testing.md: documentation, which the tests flow may not change",
+            ],
+        )
+
+    def test_a_helper_of_the_specs_may_only_gain_lines(self):
+        head = self.tests_commit({"e2e/tests/fixtures.ts": "export const a = 2;\n"})
+        report = self.gate(self.runner(head)).tests(self.base, self.spec)
+        self.assertEqual(report.problems, ["e2e/tests/fixtures.ts: a helper of the specs, which may gain lines but not change one"])
+
+    def test_an_existing_test_changed_or_gone_is_refused(self):
+        head = self.tests_commit(test="    #[test]\n    fn keeps() { assert!(true); }\n\n    #[test]\n    fn word_is_two() { assert_eq!(super::word(), 2); }\n")
+        report = self.gate(self.runner(head)).tests(self.base, self.spec)
+        self.assertEqual(report.problems, ["crates/m/src/street.rs: the existing test keeps is changed or gone"])
+
+    def test_an_existing_browser_test_skipped_is_refused(self):
+        head = self.tests_commit({"e2e/tests/street.spec.ts": 'test.skip("adds a lane", async () => {});\n'})
+        report = self.gate(self.runner(head)).tests(self.base, self.spec)
+        self.assertEqual(report.problems, ["e2e/tests/street.spec.ts: the existing test adds a lane is changed or gone"])
+
+    def test_a_branch_with_no_new_test_fails(self):
+        head = commit(self.repo, self.raise_version(), "Only the version")
+        listing = BINARY + "tests::keeps: test\n"
+        runner = TestsRunner(self.repo, listings={self.base: listing, head: listing}, runs={head: (0, BINARY + "test tests::keeps ... ok\n")})
+        report = self.gate(runner).tests(self.base, self.spec)
+        self.assertEqual(report.problems, ["the branch adds no test"])
+
+    def test_a_new_test_that_fails_at_the_head_fails(self):
+        head = self.tests_commit()
+        runner = self.runner(head, runs={head: (101, BINARY + "test tests::keeps ... ok\ntest tests::word_is_two ... FAILED\n")})
+        report = self.gate(runner).tests(self.base, self.spec)
+        self.assertEqual(report.problems, ["Rust: m unittests src/lib.rs::tests::word_is_two fails"])
+        self.assertEqual(runner.exe_runs(), [])
+
+    def test_a_new_test_that_is_ignored_fails(self):
+        head = self.tests_commit()
+        runner = self.runner(head, runs={head: (0, BINARY + "test tests::keeps ... ok\ntest tests::word_is_two ... ignored\n")})
+        report = self.gate(runner).tests(self.base, self.spec)
+        self.assertEqual(report.problems, ["Rust: the new test m unittests src/lib.rs::tests::word_is_two is ignored"])
+
+    def test_a_new_test_that_fails_alone_fails(self):
+        head = self.tests_commit()
+        runner = self.runner(head, outcomes={"tests::word_is_two": lambda repo: "failed"})
+        report = self.gate(runner).tests(self.base, self.spec)
+        self.assertEqual(report.problems, ["the new test m unittests src/lib.rs::tests::word_is_two does not pass when it runs alone"])
+
+    def test_the_plans_faults_must_be_there(self):
+        head = self.tests_commit()
+        self.write_spec({"rust": [{"file": "crates/m/src/street.rs", "functions": ["gone"]}]})
+        report = self.gate(self.runner(head)).tests(self.base, self.spec)
+        self.assertEqual(report.problems, ["the plan's faults: rust crates/m/src/street.rs: no function `gone`"])
+
+    def test_without_the_pinned_cargo_mutants_it_refuses(self):
+        head = self.tests_commit()
+        for version in ("cargo-mutants 26.0.0", ""):
+            with self.subTest(version):
+                with self.assertRaises(gate.Refused) as caught:
+                    self.gate(self.runner(head, version=version)).tests(self.base, self.spec)
+                self.assertIn("cargo install cargo-mutants --version 27.1.0", str(caught.exception))
+
+    def test_a_note_left_by_a_killed_gate_is_refused_naming_its_fault(self):
+        head = self.tests_commit()
+        g = self.gate(self.runner(head))
+        g.note_path().write_text(json.dumps({"head": head, "fault": "crates/m/src/street.rs", "pkg": None}))
+        with self.assertRaises(gate.Refused) as caught:
+            g.tests(self.base, self.spec)
+        self.assertIn("crates/m/src/street.rs", str(caught.exception))
+        self.assertIn("just build", str(caught.exception))
+
+    def rebase(self, change: dict[str, str]) -> str:
+        """main moves on by `change`, and the branch is replayed on it."""
+        git(self.repo, "checkout", "-q", "-b", "main", self.base)
+        new_base = commit(self.repo, change, "main moves")
+        git(self.repo, "checkout", "-q", "work")
+        git(self.repo, "rebase", "-q", new_base)
+        self.base = new_base
+        return git(self.repo, "rev-parse", "HEAD")
+
+    def test_after_a_rebase_that_changes_nothing_it_rests_on_the_proof_is_kept(self):
+        proved = self.tests_commit()
+        head = self.rebase({"README.md": "# CityLoom\n"})
+        runner = self.runner(head)
+        report = self.gate(runner).tests(self.base, self.spec, proved=proved)
+        self.assertEqual(report.problems, [])
+        self.assertIn(f"the faults were run at {proved}", report.text())
+        self.assertEqual(len(runner.exe_runs()), 1)  # the new test alone, with no fault
+        self.assertFalse([c for c in runner.commands if c[0].endswith("cargo-mutants") and "--list" in c])
+
+    def test_after_a_rebase_that_changes_a_faulted_file_the_faults_run_again(self):
+        proved = self.tests_commit()
+        head = self.rebase({"crates/m/src/street.rs": PRODUCT.replace("    true\n", "    !false\n")})
+        mutants = [dict(m, span={"start": {"line": 6, "column": 5}, "end": {"line": 6, "column": 11}}) if m["function"]["function_name"] == "other" else m for m in MUTANTS]
+        runner = self.runner(head, mutants=mutants)
+        report = self.gate(runner).tests(self.base, self.spec, proved=proved)
+        self.assertEqual(report.problems, [])
+        self.assertIn("the faults run again: crates/m/src/street.rs changed between the two bases", report.text())
+        self.assertEqual(len(runner.exe_runs()), 4)
+
+    def browser_case(self, head: str, judge) -> TestsRunner:
+        listing = BINARY + "tests::keeps: test\n"
+        lane = ("street.spec.ts", ["adds a lane"], "expected")
+        new = ("street.spec.ts", ["names the street"], "expected")
+        listed = playwright_report(lane, new)
+        listed["suites"][0]["specs"][1]["line"] = 2
+        return TestsRunner(
+            self.repo,
+            listings={self.base: listing, head: listing},
+            runs={head: (0, BINARY + "test tests::keeps ... ok\n")},
+            playwright={(self.base, True): playwright_report(lane), (head, True): listed, (head, False): playwright_report(lane, new)},
+            browser={head: [("street.spec.ts", ["names the street"], judge)]},
+        )
+
+    def browser_commit(self) -> str:
+        head = self.tests_commit(
+            {"e2e/tests/street.spec.ts": 'test("adds a lane", async () => {});\ntest("names the street", async () => {});\n'},
+            test="    #[test]\n    fn keeps() {}\n",
+        )
+        self.write_spec({"css": [{"file": "web/app.css", "rule": ":root", "property": "--panel", "to": "#000"}]})
+        (self.repo / "web/pkg").mkdir(parents=True)
+        (self.repo / "web/pkg/cityloom_editor.js").write_text("release\n")
+        return head
+
+    def test_a_new_browser_test_is_proved_at_optimisation_level_one_and_the_build_put_back(self):
+        head = self.browser_commit()
+        judge = lambda repo: "expected" if "--panel: #fff" in (repo / "web/app.css").read_text() else "unexpected"  # noqa: E731
+        runner = self.browser_case(head, judge)
+        report = self.gate(runner).tests(self.base, self.spec)
+        self.assertEqual(report.problems, [])
+        self.assertIn("caught: street.spec.ts::names the street::ui: 1 fault", report.text())
+        runs = [c for c in runner.commands if c[:3] == ("npx", "playwright", "test") and "tests/street.spec.ts:2" in c]
+        self.assertEqual(len(runs), 2)  # no fault, then the CSS fault (which needs no build)
+        self.assertIn("--project=ui", runs[0])
+        self.assertIn("--timeout=30000", runs[0])
+        self.assertIn("--global-timeout=300000", runs[0])
+        builds = [(c, e) for c, e in zip(runner.commands, runner.envs) if c[:2] == ("cargo", "build") and "-p" in c]
+        self.assertEqual(len(builds), 1)
+        self.assertEqual(builds[0][1].get("CARGO_PROFILE_DEV_OPT_LEVEL"), "1")
+        self.assertEqual(builds[0][1].get("CARGO_PROFILE_DEV_DEBUG"), "0")
+        self.assertEqual(runner.pkg_seen, ["level 1\n", "level 1\n"])
+        self.assertEqual((self.repo / "web/pkg/cityloom_editor.js").read_text(), "release\n")
+        self.assertEqual(git(self.repo, "status", "--porcelain"), "")
+
+    def test_a_new_browser_test_that_fails_at_level_one_with_no_fault_is_refused(self):
+        head = self.browser_commit()
+        with self.assertRaises(gate.Refused) as caught:
+            self.gate(self.browser_case(head, lambda repo: "unexpected")).tests(self.base, self.spec)
+        self.assertIn("optimisation level 1", str(caught.exception))
+        self.assertEqual((self.repo / "web/pkg/cityloom_editor.js").read_text(), "release\n")
+        self.assertFalse(gate.Gate(self.repo).note_path().exists())
+
+
+class FaultsCheck(unittest.TestCase):
+    """`gate.py faults`: the plan's faults checked against the main checkout before the plan is posted. Builds nothing."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self.tmp.name) / "main"
+        self.repo.mkdir()
+        git(self.repo, "init", "-q")
+        commit(
+            self.repo,
+            {
+                "crates/m/src/street.rs": PRODUCT,
+                "crates/citymodel_builder/src/a.rs": "pub fn cut() -> usize {\n    2\n}\n",
+                "web/app.css": ":root {\n  --panel: #fff;\n}\n",
+            },
+            "base",
+        )
+        self.spec = Path(self.tmp.name) / "faults.json"
+        builder = dict(MUTANTS[0], file="crates/citymodel_builder/src/a.rs", function={"function_name": "cut"}, package="citymodel_builder")
+        self.runner = TestsRunner(self.repo, mutants=MUTANTS + [builder])
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def check(self, spec: dict, browser: bool = False) -> gate.Report:
+        self.spec.write_text(json.dumps(spec))
+        return gate.Gate(self.repo, self.runner).faults(self.spec, browser=browser)
+
+    def test_each_entry_with_its_faults(self):
+        report = self.check(
+            {
+                "rust": [{"file": "crates/m/src/street.rs", "functions": ["word", "other"]}],
+                "css": [{"file": "web/app.css", "rule": ":root", "property": "--panel", "to": "#000"}],
+            }
+        )
+        self.assertEqual(report.problems, [])
+        self.assertEqual(
+            report.text(),
+            "PASS faults gate\n"
+            "  entry: rust crates/m/src/street.rs word: 2 faults\n"
+            "  entry: rust crates/m/src/street.rs other: 1 fault\n"
+            "  entry: css web/app.css :root { --panel }: 1 fault",
+        )
+        self.assertFalse([c for c in self.runner.commands if c[0] == "cargo"])
+
+    def test_what_is_not_there_fails(self):
+        report = self.check(
+            {
+                "rust": [{"file": "crates/m/src/street.rs", "functions": ["gone"]}],
+                "markup": [{"file": "crates/m/src/view.rs", "functions": ["f"]}],
+            }
+        )
+        self.assertEqual(report.problems, ["rust crates/m/src/street.rs: no function `gone`", "markup crates/m/src/view.rs: the file does not exist"])
+
+    def test_more_entries_than_the_limit_fail(self):
+        names = [f"--c{k}" for k in range(41)]
+        (self.repo / "web/app.css").write_text(":root {\n" + "".join(f"  {n}: #fff;\n" for n in names) + "}\n")
+        spec = {"css": [{"file": "web/app.css", "rule": ":root", "property": n, "to": "#000"} for n in names]}
+        self.assertEqual(self.check(spec).problems, ["41 entries: more than the 40 faults a native test can be proved against"])
+        spec["css"] = spec["css"][:13]
+        self.assertEqual(self.check(spec, browser=True).problems, ["13 entries: more than the 12 faults a browser test can be proved against"])
+
+    def test_a_browser_test_cannot_be_proved_against_the_server_or_the_builder(self):
+        report = self.check({"rust": [{"file": "crates/citymodel_builder/src/a.rs", "functions": ["cut"]}]}, browser=True)
+        self.assertEqual(
+            report.problems,
+            ["rust crates/citymodel_builder/src/a.rs: citymodel_builder does not reach the browser, so a browser test cannot catch its faults"],
+        )
+
+    def test_a_plan_with_rust_faults_needs_the_pinned_cargo_mutants(self):
+        self.runner.version = "cargo-mutants 26.0.0"
+        with self.assertRaises(gate.Refused):
+            self.check({"rust": [{"file": "crates/m/src/street.rs", "functions": ["word"]}]})
+        self.assertEqual(self.check({"css": [{"file": "web/app.css", "rule": ":root", "property": "--panel", "to": "#000"}]}).problems, [])
+
+    def test_a_malformed_spec_is_refused(self):
+        self.spec.write_text("{}")
+        with self.assertRaises(gate.Refused):
+            gate.Gate(self.repo, self.runner).faults(self.spec)
+
+
 class Commands(unittest.TestCase):
     def test_the_documentation_commands_are_the_workflows(self):
         workflow = (ROOT / ".github" / "workflows" / "docs.yml").read_text(encoding="utf-8")
         self.assertIn("run: " + " ".join(gate.DOCS_PRETTIER) + "\n        working-directory: e2e", workflow)
         self.assertIn("run: " + " ".join(gate.DOCS_BUILD) + "\n        working-directory: website", workflow)
+
+    def test_cargo_mutants_is_the_main_checkouts_from_any_worktree(self):
+        common = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=ROOT, check=True, capture_output=True, text=True
+        ).stdout.strip()
+        self.assertEqual(gate.MUTANTS, Path(common).parent / ".tools" / "bin" / "cargo-mutants")
 
     def test_the_rust_commands_are_the_justfiles(self):
         justfile = (ROOT / "justfile").read_text(encoding="utf-8")
