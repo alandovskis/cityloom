@@ -1,6 +1,6 @@
 # The software factory's tests flow, proved by mutation testing
 
-CLM-100. Status: for a person's approval. Nothing is built before it.
+CLM-100. Status: approved on 2026-11-26, and built (see **As built**, at the end).
 
 ## Why
 
@@ -232,3 +232,16 @@ fault's value; the test-writer sees the named functions but no fault; each new t
 not fail; existing tests may not change; a weak test is a finding in this flow; the planner may revise the faults once;
 the proof is kept over a rebase that changes nothing it rests on; a browser test's own timeout catches; what a browser
 test can be proved against; the limits; level 1; the version raised by the test-writer.
+
+## As built
+
+What the build does that this design did not say, or says otherwise:
+
+- `gate.py tests --report <file>` writes the full report while `--brief` prints the brief one, so one run (minutes long)
+  serves the test-writer and the record, the planner and the evidence.
+- The gate finds `cargo-mutants` in the main checkout through git's common directory, so a copy of `gate.py` in a
+  worktree runs the same tool.
+- It asks `cargo mutants --list --json` without `--diff`: it uses only each fault's span and replacement.
+- `gate.py faults` needs `cargo-mutants` only when the plan has Rust entries; `gate.py tests` always does.
+- `/factory`'s table of places (`.claude/skills/factory/SKILL.md`) has a row for the tests flow, which it needs to send
+  an issue to `factory-build` step T2.
