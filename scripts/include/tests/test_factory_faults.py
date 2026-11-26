@@ -283,6 +283,11 @@ class Css(unittest.TestCase):
         made = faults.css_faults(CSS, ":root", "--url", "none")
         self.assertIn("  --url: none;\n}", faulted(CSS, made[0]))
 
+    def test_a_comment_before_a_declaration_is_not_its_property(self):
+        src = ":root {\n  --r: 16px;\n  /* Fixed on purpose: the box is pale. */\n  --ring: #0b1220;\n}\n"
+        made = faults.css_faults(src, ":root", "--ring", "#fff")
+        self.assertEqual(faulted(src, made[0]), src.replace("#0b1220", "#fff"))
+
     def test_two_matching_declarations_need_nth(self):
         with self.assertRaisesRegex(faults.SpecError, 'matches 2 declarations: give "nth"'):
             faults.css_faults(CSS, ":root", "--danger", "#000")

@@ -684,7 +684,7 @@ def css_declarations(src: str) -> List[Tuple[str, str, int, int]]:
             text = src[segment:i]
             colon = next((k for k in range(segment, i) if mask[k] and src[k] == ":"), -1)
             if stack and colon >= 0 and text.strip():
-                prop = src[segment:colon].strip()
+                prop = re.sub(r"/\*.*?\*/", "", src[segment:colon], flags=re.S).strip()
                 a, b = colon + 1, i
                 while a < b and src[a].isspace():
                     a += 1

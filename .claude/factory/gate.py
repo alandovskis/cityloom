@@ -328,7 +328,15 @@ VERSION_FILES = ("crates/cityloom_editor/Cargo.toml", "Cargo.lock")
 
 # The faults: cargo-mutants, pinned and installed once in the main checkout's .tools (the README says how), and the
 # limits of a run (CLM-100's design measured a native fault at about 16 s and a browser one at about 64 s).
-MUTANTS = ROOT / ".tools" / "bin" / "cargo-mutants"
+def _main_checkout() -> Path:
+    """The main checkout of the repository this file is in, from any of its worktrees (git's common directory's)."""
+    found = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=ROOT, capture_output=True, text=True
+    )
+    return Path(found.stdout.strip()).parent if found.returncode == 0 and found.stdout.strip() else ROOT
+
+
+MUTANTS = _main_checkout() / ".tools" / "bin" / "cargo-mutants"
 MUTANTS_VERSION = "27.1.0"
 LIMITS = {"native": 40, "browser": 12}  # faults run, and entries a plan may name
 DEADLINE = 30 * 60  # no fault starts later than this after the first of its kind

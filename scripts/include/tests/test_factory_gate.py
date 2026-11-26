@@ -1492,6 +1492,12 @@ class Commands(unittest.TestCase):
         self.assertIn("run: " + " ".join(gate.DOCS_PRETTIER) + "\n        working-directory: e2e", workflow)
         self.assertIn("run: " + " ".join(gate.DOCS_BUILD) + "\n        working-directory: website", workflow)
 
+    def test_cargo_mutants_is_the_main_checkouts_from_any_worktree(self):
+        common = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=ROOT, check=True, capture_output=True, text=True
+        ).stdout.strip()
+        self.assertEqual(gate.MUTANTS, Path(common).parent / ".tools" / "bin" / "cargo-mutants")
+
     def test_the_rust_commands_are_the_justfiles(self):
         justfile = (ROOT / "justfile").read_text(encoding="utf-8")
         for command in (gate.CARGO_TEST, gate.WASM_BUILD):
