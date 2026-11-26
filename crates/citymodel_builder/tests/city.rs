@@ -637,96 +637,148 @@ fn the_extract_option_replaces_the_citys_extract() {
 
 // ---- no city in the source ----
 
-/// Rust source without its comments and its `#[cfg(test)]` items; each character with whether it is code (true) or
-/// in a string or character literal (false).
+/// Rust source without its comments and its `#[cfg(test)]` items.
 fn product_code(source: &str) -> String {
+    without_test_items(&marked(source))
+}
+
+/// Each character of `source` outside its comments with whether it is code (true) or in a string or character
+/// literal (false); a block comment leaves one space.
+fn marked(source: &str) -> Vec<(char, bool)> {
     let c: Vec<char> = source.chars().collect();
-    let at = |i: usize, text: &str| text.chars().enumerate().all(|(k, t)| c.get(i + k) == Some(&t));
     let mut kept: Vec<(char, bool)> = Vec::new();
     let mut i = 0;
     while i < c.len() {
-        let start = i;
-        if at(i, "//") {
-            while i < c.len() && c[i] != '\n' {
-                i += 1;
-            }
-            continue;
-        }
-        if at(i, "/*") {
-            let mut depth = 0;
-            loop {
-                if at(i, "/*") {
-                    (depth, i) = (depth + 1, i + 2);
-                } else if at(i, "*/") {
-                    (depth, i) = (depth - 1, i + 2);
-                } else {
-                    i += 1;
-                }
-                if depth == 0 || i >= c.len() {
-                    break;
-                }
-            }
+        if at(&c, i, "//") {
+            i = line_end(&c, i);
+        } else if at(&c, i, "/*") {
+            i = block_comment_end(&c, i);
             kept.push((' ', true));
-            continue;
-        }
-        let in_a_word = i > 0 && (c[i - 1].is_alphanumeric() || c[i - 1] == '_');
-        let hashes = c[i + 1..].iter().take_while(|h| **h == '#').count();
-        if c[i] == 'r' && (!in_a_word || (c[i - 1] == 'b' && (i < 2 || !c[i - 2].is_alphanumeric()))) && c.get(i + 1 + hashes) == Some(&'"') {
-            let close = format!("\"{}", "#".repeat(hashes));
-            i += 2 + hashes;
-            while i < c.len() && !at(i, &close) {
-                i += 1;
-            }
-            i += close.len();
-        } else if c[i] == '"' {
-            i += 1;
-            while i < c.len() && c[i] != '"' {
-                i += if c[i] == '\\' { 2 } else { 1 };
-            }
-            i += 1;
-        } else if c[i] == '\'' && c.get(i + 1) == Some(&'\\') {
-            i += 3;
-            while i < c.len() && c[i] != '\'' {
-                i += 1;
-            }
-            i += 1;
-        } else if c[i] == '\'' && c.get(i + 2) == Some(&'\'') {
-            i += 3;
+        } else if let Some(end) = literal_end(&c, i) {
+            kept.extend(c[i..end.min(c.len())].iter().map(|ch| (*ch, false)));
+            i = end;
         } else {
             kept.push((c[i], true));
             i += 1;
-            continue;
         }
-        kept.extend(c[start..i.min(c.len())].iter().map(|ch| (*ch, false)));
     }
+    kept
+}
 
-    let code: String = kept.iter().map(|(ch, is_code)| if *is_code { *ch } else { '\0' }).collect();
-    let code: Vec<char> = code.chars().collect();
+/// Whether `text` starts at `i` in `c`.
+fn at(c: &[char], i: usize, text: &str) -> bool {
+    text.chars().enumerate().all(|(k, t)| c.get(i + k) == Some(&t))
+}
+
+fn line_end(c: &[char], mut i: usize) -> usize {
+    while i < c.len() && c[i] != '\n' {
+        i += 1;
+    }
+    i
+}
+
+/// Past the block comment opened at `i`, its nested comments with it.
+fn block_comment_end(c: &[char], mut i: usize) -> usize {
+    let mut depth = 0;
+    loop {
+        if at(c, i, "/*") {
+            (depth, i) = (depth + 1, i + 2);
+        } else if at(c, i, "*/") {
+            (depth, i) = (depth - 1, i + 2);
+        } else {
+            i += 1;
+        }
+        if depth == 0 || i >= c.len() {
+            return i;
+        }
+    }
+}
+
+/// Past the string or character literal that starts at `i`, if one does.
+fn literal_end(c: &[char], i: usize) -> Option<usize> {
+    if let Some(hashes) = raw_string_hashes(c, i) {
+        Some(raw_string_end(c, i, hashes))
+    } else if c[i] == '"' {
+        Some(string_end(c, i))
+    } else if c[i] == '\'' && c.get(i + 1) == Some(&'\\') {
+        Some(escaped_char_end(c, i))
+    } else if c[i] == '\'' && c.get(i + 2) == Some(&'\'') {
+        Some(i + 3)
+    } else {
+        None
+    }
+}
+
+/// The number of `#` of the raw string (`r"`, `r#"`, `br"`) that starts at `i`, if one does.
+fn raw_string_hashes(c: &[char], i: usize) -> Option<usize> {
+    let hashes = c[i + 1..].iter().take_while(|h| **h == '#').count();
+    let opens = c[i] == 'r' && c.get(i + 1 + hashes) == Some(&'"');
+    let in_a_word = i > 0 && (c[i - 1].is_alphanumeric() || c[i - 1] == '_');
+    (opens && (!in_a_word || byte_prefix(c, i))).then_some(hashes)
+}
+
+/// Whether the `r` at `i` follows a lone `b` (`br"…"`); `i` is past the first character.
+fn byte_prefix(c: &[char], i: usize) -> bool {
+    c[i - 1] == 'b' && (i < 2 || !c[i - 2].is_alphanumeric())
+}
+
+fn raw_string_end(c: &[char], i: usize, hashes: usize) -> usize {
+    let close = format!("\"{}", "#".repeat(hashes));
+    let mut i = i + 2 + hashes;
+    while i < c.len() && !at(c, i, &close) {
+        i += 1;
+    }
+    i + close.len()
+}
+
+fn string_end(c: &[char], i: usize) -> usize {
+    let mut i = i + 1;
+    while i < c.len() && c[i] != '"' {
+        i += if c[i] == '\\' { 2 } else { 1 };
+    }
+    i + 1
+}
+
+fn escaped_char_end(c: &[char], i: usize) -> usize {
+    let mut i = i + 3;
+    while i < c.len() && c[i] != '\'' {
+        i += 1;
+    }
+    i + 1
+}
+
+/// The characters of `kept` without its `#[cfg(test)]` items, looked for in its code only.
+fn without_test_items(kept: &[(char, bool)]) -> String {
+    let code: Vec<char> = kept.iter().map(|(ch, is_code)| if *is_code { *ch } else { '\0' }).collect();
     let marker: Vec<char> = "#[cfg(test)]".chars().collect();
     let (mut out, mut i) = (String::new(), 0);
     while i < kept.len() {
-        if !code[i..].starts_with(&marker) {
+        if code[i..].starts_with(&marker) {
+            i = item_end(&code, i + marker.len());
+        } else {
             out.push(kept[i].0);
             i += 1;
-            continue;
-        }
-        // the item: to its `;`, or the end of its braces
-        let mut depth = 0;
-        i += marker.len();
-        while i < kept.len() {
-            let ch = code[i];
-            i += 1;
-            match ch {
-                '{' | '(' | '[' => depth += 1,
-                '}' | ')' | ']' => depth -= 1,
-                _ => {}
-            }
-            if depth == 0 && (ch == ';' || ch == '}') {
-                break;
-            }
         }
     }
     out
+}
+
+/// Past the item that starts at `i`: to its `;`, or the end of its braces.
+fn item_end(code: &[char], mut i: usize) -> usize {
+    let mut depth = 0;
+    while i < code.len() {
+        let ch = code[i];
+        i += 1;
+        match ch {
+            '{' | '(' | '[' => depth += 1,
+            '}' | ')' | ']' => depth -= 1,
+            _ => {}
+        }
+        if depth == 0 && (ch == ';' || ch == '}') {
+            break;
+        }
+    }
+    i
 }
 
 /// Whether `text` holds `name` as a word or a part of a name (`paris`, `PARIS_GRID`, `ParisGrid`; not `comparison`).

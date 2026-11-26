@@ -84,10 +84,10 @@ def paragraph_with(text: str, word: str) -> str:
 
 class CityDocs(unittest.TestCase):
     def says(self, text: str, words: str) -> None:
-        self.assertTrue(words in text, f"{words!r} is not said")
+        self.assertIn(words, text, f"{words!r} is not said")
 
     def says_no(self, text: str, words: str) -> None:
-        self.assertFalse(words in text, f"{words!r} is said")
+        self.assertNotIn(words, text, f"{words!r} is said")
 
     def test_the_command_is_shown_with_its_city(self):
         for path in ("README.md", "CLAUDE.md", EN + "getting-started.md", FR + "getting-started.md"):
