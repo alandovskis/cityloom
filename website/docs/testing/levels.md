@@ -116,6 +116,9 @@ The guards are tests about the code itself. They run with the host tests.
 - **`i18n_guard.rs`** fails on wording in the files of its `MIGRATED` list (`LEFT_OUT` names the few left out, each
   with its reason), on a message id used that is not in both languages, on a file of a translated slice in neither
   list, and on a dead entry of `ALLOWED_LITERALS` or `NOT_MESSAGE_IDS`.
+- **`dependency_guard.rs`** fails on a use of another slice that its `ALLOWED` table does not allow, on a break of a
+  layer or library rule that its `EXCEPTIONS` table does not let pass, on an entry that nothing uses or that has no
+  reason, and on a folder of `src/` that is not in `SLICES`. Test code is exempt.
 - **`layout_guard.rs`** keeps the files of `street/`, `junction/` and `map/` in `model/`, `vm/` and `view/`: their
   roots hold only `mod.rs`, `CLAUDE.md` and `i18n/`.
 - **`ui_guard.rs`** fails when a slice draws its own radio group, stepper, headed section of the details or question
@@ -126,4 +129,4 @@ The guards are tests about the code itself. They run with the host tests.
 - **`no_plaintext.rs`** (in the server's tests) reads every column of `users`, `identities`, `sessions`, `work` and
   `shares` as raw bytes and finds nothing the person signed in with.
 
-The first five are `#[cfg(test)]` modules of the editor.
+The first six are `#[cfg(test)]` modules of the editor.

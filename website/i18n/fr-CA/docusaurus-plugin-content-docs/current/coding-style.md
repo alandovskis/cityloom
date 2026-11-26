@@ -105,8 +105,10 @@ porte sur le code hors des tests.
 
 ### Modèle
 
-- Un modèle (`model.rs`, `model/`) ne nomme ni Leptos, ni le navigateur (`web_sys`, `js_sys`, `wasm_bindgen`), et ne
-  contient aucun signal. Exemple : `street/model/pick.rs` (`Pick`). **Revue**
+- Un modèle (`model.rs`, `model/`) ne nomme ni Leptos, ni le navigateur (`web_sys`, `js_sys`, `gloo`, `wasm_bindgen`),
+  et ne contient aucun signal. Exemple : `street/model/pick.rs` (`Pick`); `dependency_guard.rs`
+  (`a_model_that_names_leptos_or_the_browser_breaks_a_rule`). **Garde** (`dependency_guard.rs`) pour nommer Leptos et
+  les crates du navigateur, **Revue** pour un signal tenu par un autre type.
 - Les modèles de la rue et de la jonction ne nomment aucun port ni aucun magasin : ils ne lisent et ne conservent donc
   rien hors de la mémoire de la page. Parmi les autres modèles, `archive/model.rs`, `share/model.rs` et
   `sync/model.rs` prennent le port `Storage`, et `map/model/corridor.rs` prend un `CityStore`. Exemple :
@@ -117,7 +119,8 @@ porte sur le code hors des tests.
   **Garde** (`i18n_guard.rs`) contre un littéral qui ressemble à des mots dans les fichiers de sa liste `MIGRATED`,
   **Revue** pour le reste.
 - Un modèle n’utilise le modèle de vue, la vue ni le `text.rs` d’aucune tranche. Exemple : `map/model/corridor.rs`
-  (`plan`), qui utilise d’autres modèles. **Revue**
+  (`plan`), qui utilise d’autres modèles. **Garde** (`dependency_guard.rs`) pour ceux d’une autre tranche, et pour ceux
+  de sa propre tranche dans `street/`, `junction/` et `map/`, **Revue** pour le reste.
 
 ### Modèle de vue
 
@@ -132,11 +135,14 @@ porte sur le code hors des tests.
 - Un accesseur donne souvent ce qui est prêt à présenter, dans la langue de la page. Dans la rue et la jonction, une
   grande partie vient sous la forme des `Said` de la vue du modèle (`View`, `JView`), que les vues Leptos mettent en
   mots. Exemple : `project/vm.rs` (`Row`, que donne `rows`). **Revue**
-- Les fichiers des modèles de vue (`vm.rs`, `vm/`) ne nomment ni `web_sys`, ni `js_sys`, ni `wasm_bindgen` : le
-  navigateur est derrière les ports (voir [Ports](architecture/index.md#ports)). Exemple : `project/vm.rs`
-  (`ProjectsVm`). **Revue**
+- Les fichiers des modèles de vue (`vm.rs`, `vm/`) ne nomment ni `web_sys`, ni `js_sys`, ni `gloo`, ni `wasm_bindgen`,
+  ni `document()` et `window()` de Leptos : le navigateur est derrière les ports (voir
+  [Ports](architecture/index.md#ports)). Exemple : `project/vm.rs` (`ProjectsVm`); `dependency_guard.rs`
+  (`a_view_model_that_names_the_browser_breaks_a_rule`). **Garde** (`dependency_guard.rs`)
 - Un modèle de vue n’utilise aucune vue, sauf `map/vm/report.rs`, qui dessine les figures du rapport avec des
-  fonctions des vues de la rue et de la jonction. Exemple : `project/vm.rs` (`ProjectsVm`). **Revue**
+  fonctions des vues de la rue et de la jonction. Exemple : `project/vm.rs` (`ProjectsVm`). **Garde**
+  (`dependency_guard.rs`) dans `street/`, `junction/` et `map/` et pour les vues d’une autre tranche, **Revue** pour le
+  reste.
 - Un modèle de vue qui prend les ports est testé en natif contre leurs doublures, par `test_ports()`,
   `test_ports_with_time()` ou une autre fonction de `shared/ports.rs` (voir [Tests des modèles de
   vue](testing/levels.md#tests-des-modèles-de-vue)). Exemple : `standards/tests.rs` (`setup`). **Revue**

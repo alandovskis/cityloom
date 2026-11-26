@@ -31,52 +31,27 @@ The code is organised by feature, one folder per slice, not by layer. New code g
 | `sync/`        | Keeps a signed-in person's work on the server, when they chose it, and merges it between devices.                                                                                                                                                                                      |
 | `timeline/`    | A project's milestones and their page, `timeline.html`.                                                                                                                                                                                                                                |
 
-A slice may use another slice's `model` (junction uses the street's, city uses both, `sync::local` uses
-`project::model`), `city::store`, `city::binding`, `city::projection`, `city::edits`,
-`restriction::store`, `standards::model` and `standards::store` (street), `place::area` (and `place::Bounds`, the box
-that `Area::bounds` gives and `city::projection` takes), `project::copies` (share, for the copy of a shared design; the
-shell, to make a copy one of the person's projects), `project::context` (which project a page is opened in, and whether
-it is shown read-only) and `shared`. It never uses another slice's view-model, views or text, nor its other modules,
-except as this section says:
-
-- The archive panel. The Account page (`account/mod.rs`) builds it with `archive::vm::ArchiveVm::for_page` and mounts
-  it with `archive::view::ArchiveView`. The shell's Share menu builds an `ArchiveVm::for_page` for its export
-  (`shell/view.rs`).
-- The shell's tray. The Notes trays of the street page (`street/view/notes_tray.rs`) and of the junction page
-  (`junction/view/notes_tray.rs`) are made with `shell::tray`.
-- The shell's mount. The street, junction, map and account pages mount the shell with `shell::mount`, saying with
-  `shell::NotesAtStart` how their notes start. Its target is a `shell::Target`, which `StreetVm`, `JunctionVm` and
-  `MapVm` implement; the account page and a junction that cannot be drawn hand it a `shell::Bare`.
-- The drawing of an area. The map uses `restriction::draw`, the pure state machine that draws an area's outline
-  (`map/vm/mod.rs`, `map/vm/areas.rs`, `map/view/mod.rs`, `map/view/areas_view.rs`).
-- The report. `map/vm/report.rs` draws its figures with `street::view::drawing` and `junction::view::figure`.
-- A shell test, which builds a `street::vm::StreetVm`.
-
-Of `street/`, `junction/` and `map/`, another slice uses only what is under `model/`, but for the report and that shell
-test.
-
-Tests also use more of other slices, to set up what they test:
-
-- `project::ProjectStore` and `project::store::PROJECTS_KEY`: the tests of archive, city, junction, map, share, shell,
-  street and sync.
-- `restriction::fixtures`: the tests of city, map and street.
-- `shell::view::i18n_keys`: the tests of account, junction, map and project.
-- `sync::SyncVm` and `sync::Status`: the tests of account.
-- `sync::tests` (`Device`, `ServerSim`, `device`, `ada`, `T0`), `sync::local::ids`, `share::links::ProjectShares`,
-  `share::store` and `timeline::store`: the tests of project.
-- `city::scenario::Action`: the tests of street and junction.
-
-A few stores are used across slices too. `sync::local` uses `project::store` and
-`project::migrate::{legacy_waiting, legacy_kept, area_moved}`. `project::store` uses `city::edits`, `city::store` and
-`restriction::store`. `sync::local` and `project::store` use `timeline::store`. The Account page (`account/mod.rs`)
-runs `project::migrate::move_legacy_work` before it syncs.
-
-The stores and the editors also use `sync::model` (`Id`, `Kind`, `Change`, `Origin`, `Report`, `mark`), which depends
-only on `shared`. The shell builds `sync::SyncVm`; every other slice reaches the sync only through `sync::hub` and
-`sync::model`. `shared` depends on no slice.
-
-A page made of several slices is put together in `lib.rs`, the composition root, which may use any slice (see
+A slice may use another slice's `model`, the modules open to every slice (`city::store`, `city::binding`,
+`city::projection`, `city::edits`, `restriction::store`, `place::area` and `place::Bounds`, and `sync::hub`) and
+`shared`. It never uses another slice's view-model, views or text, nor its other modules, except where
+[`dependency_guard.rs`](https://github.com/alandovskis/cityloom/blob/main/crates/cityloom_editor/src/dependency_guard.rs) allows it (see [The guards](../testing/levels.md#the-guards)). `shared` uses no slice.
+`lib.rs` is the composition root: it may use any slice, and a page made of several slices is put together there (see
 [Pages and entry points](#pages-and-entry-points)).
+
+To allow a new dependency, add an entry to the guard's `ALLOWED` table. An entry has a `by`, a `uses` and a `why`:
+
+- `by`: who may use it, a slice's folder, a file (`map/vm/report.rs`) or `*`, any slice;
+- `uses`: module paths of another slice, each covering what is under it (`*::model` is any slice's model);
+- `why`: the reason.
+
+The guard fails on a use of another slice that no entry allows, on an entry that nothing uses, on an entry with a
+blank reason, and on a folder of `src/` that is not in its `SLICES` list: a new slice goes into `SLICES`. Test code is
+exempt: an item under `#[cfg(test)]`, and a file whose `mod` declaration is under it.
+
+The guard reads names, not resolved items: an item that a slice re-exports counts as that slice's. It accepts cycles
+between slices. Its header comment lists every limit. It does not hold two narrower habits either. `sync::model` uses
+no other slice, only `shared` and the sync's own hub; the stores and the editors use it (`Id`, `Kind`, `Change`,
+`Origin`, `Report`, `mark`). Only the street slice uses `standards::model`.
 
 ## Layers inside a slice
 
@@ -94,6 +69,13 @@ In the street and junction slices, `vm/` also holds the words for a screen reade
 (`keys.rs`) and the handle the views take (`watch.rs`); in the map slice, it holds the sub-view-models, the camera, the
 report and what is built for the map. `view/` holds the Leptos views, the SVG drawing and the component tests
 (`view/tests.rs`).
+
+[`dependency_guard.rs`](https://github.com/alandovskis/cityloom/blob/main/crates/cityloom_editor/src/dependency_guard.rs) also holds the layers. In `street/`, `junction/` and `map/`, the model uses neither the
+view-model nor the views of its slice, the view-model does not use the views, and neither takes the slice whole. In
+every slice, the model (`model.rs`, `model/`) names neither Leptos nor the browser's crates (`web_sys`, `js_sys`,
+`gloo`, `wasm_bindgen` and their families). The view-model (`vm.rs`, `vm/`) names neither the browser's crates, even
+through Leptos, nor Leptos's `document()` and `window()`. The guard's `EXCEPTIONS` table lets a break pass, with its
+reason.
 
 The other slices keep their files side by side at their root: `model.rs`, `vm.rs`, `view.rs`, `text.rs`, `tests.rs`
 and `i18n/`, as each needs. The shell keeps its `vm.rs`, its Leptos views and `tests.rs` side by side.
@@ -118,14 +100,22 @@ Each page of `web/` has a script that loads the editor's module and calls its en
 | `share.html`        | `share.js`    | `mount_share` (`lib.rs`): a project's share links, or a share link being opened.       |
 | `compare.html`      | `compare.js`  | `mount_compare` (`lib.rs`): two designs of one street or junction.                     |
 
-`credits.html` loads no module. Each script then mounts the shell (`mount_shell`). The pages that open the city
+`credits.html` loads no module. Each script then mounts the shell (`mount_shell`). Its target is a `shell::Target`, which
+`StreetVm`, `JunctionVm` and `MapVm` implement; the About page hands it its city's `MapVm`. The home, timeline, share
+and Account pages, and a junction that cannot be drawn, hand it a `shell::Bare`; the comparison page hands it a
+`CompareTarget` over one. The pages that open the city
 (`about.js`, `map.js`, `app.js`, `junction.js` and `compare.js`) call `prepare_city` (`place/mod.rs`) before they open
 it: it gets the roads of the area the person is working in, unless they are already kept.
 
 `lib.rs` is the composition root, where slices may meet. The home page is `project::mount_list`, handed the share
 slice's `share::links::ProjectShares` as its `project::model::ProjectLinks`, so that a project's share links end before
-it does. The About page runs `project::migrate::move_legacy_work` and then `map::mount_about`. The timeline, share and
+it does. The About page runs `project::migrate::move_legacy_work` and then `map::mount_about`, so the project slice uses
+no other slice's page. The timeline, share and
 comparison pages are put together there too, and `i18n_for` registers every slice's messages.
+
+A page in no project that syncs first runs `project::migrate::move_legacy_work`, which moves the work from before
+projects into the first project: the home page (through `ProjectsVm::new_with`), the About page, the Account page
+(`account/mod.rs`) and the share page when it opens a link.
 
 A page of a project opens inside it (`project::context::open_page`): the project its address names with
 `?project=<id>`, else the one opened last. Where there is none, the page goes to `index.html?missing=1`. The links to

@@ -89,9 +89,11 @@ Inside an editing slice, `model.rs` holds the rules, `vm.rs` the view-model, `te
 `tests.rs` the tests and `i18n/en.ftl` and `i18n/fr.ftl` the messages; the views sit beside them. In the three largest
 slices, `street/`, `junction/` and `map/`, each layer has a folder of its own: `model/`, `vm/` and `view/` (with
 `model/mod.rs`, `vm/mod.rs` and `view/mod.rs` in place of `model.rs`, `vm.rs` and `view.rs`, and the tests in
-`view/tests.rs`); only `mod.rs`, `i18n/` and `CLAUDE.md` stay at the slice's root. Five files sit at the top of `src/`:
+`view/tests.rs`); only `mod.rs`, `i18n/` and `CLAUDE.md` stay at the slice's root. Six files sit at the top of `src/`:
 
 - `lib.rs`: the entry points the pages call (`mount_*`) and the registry of every slice's messages.
+- `dependency_guard.rs`: a test that fails when a slice uses another slice in a way its `ALLOWED` table does not allow,
+  or when a layer uses what its rules forbid.
 - `i18n_guard.rs`: a test that fails when a translated file holds wording of its own instead of a message.
 - `layout_guard.rs`: a test that fails when a file is left at the root of `street/`, `junction/` or `map/` instead of in
   one of its layers.
