@@ -2,7 +2,7 @@
 
 CityLoom is a street, junction and city-map editor in Rust, compiled to WebAssembly and drawn with Leptos 0.8 (client-side rendering). Pages: `web/index.html` (home: the person's projects), `web/about.html` (About CityLoom, with the city of the project opened last behind it), `web/map.html`, `web/street.html`, `web/intersection.html` (and `web/account.html`, `web/credits.html`, `web/timeline.html`, a project's milestones, `web/share.html`, a project's share links or a share link being opened, and `web/compare.html`, two designs (the baseline or a scenario) of one street or junction side by side, with what differs in the second; read-only, opened by the Compare link of a street's or junction's scenario panel). Every page's top bar links Projects (`index.html`) and About (`about.html`), the page's own `aria-current="page"`, and the logo goes to `index.html`; there is no Map link: a map is opened from its project. Streets come from OpenStreetMap; the catalogue's rules, rates and thresholds are synthetic placeholders.
 
-Layout: every crate lives in `crates/` (`cityloom_editor`, the wasm editor, whose `src/` the paths below name as `src/…`; `cityloom_ui`, the controls its pages share, with no wording: `RadioGroup`, `Stepper` and `NumberField`, `Section`, `Confirm`, each word a signal of the caller's, the keys' decisions in `keys.rs`; `cityloom_model`, the street network the importer makes and the street as the city keeps it, `cityloom_report`, `cityloom_report_pdf`, `cityloom_server`, `citymodel_builder`, which also holds the OpenStreetMap importer); the root `Cargo.toml` is only the workspace. The product's `version` is in `crates/cityloom_editor/Cargo.toml`. `web/`, `e2e/`, `scripts/`, `website/` and `data/` stay at the root. Other paths below that start with a crate name (`cityloom_server/…`, `citymodel_builder/…`) are inside `crates/`.
+Layout: every crate lives in `crates/` (`cityloom_editor`, the wasm editor, whose `src/` the paths below name as `src/…`; `cityloom_ui`, the controls its pages share, with no wording: `RadioGroup`, `Stepper` and `NumberField`, `Section`, `Confirm`, each word a signal of the caller's, the keys' decisions in `keys.rs`; `cityloom_model`, the street network the importer makes and the street as the city keeps it, `cityloom_report`, `cityloom_report_pdf`, `cityloom_server`, `citymodel_builder`, which also holds the OpenStreetMap importer); the root `Cargo.toml` is only the workspace. The product's `version` is in `crates/cityloom_editor/Cargo.toml`. `web/`, `e2e/`, `scripts/`, `website/`, `data/` and `cities/` (a city's config for `just prepare`, `cities/<id>.toml`) stay at the root. Other paths below that start with a crate name (`cityloom_server/…`, `citymodel_builder/…`) are inside `crates/`.
 
 ## Commands
 
@@ -14,16 +14,17 @@ just db              # throwaway Postgres in Docker (127.0.0.1:55432), prints th
 cargo test shell::vm # one module; a full test name also works
 just check-no-fake   # release server must hold no fake provider (both CI workflows' server-release job)
 just build           # release wasm + wasm-bindgen into web/pkg (gitignored)
-just prepare         # downloads Geofabrik's Quebec extract (~1.2 GB) into data/, makes the network tiles in web/data/metro (osmium-tool keeps the roads, the importer reads
-                     # them once, the network is cut into JSON tiles), packs them into data/montreal.citymodel; all gitignored; args pass through (--refresh). A place no tile holds is "not covered": without tiles no place opens
-just pack            # citymodel_builder pack only; `cargo run -p citymodel_builder --release -- tiles|pack` runs one step (`fixture` and `import` turn one OSM file into a tile or a network)
+just prepare montreal # the city of cities/montreal.toml: downloads its extract (Geofabrik's Quebec, ~1.2 GB) into data/, makes the network tiles in web/data/metro (osmium-tool keeps the roads,
+                     # the importer reads them once, the network is cut along the city's grid into JSON tiles), packs them into data/montreal.citymodel; all gitignored; --refresh, --extract <path>.
+                     # No city lists the cities. A city is one file, cities/<id>.toml. A place no tile holds is "not covered": without tiles no place opens
+just pack montreal   # citymodel_builder pack only; `cargo run -p citymodel_builder --release -- tiles|pack <city>` runs one step (`fixture` and `import` turn one OSM file into a tile or a network)
 just e2e-fixtures    # imports e2e/fixtures/*.osm.pbf into e2e/fixtures/generated/*.json (gitignored); the browser recipes run it first
 just test-scripts    # scripts/include/tests (the issue system's consistency test, the CI selector's, the factory's, the Architecture pages' and the feature list's); CI's Script tests job runs it
 just e2e-ui          # UI tier of the browser tests (e2e/tiers.json): one page, network stubbed, static server only; no database, no archive; builds first
 just e2e-integration # integration tier: the real server and a Postgres (needs DATABASE_URL): account-server, share and sync specs; builds first
 just e2e-archive     # E2E tier: packs the e2e fixtures into target/e2e-archive and runs archive, delivery and serve specs, and the map and street specs again, against a fresh server that unpacks it (E2E_ARCHIVE=1); builds first; E2E_PORT moves the port
 just e2e             # builds wasm and server, then the three tiers; with arguments only those specs (`just e2e tests/street.spec.ts`), whatever their tier; the integration tier needs DATABASE_URL
-just deploy          # build and upload to Railway (needs the CLI logged in, `just prepare` tiles, zig; musl build; refuses a fake-provider server)
+just deploy          # build and upload to Railway (needs the CLI logged in, `just prepare montreal` tiles, zig; musl build; refuses a fake-provider server)
 just check           # everything
 just format          # rustfmt + Prettier; `just format-check` only checks, as CI does
 just serve           # server on http://127.0.0.1:8137/ (E2E_PORT moves it); without DATABASE_URL the account side answers 503

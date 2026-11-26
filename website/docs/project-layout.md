@@ -14,6 +14,7 @@ fits together.
 | Folder     | What it holds                                                                                                                                                                                                                                                                    |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `crates/`  | Every Rust crate (see [The crates](#the-crates)). The root `Cargo.toml` is only the workspace: it lists `crates/*` and sets the release profile.                                                                                                                                 |
+| `cities/`  | One configuration file per city that `just prepare <city>` can prepare, `cities/<id>.toml`: its OpenStreetMap extract's address, its grid of tiles and their margin.                                                                                                             |
 | `web/`     | What the server sends to the browser: the pages, their start-up scripts, stylesheets, fonts and icons (see [`web/`](#web)).                                                                                                                                                      |
 | `e2e/`     | The Playwright browser tests: the specs in `tests/`, small OpenStreetMap extracts in `fixtures/`, and `tiers.json`, which puts each spec in one tier (UI, integration or E2E).                                                                                                   |
 | `scripts/` | The shell and Node scripts the `justfile` and CI run: building, deploying and checking the version. `scripts/ci/` holds CI's change selector and its rules (`spec-map.json`); `scripts/include/tests/` tests them.                                                               |
@@ -37,17 +38,17 @@ The files at the top level:
 
 ### Made by the tools, not kept in git
 
-| Path                      | Made by             | What it is                                                                        |
-| ------------------------- | ------------------- | --------------------------------------------------------------------------------- |
-| `target/`                 | `cargo`             | Build output.                                                                     |
-| `.tools/`                 | `just setup`        | `wasm-bindgen-cli`, at the version pinned in `crates/cityloom_editor/Cargo.toml`. |
-| `node_modules/`           | `just setup`        | MapLibre, from `package.json`.                                                    |
-| `web/pkg/`                | `just build`        | The WebAssembly modules and their JavaScript glue.                                |
-| `web/vendor/`             | `just build`        | MapLibre's script, worker and stylesheet, copied from `node_modules/`.            |
-| `web/data/metro/`         | `just prepare`      | The metropolitan area's network tiles (`<x>_<y>.json`) and their `index.json`.    |
-| `data/`                   | `just prepare`      | Geofabrik's Quebec extract and the packed area archive, `montreal.citymodel`.     |
-| `e2e/fixtures/generated/` | `just e2e-fixtures` | The test fixtures made into network tiles.                                        |
-| `website/build/`          | `just docs-build`   | This site, built.                                                                 |
+| Path                      | Made by               | What it is                                                                                                                                                                         |
+| ------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `target/`                 | `cargo`               | Build output.                                                                                                                                                                      |
+| `.tools/`                 | `just setup`          | `wasm-bindgen-cli`, at the version pinned in `crates/cityloom_editor/Cargo.toml`.                                                                                                  |
+| `node_modules/`           | `just setup`          | MapLibre, from `package.json`.                                                                                                                                                     |
+| `web/pkg/`                | `just build`          | The WebAssembly modules and their JavaScript glue.                                                                                                                                 |
+| `web/vendor/`             | `just build`          | MapLibre's script, worker and stylesheet, copied from `node_modules/`.                                                                                                             |
+| `web/data/metro/`         | `just prepare <city>` | The network tiles (`<x>_<y>.json`) of the city prepared last, and their `index.json`.                                                                                              |
+| `data/`                   | `just prepare <city>` | Each city's extract, its osmium work files in `metro-work/<id>/`, and its packed area archive, `<id>.citymodel` (Montréal's: Geofabrik's Quebec extract and `montreal.citymodel`). |
+| `e2e/fixtures/generated/` | `just e2e-fixtures`   | The test fixtures made into network tiles.                                                                                                                                         |
+| `website/build/`          | `just docs-build`     | This site, built.                                                                                                                                                                  |
 
 ## The crates
 

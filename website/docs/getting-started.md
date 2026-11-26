@@ -41,15 +41,41 @@ the pages are signed out.
 ## Map data
 
 ```sh
-just prepare
+just prepare montreal
 ```
 
 This runs `citymodel_builder`, the repository's Rust tool (`cargo run -p citymodel_builder -- prepare`; its arguments are
-the recipe's). It downloads Geofabrik's Quebec extract into `data/` if it is not there (about 1.2 GB; `just prepare --refresh` takes
-a newer one). It then keeps the metropolitan area's roads (needs `osmium-tool`), imports them once with osm2streets and cuts the resulting
-street network into JSON tiles in `web/data/metro` (about 1,700 tiles, about 570 MB). Last, it packs them
-into one archive, `data/montreal.citymodel`, a tar with a SHA-256 index that the server unpacks at start-up. The tiles, the
-archive are ignored by git.
+the recipe's), for the city of `cities/montreal.toml`. It downloads the city's OpenStreetMap extract, Geofabrik's Quebec
+extract, into `data/` if it is not there (about 1.2 GB; `just prepare montreal --refresh` takes a newer one, and
+`just prepare montreal --extract <path>` reads another file instead). It then keeps the metropolitan area's roads (needs
+`osmium-tool`), imports them once with osm2streets and cuts the resulting street network along the city's grid into JSON
+tiles in `web/data/metro` (about 1,700 tiles, about 570 MB). Last, it packs them into one archive,
+`data/montreal.citymodel`, a tar with a SHA-256 index that the server unpacks at start-up. The tiles, the archive are
+ignored by git. `just pack montreal` packs the tiles again without the rest.
+
+`just prepare` with no city, or with a city that has no file in `cities/`, lists the cities there are and stops before
+downloading anything.
+
+### Add a city
+
+A city is one configuration file, `cities/<id>.toml`, checked in; adding one changes no Rust. `just prepare <id>` reads
+it, and `cities/montreal.toml` is an example. Its keys:
+
+- `id`: the file's name, which is also the archive's area name: 1 to 64 lower-case letters, digits and hyphens.
+- `extract_url`: the `http://` or `https://` address of the city's OpenStreetMap extract. Its last part, a plain file
+  name ending in `.osm.pbf`, is the extract's name in `data/`. Two cities share an extract only by giving the same
+  address.
+- `[grid]`: the tiles, in degrees. `west` and `south` are the south-west corner of tile `0_0`; `tile_width` and
+  `tile_height` the size of a tile's core; `columns` and `rows` the number of tiles, west to east and south to north.
+  The grid must lie on the earth and hold at least one tile.
+- `[margin]`: how far a tile reaches past its core, in degrees, `lon` and `lat`. Each must be at least the 400 m an area
+  reaches from its centre, measured at the grid's edge nearest a pole.
+
+Each city keeps its own extract, its own work folder, `data/metro-work/<id>`, and its own archive, `data/<id>.citymodel`;
+`web/data/metro` holds the tiles of the city prepared last. A file that misses a key, has one it does not know or fails a
+check is refused before anything is downloaded, with the file and the key named. The builder's test
+`every_city_file_loads` (`cargo test -p citymodel_builder --test city`) loads every file of `cities/`, so a new city is
+checked with the other tests.
 
 Opening a place needs the road tiles: without them no place opens, the default one included, and the page that opens it says the place is not covered.
 

@@ -13,20 +13,20 @@ use sha2::{Digest, Sha256};
 
 use crate::metro_index::{Grid, short_checksum};
 use crate::progress::StepError;
-use crate::tiles::{MARGIN_LAT, MARGIN_LON};
+use crate::tiles::Margin;
 
 /// The box a road is looked for in, widened by this much (degrees, about a tenth of a millimetre), so that rounding
 /// cannot leave out a road `reaching` would keep: the box only chooses the roads `reaching` is asked about.
 const SLACK: f64 = 1e-9;
 
 /// Tile `x`, `y`'s core widened by the margin, as a frame.
-fn rect(grid: &Grid, x: u16, y: u16) -> Frame {
+fn rect(grid: &Grid, margin: &Margin, x: u16, y: u16) -> Frame {
     let (x, y) = (f64::from(x), f64::from(y));
     Frame {
-        south: grid.lat0 + y * grid.dlat - MARGIN_LAT,
-        west: grid.lon0 + x * grid.dlon - MARGIN_LON,
-        north: grid.lat0 + (y + 1.0) * grid.dlat + MARGIN_LAT,
-        east: grid.lon0 + (x + 1.0) * grid.dlon + MARGIN_LON,
+        south: grid.lat0 + y * grid.dlat - margin.lat,
+        west: grid.lon0 + x * grid.dlon - margin.lon,
+        north: grid.lat0 + (y + 1.0) * grid.dlat + margin.lat,
+        east: grid.lon0 + (x + 1.0) * grid.dlon + margin.lon,
     }
 }
 
@@ -40,7 +40,7 @@ fn span(from: f64, to: f64, origin: f64, size: f64, margin: f64, count: u16) -> 
 }
 
 /// The tiles of the grid that hold a road, `x` outer and `y` inner; each tile's frame is `frame`, the whole area's.
-pub fn cut(network: &Network, frame: &Frame, grid: &Grid) -> Vec<(u16, u16, NetworkTile)> {
+pub fn cut(network: &Network, frame: &Frame, grid: &Grid, margin: &Margin) -> Vec<(u16, u16, NetworkTile)> {
     let (width_m, height_m) = (frame.width_m(), frame.height_m());
     // Which roads each tile's box may hold, in the network's order: a road is looked at for the few tiles its own
     // box comes near, not for every tile.
@@ -55,9 +55,9 @@ pub fn cut(network: &Network, frame: &Frame, grid: &Grid) -> Vec<(u16, u16, Netw
         if grid.nx == 0 || grid.ny == 0 || !(west.is_finite() && east.is_finite() && south.is_finite() && north.is_finite()) {
             continue;
         }
-        for x in span(west, east, grid.lon0, grid.dlon, MARGIN_LON, grid.nx) {
-            for y in span(south, north, grid.lat0, grid.dlat, MARGIN_LAT, grid.ny) {
-                let r = rect(grid, x, y);
+        for x in span(west, east, grid.lon0, grid.dlon, margin.lon, grid.nx) {
+            for y in span(south, north, grid.lat0, grid.dlat, margin.lat, grid.ny) {
+                let r = rect(grid, margin, x, y);
                 if west <= r.east + SLACK && east >= r.west - SLACK && south <= r.north + SLACK && north >= r.south - SLACK {
                     candidates[usize::from(x) * usize::from(grid.ny) + usize::from(y)].push(i);
                 }
@@ -85,7 +85,7 @@ pub fn cut(network: &Network, frame: &Frame, grid: &Grid) -> Vec<(u16, u16, Netw
                 roads: roads.iter().map(|&i| network.roads[i].clone()).collect(),
                 corridors: Vec::new(),
             };
-            let held = near.reaching(frame, &rect(grid, x, y));
+            let held = near.reaching(frame, &rect(grid, margin, x, y));
             if !held.roads.is_empty() {
                 tiles.push((x, y, NetworkTile { frame: *frame, network: held }));
             }
@@ -124,6 +124,9 @@ mod tests {
     fn small_grid() -> Grid {
         Grid { lon0: -73.6, lat0: 45.5, dlon: 0.0257, dlat: 0.018, nx: 3, ny: 2 }
     }
+
+    /// About 500 m.
+    const MARGIN: Margin = Margin { lon: 0.0064, lat: 0.0045 };
 
     fn at(lon: f64, lat: f64) -> Point {
         let [x, y] = frame().local(lon, lat);
@@ -172,7 +175,7 @@ mod tests {
     #[test]
     fn a_road_is_in_every_tile_whose_widened_core_it_reaches_and_empty_tiles_are_left_out() {
         let whole = network();
-        let tiles = cut(&whole, &frame(), &small_grid());
+        let tiles = cut(&whole, &frame(), &small_grid(), &MARGIN);
         let at: Vec<(u16, u16)> = tiles.iter().map(|(x, y, _)| (*x, *y)).collect();
         assert_eq!(at, [(0, 0), (1, 0)]);
         assert_eq!(ids(&tiles[0].2), (vec![1, 2], vec![1, 2, 3, 4]));
@@ -191,20 +194,30 @@ mod tests {
         // 300 m east of tile 0_0's core (its margin is about 500 m) and inside 1_0's core
         let (a, b) = (at(-73.5705, 45.51), at(-73.5700, 45.51));
         let whole = Network { left_hand: false, junctions: vec![junction(1, a), junction(2, b)], roads: vec![road(7, 1, 2, &[a, b])], corridors: vec![] };
-        let at: Vec<(u16, u16)> = cut(&whole, &frame(), &small_grid()).iter().map(|(x, y, _)| (*x, *y)).collect();
+        let at: Vec<(u16, u16)> = cut(&whole, &frame(), &small_grid(), &MARGIN).iter().map(|(x, y, _)| (*x, *y)).collect();
         assert_eq!(at, [(0, 0), (1, 0)]);
+    }
+
+    #[test]
+    fn the_margin_given_decides_how_far_past_the_core_a_tile_reaches() {
+        // 300 m east of tile 0_0's core and inside 1_0's core: within a margin of 500 m, past one of 80 m
+        let (a, b) = (at(-73.5705, 45.51), at(-73.5700, 45.51));
+        let whole = Network { left_hand: false, junctions: vec![junction(1, a), junction(2, b)], roads: vec![road(7, 1, 2, &[a, b])], corridors: vec![] };
+        let holding = |margin: &Margin| -> Vec<(u16, u16)> { cut(&whole, &frame(), &small_grid(), margin).iter().map(|(x, y, _)| (*x, *y)).collect() };
+        assert_eq!(holding(&MARGIN), [(0, 0), (1, 0)]);
+        assert_eq!(holding(&Margin { lon: 0.001, lat: 0.001 }), [(1, 0)]);
     }
 
     #[test]
     fn the_tiles_are_what_reaching_gives_from_the_whole_network() {
         let osm = fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/importer/data/plateau.osm")).unwrap();
         let (whole, frame) = crate::importer::import_whole(&osm).unwrap();
-        let grid = crate::tiles::grid();
-        let tiles = cut(&whole, &frame, &grid);
+        let grid = Grid { lon0: -74.4, lat0: 45.2, dlon: 0.0257, dlat: 0.018, nx: 51, ny: 34 };
+        let tiles = cut(&whole, &frame, &grid, &MARGIN);
         let mut expected = Vec::new();
         for x in 0..grid.nx {
             for y in 0..grid.ny {
-                let held = whole.reaching(&frame, &rect(&grid, x, y));
+                let held = whole.reaching(&frame, &rect(&grid, &MARGIN, x, y));
                 if !held.roads.is_empty() {
                     expected.push((x, y, NetworkTile { frame, network: held }));
                 }
@@ -216,7 +229,7 @@ mod tests {
 
     #[test]
     fn written_tiles_parse_back_and_their_checksums_are_the_files() {
-        let tiles = cut(&network(), &frame(), &small_grid());
+        let tiles = cut(&network(), &frame(), &small_grid(), &MARGIN);
         let dir = tempfile::tempdir().unwrap();
         let named = write(dir.path(), &tiles).unwrap();
         let names: Vec<&str> = named.iter().map(|(n, _)| n.as_str()).collect();
@@ -234,7 +247,7 @@ mod tests {
 
     #[test]
     fn writing_twice_gives_the_same_bytes() {
-        let tiles = cut(&network(), &frame(), &small_grid());
+        let tiles = cut(&network(), &frame(), &small_grid(), &MARGIN);
         let (one, two) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         assert_eq!(write(one.path(), &tiles).unwrap(), write(two.path(), &tiles).unwrap());
         for name in ["0_0", "1_0"] {

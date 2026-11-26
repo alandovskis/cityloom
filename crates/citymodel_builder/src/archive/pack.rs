@@ -102,7 +102,7 @@ fn changed(path: &Path) -> PackError {
     }
 }
 
-fn is_area(area: &str) -> bool {
+pub(crate) fn is_area(area: &str) -> bool {
     !area.is_empty() && area.len() <= 64 && area.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 

@@ -14,6 +14,7 @@ qu’ils contiennent s’assemble.
 | Dossier    | Contenu                                                                                                                                                                                                                                                                                                                |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `crates/`  | Toutes les caisses Rust (voir [Les caisses](#les-caisses)). Le `Cargo.toml` de la racine n’est que l’espace de travail : il énumère `crates/*` et fixe le profil de publication.                                                                                                                                       |
+| `cities/`  | Un fichier de configuration par ville que `just prepare <city>` peut préparer, `cities/<id>.toml` : l’adresse de son extrait OpenStreetMap, sa grille de tuiles et leur marge.                                                                                                                                         |
 | `web/`     | Ce que le serveur envoie au navigateur : les pages, leurs scripts de démarrage, les feuilles de style, les polices et les icônes (voir [`web/`](#web)).                                                                                                                                                                |
 | `e2e/`     | Les tests Playwright dans le navigateur : les spécifications dans `tests/`, de petits extraits OpenStreetMap dans `fixtures/`, et `tiers.json`, qui place chaque spécification dans un seul niveau (interface, intégration ou bout en bout).                                                                           |
 | `scripts/` | Les scripts shell et Node que lancent le `justfile` et l’intégration continue : construction, déploiement, vérification de la version. `scripts/ci/` contient le sélecteur de changements de l’intégration continue et ses règles (`spec-map.json`); `scripts/include/tests/` les teste.                               |
@@ -39,17 +40,17 @@ Les fichiers du premier niveau :
 
 ### Produits par les outils, absents de git
 
-| Chemin                    | Produit par         | Contenu                                                                                  |
-| ------------------------- | ------------------- | ---------------------------------------------------------------------------------------- |
-| `target/`                 | `cargo`             | Les produits de la construction.                                                         |
-| `.tools/`                 | `just setup`        | `wasm-bindgen-cli`, à la version fixée dans `crates/cityloom_editor/Cargo.toml`.         |
-| `node_modules/`           | `just setup`        | MapLibre, d’après `package.json`.                                                        |
-| `web/pkg/`                | `just build`        | Les modules WebAssembly et leur code de liaison JavaScript.                              |
-| `web/vendor/`             | `just build`        | Le script, le travailleur et la feuille de style de MapLibre, copiés de `node_modules/`. |
-| `web/data/metro/`         | `just prepare`      | Les tuiles du réseau de la région métropolitaine (`<x>_<y>.json`) et leur `index.json`.  |
-| `data/`                   | `just prepare`      | L’extrait du Québec de Geofabrik et l’archive de zone empaquetée, `montreal.citymodel`.  |
-| `e2e/fixtures/generated/` | `just e2e-fixtures` | Les données de test changées en tuiles du réseau.                                        |
-| `website/build/`          | `just docs-build`   | Ce site, construit.                                                                      |
+| Chemin                    | Produit par           | Contenu                                                                                                                                                                                                             |
+| ------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `target/`                 | `cargo`               | Les produits de la construction.                                                                                                                                                                                    |
+| `.tools/`                 | `just setup`          | `wasm-bindgen-cli`, à la version fixée dans `crates/cityloom_editor/Cargo.toml`.                                                                                                                                    |
+| `node_modules/`           | `just setup`          | MapLibre, d’après `package.json`.                                                                                                                                                                                   |
+| `web/pkg/`                | `just build`          | Les modules WebAssembly et leur code de liaison JavaScript.                                                                                                                                                         |
+| `web/vendor/`             | `just build`          | Le script, le travailleur et la feuille de style de MapLibre, copiés de `node_modules/`.                                                                                                                            |
+| `web/data/metro/`         | `just prepare <city>` | Les tuiles du réseau (`<x>_<y>.json`) de la dernière ville préparée, et leur `index.json`.                                                                                                                          |
+| `data/`                   | `just prepare <city>` | L’extrait de chaque ville, ses fichiers de travail d’osmium dans `metro-work/<id>/` et son archive de zone empaquetée, `<id>.citymodel` (pour Montréal : l’extrait du Québec de Geofabrik et `montreal.citymodel`). |
+| `e2e/fixtures/generated/` | `just e2e-fixtures`   | Les données de test changées en tuiles du réseau.                                                                                                                                                                   |
+| `website/build/`          | `just docs-build`     | Ce site, construit.                                                                                                                                                                                                 |
 
 ## Les caisses
 

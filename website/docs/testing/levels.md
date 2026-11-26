@@ -64,8 +64,8 @@ The server's tests are `crates/cityloom_server/tests/`: `api`, `areas`, `auth_fl
 
 ## `citymodel_builder` and `cityloom_model` tests
 
-`crates/citymodel_builder/tests/` holds the pipeline's tests (`archive`, `commands`, `ctrl_c`, `download`, `prepare`,
-`progress` and `tiles`) and the importer's, which are one test crate, `tests/importer/`: `import.rs`, `real_city.rs`,
+`crates/citymodel_builder/tests/` holds the pipeline's tests (`archive`, `city`, `commands`, `ctrl_c`, `download`,
+`prepare`, `progress` and `tiles`) and the importer's, which are one test crate, `tests/importer/`: `import.rs`, `real_city.rs`,
 `clip_agrees.rs` and `projection.rs`, with small OpenStreetMap extracts such as `boulevard.osm` and `split_block.osm`.
 `cityloom_model`'s tests are inline (see [Model unit tests](#model-unit-tests)). `cityloom_model::IMPORTER_VERSION` is
 raised whenever the importer's output changes for the same data.

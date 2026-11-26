@@ -7,9 +7,10 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use cityloom_model::NetworkTile;
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 
 use crate::archive::{self, PackInputs};
+use crate::city::{self, City};
 use crate::metro_index::Grid;
 use crate::prepare::{self, PrepareArgs};
 use crate::progress::{Progress, Spec, StepError, exit_on_ctrl_c, megabytes};
@@ -24,42 +25,62 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    /// Download the extract if needed, make the network tiles and pack the archive.
+    /// Download a city's extract if needed, make its network tiles and pack its archive.
     Prepare {
+        /// The city: the name of its config, cities/<city>.toml (without one, the known cities are listed).
+        city: Option<String>,
+        /// The extract to read instead of the city's (data/<its file name>).
+        #[arg(long)]
         extract: Option<PathBuf>,
         /// Download a newer extract.
         #[arg(long)]
         refresh: bool,
     },
-    /// Keep an extract's roads, import them and cut the network into tiles.
+    /// Keep a city's roads from its extract, import them and cut the network into its tiles.
     Tiles {
-        extract: PathBuf,
+        /// The city: the name of its config, cities/<city>.toml.
+        city: String,
+        /// The folder of osmium's intermediate files (data/metro-work/<city> by default).
         workdir: Option<PathBuf>,
+        /// The extract to read instead of the city's (data/<its file name>).
+        #[arg(long)]
+        extract: Option<PathBuf>,
         /// The tiles' folder (web/data/metro by default).
         #[arg(long)]
         out: Option<PathBuf>,
     },
     /// Pack the network tiles into a .citymodel archive.
-    Pack {
-        #[arg(long, default_value = "montreal")]
-        area: String,
-        #[arg(long)]
-        out: Option<PathBuf>,
-        #[arg(long)]
-        metro: Option<PathBuf>,
-        #[arg(long, default_value = "quebec-latest.osm.pbf")]
-        source: String,
-        /// The extract's replication time, Unix seconds.
-        #[arg(long, default_value_t = 0)]
-        source_time: i64,
-        /// When the archive is made, Unix seconds (now by default).
-        #[arg(long)]
-        created: Option<i64>,
-    },
+    Pack(PackArgs),
     /// Import a whole OSM file (XML or PBF) and write it as one network tile, in the data's own frame: a fixture.
     Fixture { input: PathBuf, out: PathBuf },
     /// Import an OSM file (XML or PBF) and write its street network as JSON, to look at what the importer makes of it.
     Import { input: PathBuf, out: PathBuf },
+}
+
+/// What `pack` was asked. With a city, each flag not given is the city's; without one, `--area`, `--out`, `--metro`
+/// and `--source` must all be given.
+#[derive(Args, Debug)]
+pub struct PackArgs {
+    /// The city: the name of its config, cities/<city>.toml.
+    pub city: Option<String>,
+    /// The archive's area name (the city's id by default).
+    #[arg(long)]
+    pub area: Option<String>,
+    /// The archive (data/<city>.citymodel by default).
+    #[arg(long)]
+    pub out: Option<PathBuf>,
+    /// The tiles' folder (web/data/metro by default).
+    #[arg(long)]
+    pub metro: Option<PathBuf>,
+    /// The extract's name, as the archive keeps it (the city's extract's file name by default).
+    #[arg(long)]
+    pub source: Option<String>,
+    /// The extract's replication time, Unix seconds.
+    #[arg(long, default_value_t = 0)]
+    pub source_time: i64,
+    /// When the archive is made, Unix seconds (now by default).
+    #[arg(long)]
+    pub created: Option<i64>,
 }
 
 /// `2026-10-16T20:21:15Z` as Unix seconds (osmium's replication timestamp), or None.
@@ -104,8 +125,49 @@ pub struct PackJob {
     pub source: String,
     pub source_time: i64,
     pub created: i64,
-    /// The grid's size in tiles, when the caller knows it; else the built-in grid's or the tiles' extent.
+    /// The city's grid, which the tiles' `index.json` must be of; without it, the tiles' extent gives the grid's size.
     pub grid: Option<Grid>,
+}
+
+/// The job `pack` was asked for; nothing is read but the city's config.
+pub fn pack_job(root: &Path, args: PackArgs) -> Result<PackJob, String> {
+    let PackArgs { city, area, out, metro, source, source_time, created } = args;
+    let created = created.unwrap_or_else(now);
+    let Some(id) = city else {
+        let missing: Vec<&str> = [("--area", area.is_none()), ("--out", out.is_none()), ("--metro", metro.is_none()), ("--source", source.is_none())]
+            .into_iter()
+            .filter_map(|(flag, missing)| missing.then_some(flag))
+            .collect();
+        let (Some(area), Some(out), Some(metro), Some(source)) = (area, out, metro, source) else {
+            return Err(format!("pack without a city needs {} ({})", missing.join(", "), city::listed(root)));
+        };
+        return Ok(PackJob { out: absolute(&out), area, metro: absolute(&metro), source, source_time, created, grid: None });
+    };
+    let city = city::load(root, &id)?;
+    Ok(PackJob {
+        out: out.map_or_else(|| city.archive(root), |out| absolute(&out)),
+        area: area.unwrap_or_else(|| city.id.clone()),
+        metro: metro.map_or_else(|| root.join("web/data/metro"), |metro| absolute(&metro)),
+        source: source.unwrap_or_else(|| city.extract_name().to_string()),
+        source_time,
+        created,
+        grid: Some(city.grid.grid()),
+    })
+}
+
+/// What `tiles` was asked: the city and the paths it reads and works in.
+pub struct TilesRun {
+    pub city: City,
+    pub source: PathBuf,
+    pub work: PathBuf,
+}
+
+/// What `tiles <city>` reads and works in: the city's extract and work folder, unless given.
+pub fn tiles_run(root: &Path, city: &str, extract: Option<PathBuf>, workdir: Option<PathBuf>) -> Result<TilesRun, String> {
+    let city = city::load(root, city)?;
+    let source = extract.map_or_else(|| city.extract(root), |extract| absolute(&extract));
+    let work = workdir.map_or_else(|| city.work(root), |work| absolute(&work));
+    Ok(TilesRun { city, source, work })
 }
 
 fn fail(line: impl Into<String>) -> StepError {
@@ -119,10 +181,6 @@ fn tile_name(name: &str) -> Option<(u16, u16)> {
 
 fn number(index: &serde_json::Value, key: &str) -> Result<f64, StepError> {
     index[key].as_f64().ok_or_else(|| fail(format!("index.json has no number {key:?}")))
-}
-
-fn same(a: f64, b: f64) -> bool {
-    (a - b).abs() < 1e-9
 }
 
 /// The pieces of `run_pack` that read the folders: the grid, the network tiles.
@@ -160,10 +218,11 @@ fn read_inputs(job: &PackJob) -> Result<(Grid, Vec<(u16, u16, PathBuf)>), StepEr
     }
 
     let (lon0, lat0, dlon, dlat) = (number(&index, "lon0")?, number(&index, "lat0")?, number(&index, "dlon")?, number(&index, "dlat")?);
-    let montreal = tiles::grid();
     let grid = match job.grid {
-        Some(grid) => grid,
-        None if same(lon0, montreal.lon0) && same(lat0, montreal.lat0) && same(dlon, montreal.dlon) && same(dlat, montreal.dlat) => montreal,
+        Some(grid) if (lon0, lat0, dlon, dlat) == (grid.lon0, grid.lat0, grid.dlon, grid.dlat) => grid,
+        Some(_) => {
+            return Err(fail(format!("{} is the index of another grid's tiles than {}'s; make {}'s tiles first", index_path.display(), job.area, job.area)));
+        }
         None => {
             let nx = roads.iter().map(|r| r.0).max().map_or(1, |m| m + 1);
             let ny = roads.iter().map(|r| r.1).max().map_or(1, |m| m + 1);
@@ -233,34 +292,43 @@ pub(crate) fn now() -> i64 {
 /// Runs a command; the error is the exit code.
 pub fn dispatch(cli: Cli) -> Result<(), i32> {
     match cli.command {
-        Command::Pack { area, out, metro, source, source_time, created } => {
+        Command::Pack(args) => {
             let root = repo_root();
-            let job = PackJob {
-                out: absolute(&out.unwrap_or_else(|| root.join("data/montreal.citymodel"))),
-                area,
-                metro: absolute(&metro.unwrap_or_else(|| root.join("web/data/metro"))),
-                source,
-                source_time,
-                created: created.unwrap_or_else(now),
-                grid: None,
-            };
+            let job = pack_job(&root, args).map_err(|error| {
+                eprintln!("{error}");
+                1
+            })?;
             let progress = Arc::new(Progress::stderr(pack_steps(&job.out), root.join("data/logs"), root));
             exit_on_ctrl_c(&progress).expect("the Ctrl-C handler");
             let result = run_pack(&progress, &job);
             progress.close();
             result.map_err(|_| 1)
         }
-        Command::Tiles { extract, workdir, out } => {
+        Command::Tiles { city, workdir, extract, out } => {
             let root = repo_root();
-            let (source, work, out) = (absolute(&extract), absolute(&workdir.unwrap_or_else(|| root.join("data/metro-work"))), tiles_out(out));
-            let job = TilesJob { source: &source, work: &work, out: &out, osmium: "osmium" };
-            let progress = Arc::new(Progress::stderr(tiles::steps(), root.join("data/logs"), root));
+            let TilesRun { city, source, work } = tiles_run(&root, &city, extract, workdir).map_err(|error| {
+                eprintln!("{error}");
+                1
+            })?;
+            let out = tiles_out(out);
+            let grid = city.grid.grid();
+            let job = TilesJob {
+                source: &source,
+                work: &work,
+                out: &out,
+                osmium: "osmium",
+                grid,
+                margin: city.margin,
+                url: &city.extract_url,
+                extract_name: city.extract_name(),
+            };
+            let progress = Arc::new(Progress::stderr(tiles::steps(&grid), root.join("data/logs"), root));
             exit_on_ctrl_c(&progress).expect("the Ctrl-C handler");
             let result = tiles::run(&progress, &job);
             progress.close();
             result.map_err(|_| 1)
         }
-        Command::Prepare { extract, refresh } => prepare::run(PrepareArgs { extract, refresh }),
+        Command::Prepare { city, extract, refresh } => prepare::run(PrepareArgs { city, extract, refresh }),
         Command::Fixture { input, out } => fixture(&input, &out).map_err(|error| {
             eprintln!("{error}");
             1

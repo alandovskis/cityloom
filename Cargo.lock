@@ -678,7 +678,7 @@ dependencies = [
 
 [[package]]
 name = "cityloom_editor"
-version = "0.115.2"
+version = "0.116.0"
 dependencies = [
  "any_spawner",
  "cityloom_model",
@@ -787,12 +787,14 @@ dependencies = [
  "ctrlc",
  "geom",
  "osm2streets",
+ "serde",
  "serde_json",
  "sha2 0.11.1",
  "streets_reader",
  "tar",
  "tempfile",
  "thiserror 2.0.21",
+ "toml",
  "ureq",
 ]
 
