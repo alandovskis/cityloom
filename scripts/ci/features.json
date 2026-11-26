@@ -502,6 +502,7 @@
         "crates/cityloom_server/src/session.rs",
         "crates/cityloom_server/src/crypto.rs",
         "crates/cityloom_server/src/db.rs",
+        "crates/cityloom_server/tests/auth_flow.rs",
         "crates/cityloom_ui/src/keys.rs",
         "crates/cityloom_ui/src/radio.rs",
         "crates/cityloom_ui/src/confirm.rs"
