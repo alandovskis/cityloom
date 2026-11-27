@@ -1,0 +1,32 @@
+$ git rev-parse HEAD
+6cf7e8a8a7d0f3b71e10b2f7168b730bad6316ae
+
+$ cargo test -p cityloom_editor --lib street::vm::plan::pick_tests::a_stop_dragged_on_the_plan_follows_the_pointer_quietly_and_is_kept_as_one_edit_or_put_back -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3990 filtered out; finished in 0.05s
+
+$ cargo test -p cityloom_editor --lib street::vm::plan::pick_tests::a_raised_element_dragged_on_the_plan_follows_the_pointer_quietly_and_is_kept_as_one_edit_or_put_back -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3990 filtered out; finished in 0.03s
+
+$ cargo test -p cityloom_editor --lib street::vm::plan::pick_tests::a_planting_dragged_on_the_plan_follows_the_pointer_quietly_and_is_kept_as_one_edit_or_put_back -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3990 filtered out; finished in 0.03s
+
+$ cargo test -p cityloom_editor --lib street::vm::plan::pick_tests::a_second_drag_while_a_stop_a_raised_element_or_a_planting_is_dragged_is_refused_with_its_row_s_reason -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3990 filtered out; finished in 0.07s
+
+$ cargo test -p cityloom_editor --lib street::vm::plan::pick_tests::a_boundary_pressed_while_a_thing_is_dragged_is_refused_and_says_why -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3990 filtered out; finished in 0.03s
+
+$ cargo test -p cityloom_editor --lib street::vm::plan::pick_tests::on_a_street_anchored_at_its_last_end_a_stop_a_raised_element_and_a_planting_move_with_the_pointer -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3990 filtered out; finished in 0.04s
