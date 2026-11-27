@@ -163,6 +163,140 @@ mod tests {
         Rig { vm, binding, page, said, storage, ports }
     }
 
+    /// A city with one street whose baseline is the sample's street changed by `baseline`, and one scenario per edit,
+    /// each made from that baseline and then changed by its edit; the page at `/compare.html?street=E`, comparing the
+    /// baseline with the first scenario.
+    fn rig_with(baseline: fn(&mut Street), edits: &[fn(&mut Street)]) -> Rig {
+        let (mut ports, said, storage, _) = test_ports_with_time();
+        let page = Rc::new(FakePage::default());
+        ports.page = page.clone();
+        let own: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage.clone(), "p1"));
+        let store = CityStore::sample(own.clone());
+        let edge = store.open().view(0).edges[0].uid;
+        let binding = CityBinding { store, place: Place::Street(edge) };
+        let mut base = binding.street_editor(None).unwrap().snapshot();
+        baseline(&mut base);
+        binding.keep_street_in(base, None).unwrap();
+        for (i, edit) in edits.iter().enumerate() {
+            let id = binding.act(Action::Create(format!("Scenario {i}"))).unwrap().unwrap();
+            let mut s = binding.street_editor(Some(id)).unwrap().snapshot();
+            edit(&mut s);
+            binding.keep_street_in(s, Some(id)).unwrap();
+        }
+        *page.path.borrow_mut() = format!("/compare.html?street={edge}");
+        ports.storage = own.clone();
+        let binding = CityBinding { store: CityStore::sample(own), place: Place::Street(edge) };
+        let vm = StreetCompareVm::new(ports.clone(), crate::i18n_for(Locale::En), binding.clone());
+        Rig { vm, binding, page, said, storage, ports }
+    }
+
+    /// The baseline as the city keeps it.
+    fn baseline_of(r: &Rig) -> Street {
+        r.binding.street_editor(None).unwrap().snapshot()
+    }
+
+    fn kind(id: &str) -> usize {
+        crate::shared::catalogue::kind_index(id).unwrap()
+    }
+
+    fn piece_lines(r: &Rig) -> Vec<Said> {
+        group(&r.vm().summary(), "cmp-h-pieces").lines.clone()
+    }
+
+    #[test]
+    fn a_piece_added_in_b_is_listed_with_its_kind_and_width() {
+        let r = rig_with(
+            |_| {},
+            &[|s| {
+                s.segments.insert(1, crate::street::model::Segment::new(s.next_uid, kind("bike"), 1_500));
+                s.next_uid += 1;
+            }],
+        );
+        let lines = piece_lines(&r);
+        let added = Said::new("cmp-piece-added").with("kind", Arg::KindLower("bike")).with("width", Arg::Length(1_500));
+        let line = lines.iter().find(|l| l.key == "cmp-piece-added").unwrap_or_else(|| panic!("{lines:?}"));
+        assert_eq!(*line, added);
+        assert!(crate::shared::testing::en(line).starts_with("Added: "), "{}", crate::shared::testing::en(line));
+    }
+
+    #[test]
+    fn a_piece_removed_in_b_is_listed_with_its_kind_and_width() {
+        let r = rig_with(
+            |_| {},
+            &[|s| {
+                s.segments.pop();
+            }],
+        );
+        let gone = baseline_of(&r).segments.last().unwrap().clone();
+        let lines = piece_lines(&r);
+        let removed = Said::new("cmp-piece-removed")
+            .with("kind", Arg::KindLower(crate::shared::catalogue::KINDS[gone.kind].id))
+            .with("width", Arg::Length(gone.width_mm));
+        let line = lines.iter().find(|l| l.key == "cmp-piece-removed").unwrap_or_else(|| panic!("{lines:?}"));
+        assert_eq!(*line, removed);
+        assert!(crate::shared::testing::en(line).starts_with("Removed: "), "{}", crate::shared::testing::en(line));
+    }
+
+    #[test]
+    fn a_piece_of_another_kind_in_b_is_listed_as_becoming_it() {
+        let r = rig_with(
+            |_| {},
+            &[|s| {
+                let bike = kind("bike");
+                s.segments[1].kind = bike;
+                s.segments[1].material = crate::shared::catalogue::KINDS[bike].materials[0];
+                s.segments[1].curb = None;
+            }],
+        );
+        let was = baseline_of(&r).segments[1].kind;
+        assert_ne!(was, kind("bike"), "the sample's second piece is of another kind");
+        let lines = piece_lines(&r);
+        let becomes = Said::new("cmp-piece-kind").with("from", Arg::Kind(crate::shared::catalogue::KINDS[was].id)).with("to", Arg::KindLower("bike"));
+        assert_eq!(lines.iter().filter(|l| l.key == "cmp-piece-kind").collect::<Vec<_>>(), [&becomes], "{lines:?}");
+        assert!(!lines.iter().any(|l| l.key == "cmp-piece-added" || l.key == "cmp-piece-removed"), "{lines:?}");
+    }
+
+    #[test]
+    fn each_other_difference_is_named_in_also() {
+        use crate::shared::catalogue::{KINDS, Side};
+        use crate::street::model::{Calming, CalmingKind, Green, GreenKind, Instance, Speed, Stop, StopKind, TreeSize, Use, Zone};
+        /// Two stretches, the second from 20 m on with its own section, its first piece widened by `widen_mm`.
+        fn zones(s: &mut Street, widen_mm: i32) {
+            s.length_mm = Some(60_000);
+            let mut section = s.segments.clone();
+            section[0].width_mm += widen_mm;
+            let zone = |from_mm, segments| Zone { from_mm, segments, name: None, speed: Speed::Undecided };
+            s.zones = vec![zone(0, None), zone(20_000, Some(section))];
+        }
+        let cases: [(&str, fn(&mut Street)); 7] = [
+            ("cmp-other-speed", |s| s.speed = if s.speed == Speed::Kmh(30) { Speed::Kmh(40) } else { Speed::Kmh(30) }),
+            ("cmp-other-stretches", |s| zones(s, 1_000)),
+            ("cmp-other-piece-details", |s| {
+                let p = s.segments.iter_mut().find(|p| KINDS[p.kind].materials.len() > 1).unwrap();
+                p.material = KINDS[p.kind].materials.iter().copied().find(|&m| m != p.material).unwrap();
+            }),
+            ("cmp-other-curbside", |s| s.curb.push(Instance { side: Side::Right, from_mm: 1_000, length_mm: 5_000, use_: Use::Loading })),
+            ("cmp-other-stops", |s| {
+                s.stops.push(Stop { side: Side::Right, from_mm: 8_000, length_mm: 12_000, kind: StopKind::Curb, shelter: false, name: None })
+            }),
+            ("cmp-other-calming", |s| s.calming.push(Calming { from_mm: 30_000, length_mm: 7_000, kind: CalmingKind::Table, first: None })),
+            ("cmp-other-green", |s| {
+                s.green.push(Green { kind: GreenKind::Tree, from_mm: 2_000, length_mm: 500, offset_mm: 1_000, width_mm: 800, size: Some(TreeSize::M) })
+            }),
+        ];
+        let edits: Vec<fn(&mut Street)> = cases.iter().map(|(_, edit)| *edit).collect();
+        let r = rig_with(|s| zones(s, 500), &edits);
+        let ids: Vec<u32> = r.binding.scenarios().iter().map(|(id, _)| *id).collect();
+        assert_eq!(ids.len(), cases.len());
+        for ((key, _), id) in cases.iter().zip(ids) {
+            r.vm().choose(Pick::B, Some(id));
+            let also: Vec<&str> = r.vm().summary().also.iter().map(|s| s.key).collect();
+            assert_eq!(also, [*key], "the scenario for {key}");
+        }
+        r.vm().choose(Pick::B, None);
+        assert!(r.vm().summary().also.is_empty(), "the baseline against itself differs in none of them");
+    }
+
     fn stored(storage: &MemoryStorage) -> Vec<(String, Option<String>)> {
         let mut keys = storage.keys();
         keys.sort();

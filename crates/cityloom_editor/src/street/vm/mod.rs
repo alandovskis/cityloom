@@ -2656,6 +2656,28 @@ mod tests {
         assert_eq!(r.said.take(), vec!["Ce navigateur ne conserve pas vos modifications, alors les autres pages ne les verront pas."]);
     }
 
+    #[test]
+    fn a_scenario_the_browser_cannot_keep_is_said_and_not_made() {
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, _) = city_rig();
+        r.storage.blocked(true);
+        r.said.take();
+        assert!(!r.vm.create_scenario("Wider bike lane"));
+        assert_eq!(r.said.take(), vec![crate::i18n_for(Locale::En).tr_now("not-kept", &crate::shared::i18n::Args::new())]);
+        assert!(r.vm.scenario_state().items().is_empty(), "no scenario is listed");
+        assert_eq!(r.vm.scenario_state().active_now(), None, "the baseline is still shown");
+    }
+
+    #[test]
+    fn a_typed_length_that_is_not_a_number_is_said() {
+        let r = rig(0);
+        r.vm.say_bad_number();
+        assert_eq!(r.said.take(), ["That is not a number."]);
+        r.vm.i18n().set(Locale::FrCa);
+        r.vm.say_bad_number();
+        assert_eq!(r.said.take(), ["Ce n’est pas un nombre."]);
+    }
+
     use crate::restriction::fixtures::{bent_midpoint, bent_store, square};
     use crate::restriction::model::Rule;
     use crate::restriction::store::RestrictionStore;
@@ -3964,6 +3986,29 @@ mod calming_tests {
     }
 
     #[test]
+    fn a_drag_begun_with_no_element_chosen_is_refused_and_opens_nothing() {
+        let r = rig();
+        let revisions = r.vm.view_now().revisions.len();
+        let refusal = "Choose a raised table, crossing, chicane or modal filter first.";
+        // nothing chosen on the strip
+        assert!(!r.vm.begin_calming_drag());
+        assert_eq!(r.said.take(), [refusal]);
+        assert!(!r.vm.core.read(|e| e.dragging()), "no gesture is open");
+        assert_eq!(r.vm.view_now().revisions.len(), revisions);
+        // the free stretch chosen
+        r.vm.select_calming(0);
+        r.said.take();
+        assert!(!r.vm.begin_calming_drag());
+        assert_eq!(r.said.take(), [refusal]);
+        assert!(!r.vm.core.read(|e| e.dragging()), "no gesture is open");
+        // so there is nothing to end
+        r.vm.end_calming_drag(true);
+        assert!(r.said.take().is_empty(), "nothing is said");
+        assert_eq!(r.vm.view_now().revisions.len(), revisions, "nothing is kept");
+        assert_eq!(cells(&r), [(None, 0, LENGTH)]);
+    }
+
+    #[test]
     fn drags_of_the_zones_the_curbside_the_stops_and_the_elements_refuse_each_other() {
         let r = with_table();
         // an element drag refuses the others
@@ -4306,6 +4351,16 @@ mod green_tests {
     }
 
     #[test]
+    fn a_drag_begun_with_no_element_chosen_is_refused_and_opens_nothing() {
+        let r = rig();
+        let revisions = r.vm.view_now().revisions.len();
+        assert!(!r.vm.begin_green_drag());
+        assert_eq!(r.said.take(), ["Choose a tree or planting first."]);
+        assert!(!r.vm.core.read(|e| e.dragging()), "no gesture is open");
+        assert_eq!(r.vm.view_now().revisions.len(), revisions);
+    }
+
+    #[test]
     fn the_tools_show_the_chosen_element() {
         let r = rig();
         let mut f = form(GreenKind::Tree, 20_000, 3);
@@ -4464,6 +4519,26 @@ mod level_tests {
         assert!(vm.add_green_clear(GreenForm::new(GreenKind::Tree)), "adding a tree chooses it");
         assert_eq!(vm.level(), Level::Green);
         assert_eq!(path(&vm), ["Street", "*Tree"]);
+    }
+
+    #[test]
+    fn a_named_stop_is_named_on_the_path() {
+        let vm = vm();
+        vm.select_stop(Side::Right, 0);
+        assert!(vm.add_stop(StopKind::Bulb, 8_000));
+        assert!(vm.name_stop("Rachel / Saint-Denis"));
+        assert_eq!(path(&vm), ["Street", "*Rachel / Saint-Denis"]);
+        assert!(vm.name_stop("  "), "a blank name takes the name away");
+        assert_eq!(path(&vm), ["Street", "*Curb extension"], "the kind names it again");
+    }
+
+    #[test]
+    fn a_name_typed_before_the_stop_is_added_names_it_on_the_path() {
+        let vm = vm();
+        vm.select_stop(Side::Right, 0);
+        assert!(vm.name_stop("Mont-Royal"));
+        assert!(vm.add_stop(StopKind::Bulb, 8_000));
+        assert_eq!(path(&vm), ["Street", "*Mont-Royal"]);
     }
 
     #[test]
