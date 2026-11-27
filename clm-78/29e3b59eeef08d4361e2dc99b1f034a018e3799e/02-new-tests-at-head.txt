@@ -1,0 +1,37 @@
+Each new test of CLM-78 run alone at 29e3b59eeef08d4361e2dc99b1f034a018e3799e
+
+$ cargo test -p cityloom_editor --lib street::model::replay::tests::a_change_of_times_of_day_reaches_the_counterpart_and_leaves_its_other_fields -- --exact
+running 1 test
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3993 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib street::model::replay::tests::a_material_change_reaches_the_counterpart_and_leaves_its_other_fields -- --exact
+running 1 test
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3993 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib street::model::replay::tests::a_tram_change_reaches_the_counterpart_and_leaves_its_other_fields -- --exact
+running 1 test
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3993 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib street::model::replay::tests::an_added_first_piece_whose_right_neighbour_the_target_lacks_goes_at_the_start -- --exact
+running 1 test
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3993 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib street::model::replay::tests::an_added_piece_with_no_counterpart_on_either_side_goes_at_the_end_when_not_nearer_the_start -- --exact
+running 1 test
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3993 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib street::model::replay::tests::an_added_piece_with_no_counterpart_on_either_side_goes_at_the_start_when_nearer_it -- --exact
+running 1 test
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3993 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib street::model::replay::tests::an_added_piece_with_no_counterpart_on_its_left_goes_before_the_nearest_on_its_right -- --exact
+running 1 test
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3993 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib street::model::tests::a_change_of_side_lays_an_untouched_streets_own_stretches_out_again -- --exact
+running 1 test
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3993 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib street::model::tests::a_change_of_side_on_an_edited_street_mirrors_the_direction_of_a_pieces_times_of_day -- --exact
+running 1 test
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3993 filtered out; finished in 0.02s
