@@ -4120,10 +4120,14 @@ mod tests {
         s
     }
 
-    /// The streets of `too_wide_for_a_ring` as a roundabout with a bus lane across, a cycle track, a wider ring and one
-    /// street shifted: what the person had made of it before the streets grew.
+    /// The streets of `too_wide_for_a_ring` as a roundabout with a bus lane across, a cycle track, a wider ring, one
+    /// street shifted and corners of the default size: what the person had made of it before the streets grew.
     fn roundabout_with_extras(streets: &State) -> State {
         let mut now = streets.clone();
+        for a in &mut now.arms {
+            a.corner_mm = DEFAULT_CORNER_MM;
+        }
+        assert!(DEFAULT_CORNER_MM > MIN_CORNER_MM, "the corners have to be made smaller");
         now.control = ROUNDABOUT;
         now.bus = Some((now.arms[0].uid, now.arms[1].uid));
         now.cycle = Some(CYCLE_MIN_MM);
