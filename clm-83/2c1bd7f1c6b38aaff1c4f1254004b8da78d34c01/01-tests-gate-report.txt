@@ -1,0 +1,11 @@
+PASS tests gate
+  new test: cityloom_editor unittests src/lib.rs::junction::view::tests::a_street_nothing_enters_from_has_a_signal_section_that_says_it_has_no_green_of_its_own_in_both_languages
+  new test: cityloom_editor unittests src/lib.rs::junction::view::tests::a_street_that_only_leaves_says_no_lanes_come_in_and_lists_none_in_both_languages
+  new test: cityloom_editor unittests src/lib.rs::junction::view::tests::an_approach_that_served_no_vehicle_says_so_to_a_screen_reader_in_both_wait_cells_in_both_languages
+  caught: cityloom_editor unittests src/lib.rs::junction::view::tests::a_street_nothing_enters_from_has_a_signal_section_that_says_it_has_no_green_of_its_own_in_both_languages: 3 faults, the first: crates/cityloom_editor/src/junction/view/inspector.rs: replace == with != in signal_section; crates/cityloom_editor/src/junction/i18n/en.ftl: remove the message jn-sig-no-phase; crates/cityloom_editor/src/junction/i18n/en.ftl: remove the message jn-insp-one-way-out
+  caught: cityloom_editor unittests src/lib.rs::junction::view::tests::a_street_that_only_leaves_says_no_lanes_come_in_and_lists_none_in_both_languages: 3 faults, the first: crates/cityloom_editor/src/junction/i18n/en.ftl: remove the message jn-sig-no-phase; crates/cityloom_editor/src/junction/i18n/en.ftl: remove the message jn-insp-one-way-out; crates/cityloom_editor/src/junction/i18n/fr.ftl: remove the message jn-sig-no-phase
+  caught: cityloom_editor unittests src/lib.rs::junction::view::tests::an_approach_that_served_no_vehicle_says_so_to_a_screen_reader_in_both_wait_cells_in_both_languages: 3 faults, the first: crates/cityloom_editor/src/junction/i18n/en.ftl: remove the message jn-act-no-wait-said; crates/cityloom_editor/src/junction/i18n/en.ftl: remove the message jn-calls-no-wait; crates/cityloom_editor/src/junction/i18n/fr.ftl: remove the message jn-act-no-wait-said
+  not caught by any new test: crates/cityloom_editor/src/junction/i18n/fr.ftl: remove the message jn-insp-one-way-out
+  did not compile: crates/cityloom_editor/src/junction/view/inspector.rs: replace arm_panel -> AnyView with Default::default()
+  did not compile: crates/cityloom_editor/src/junction/view/inspector.rs: remove the attribute id="i-h-signal"
+  not run, every new test had caught three: 25 faults
