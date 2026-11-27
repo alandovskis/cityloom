@@ -703,6 +703,12 @@ fn the_add_menu_s_search_of_items_the_street_can_take_greys_none() {
     assert_eq!(count(&h, "aria-describedby="), 3, "{h}");
     assert!(!h.contains("aria-disabled") && !h.contains("add-reason"), "{h}");
     assert_eq!(count(&h, "class=\"add-icon\""), 3, "a piece keeps its icon: {h}");
+    for (id, data) in [("bike", "kind-bike"), ("bikerack", "kind-bikerack"), ("bikeshare", "kind-bikeshare")] {
+        let button = &h[h.find(&format!("data-item=\"{data}\"")).unwrap_or_else(|| panic!("{data}: {h}"))..];
+        let button = &button[..button.find("</button>").unwrap()];
+        let drawn = format!("<span class=\"add-icon\">{}</span>", crate::shared::symbols::icon(id));
+        assert!(button.contains(&drawn), "{data} holds its own icon: {button}");
+    }
     assert_eq!(count(&h, ">Cycling</span>"), 3, "{h}");
     assert_eq!(count(&h, "id=\"add-place-pieces\""), 1, "{h}");
     assert!(h.contains("id=\"add-place-pieces\" hidden>Goes after the selected piece.</p>"), "{h}");
