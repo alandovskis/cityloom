@@ -1,0 +1,52 @@
+$ git rev-parse HEAD
+3b69bf6fe3944f7e543ef23b3ab12410fcec94c7
+
+$ cargo test -p cityloom_editor --lib junction::model::tests::leaving_a_signal_with_bike_boxes_and_its_timing_says_both_went -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3994 filtered out; finished in 0.04s
+
+$ cargo test -p cityloom_editor --lib junction::model::tests::leaving_a_signal_with_protected_corners_and_its_timing_says_both_went -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3994 filtered out; finished in 0.03s
+
+$ cargo test -p cityloom_editor --lib junction::model::tests::leaving_a_signal_with_bike_boxes_protected_corners_and_its_timing_says_all_went -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3994 filtered out; finished in 0.03s
+
+$ cargo test -p cityloom_editor --lib junction::model::tests::a_phase_for_a_pedestrian_street_is_refused_and_changes_nothing -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3994 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib junction::model::tests::a_bus_lane_between_streets_that_are_not_there_is_refused_as_not_fitting -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3994 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib junction::model::tests::a_roundabout_that_cannot_be_drawn_opens_eased_to_a_priority_junction_without_its_extras -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3994 filtered out; finished in 0.02s
+
+$ cargo test -p cityloom_editor --lib junction::model::tests::a_roundabout_that_cannot_be_drawn_and_eases_to_the_junction_as_laid_out_opens_on_it -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3994 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib junction::model::plans::tests::the_schedule_is_not_changed_off_a_signal -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3994 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib junction::model::plans::tests::a_period_is_not_given_a_plan_the_junction_does_not_have -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3994 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib junction::model::plans::tests::a_period_that_is_not_there_is_not_removed_moved_or_given_a_plan -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3994 filtered out; finished in 0.00s
