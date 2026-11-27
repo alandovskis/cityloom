@@ -1,0 +1,22 @@
+$ git rev-parse HEAD
+18d860f11497b4eb4c66a45b59da2af8e3f7564d
+
+$ cargo test -p cityloom_editor --lib street::view::tests::the_add_menu_s_search_lists_its_matches_with_where_each_goes_and_why_it_is_greyed -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3988 filtered out; finished in 0.03s
+
+$ cargo test -p cityloom_editor --lib street::view::tests::the_add_menu_s_search_of_items_the_street_can_take_greys_none -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3988 filtered out; finished in 0.02s
+
+$ cargo test -p cityloom_editor --lib street::view::tests::the_add_menu_s_search_says_when_nothing_matches -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3988 filtered out; finished in 0.01s
+
+$ cargo test -p cityloom_editor --lib street::view::tests::the_add_menu_s_search_says_in_french_when_nothing_matches -- --exact
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3988 filtered out; finished in 0.01s

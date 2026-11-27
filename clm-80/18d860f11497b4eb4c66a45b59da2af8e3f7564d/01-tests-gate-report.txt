@@ -1,0 +1,12 @@
+PASS tests gate
+  new test: cityloom_editor unittests src/lib.rs::street::view::tests::the_add_menu_s_search_lists_its_matches_with_where_each_goes_and_why_it_is_greyed
+  new test: cityloom_editor unittests src/lib.rs::street::view::tests::the_add_menu_s_search_of_items_the_street_can_take_greys_none
+  new test: cityloom_editor unittests src/lib.rs::street::view::tests::the_add_menu_s_search_says_in_french_when_nothing_matches
+  new test: cityloom_editor unittests src/lib.rs::street::view::tests::the_add_menu_s_search_says_when_nothing_matches
+  caught: cityloom_editor unittests src/lib.rs::street::view::tests::the_add_menu_s_search_lists_its_matches_with_where_each_goes_and_why_it_is_greyed: 3 faults, the first: crates/cityloom_editor/src/street/view/add_menu.rs: remove the attribute class="add-reason"; crates/cityloom_editor/src/street/view/add_menu.rs: remove the attribute id=id; crates/cityloom_editor/src/street/view/add_menu.rs: remove the attribute hidden
+  caught: cityloom_editor unittests src/lib.rs::street::view::tests::the_add_menu_s_search_of_items_the_street_can_take_greys_none: 3 faults, the first: crates/cityloom_editor/src/street/view/add_menu.rs: remove the attribute class="add-icon"; crates/cityloom_editor/src/street/view/add_menu.rs: remove the attribute inner_html=icon(KINDS[k].id); crates/cityloom_editor/src/street/view/add_menu.rs: remove the attribute hidden
+  caught: cityloom_editor unittests src/lib.rs::street::view::tests::the_add_menu_s_search_says_in_french_when_nothing_matches: 3 faults, the first: crates/cityloom_editor/src/street/view/add_menu.rs: remove the attribute class="add-none"; crates/cityloom_editor/src/street/i18n/fr.ftl: remove the message add-no-match; crates/cityloom_editor/src/street/i18n/fr.ftl: remove the placeable { $query } of add-no-match
+  caught: cityloom_editor unittests src/lib.rs::street::view::tests::the_add_menu_s_search_says_when_nothing_matches: 3 faults, the first: crates/cityloom_editor/src/street/view/add_menu.rs: remove the attribute class="add-none"; crates/cityloom_editor/src/street/i18n/en.ftl: remove the message add-no-match; crates/cityloom_editor/src/street/i18n/en.ftl: remove the placeable { $query } of add-no-match
+  did not compile: crates/cityloom_editor/src/street/view/add_menu.rs: delete match arm Item::Piece(k) in item
+  did not compile: crates/cityloom_editor/src/street/view/add_menu.rs: remove the attribute id=format!("add-place-{}", r.id())
+  not run, every new test had caught three: 25 faults
