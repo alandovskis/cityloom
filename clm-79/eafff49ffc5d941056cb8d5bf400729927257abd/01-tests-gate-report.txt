@@ -1,0 +1,39 @@
+PASS tests gate
+  new test: cityloom_editor unittests src/lib.rs::street::vm::calming_tests::a_drag_begun_with_no_element_chosen_is_refused_and_opens_nothing
+  new test: cityloom_editor unittests src/lib.rs::street::vm::compare::tests::a_piece_added_in_b_is_listed_with_its_kind_and_width
+  new test: cityloom_editor unittests src/lib.rs::street::vm::compare::tests::a_piece_of_another_kind_in_b_is_listed_as_becoming_it
+  new test: cityloom_editor unittests src/lib.rs::street::vm::compare::tests::a_piece_removed_in_b_is_listed_with_its_kind_and_width
+  new test: cityloom_editor unittests src/lib.rs::street::vm::compare::tests::each_other_difference_is_named_in_also
+  new test: cityloom_editor unittests src/lib.rs::street::vm::green_tests::a_drag_begun_with_no_element_chosen_is_refused_and_opens_nothing
+  new test: cityloom_editor unittests src/lib.rs::street::vm::level_tests::a_name_typed_before_the_stop_is_added_names_it_on_the_path
+  new test: cityloom_editor unittests src/lib.rs::street::vm::level_tests::a_named_stop_is_named_on_the_path
+  new test: cityloom_editor unittests src/lib.rs::street::vm::tests::a_scenario_the_browser_cannot_keep_is_said_and_not_made
+  new test: cityloom_editor unittests src/lib.rs::street::vm::tests::a_typed_length_that_is_not_a_number_is_said
+  caught: cityloom_editor unittests src/lib.rs::street::vm::calming_tests::a_drag_begun_with_no_element_chosen_is_refused_and_opens_nothing: 3 faults, the first: crates/cityloom_editor/src/street/vm/mod.rs: replace StreetVm::begin_calming_drag -> bool with true; crates/cityloom_editor/src/street/vm/mod.rs: replace StreetVm::begin_calming_drag -> bool with false; crates/cityloom_editor/src/street/vm/mod.rs: delete ! in StreetVm::begin_calming_drag
+  caught: cityloom_editor unittests src/lib.rs::street::vm::compare::tests::a_piece_added_in_b_is_listed_with_its_kind_and_width: 3 faults, the first: crates/cityloom_editor/src/street/model/compare.rs: replace pieces -> (bool, Vec<PieceChange>) with (true, vec![]); crates/cityloom_editor/src/street/i18n/en.ftl: remove the message cmp-piece-added; crates/cityloom_editor/src/street/i18n/en.ftl: remove the placeable { $kind } of cmp-piece-added
+  caught: cityloom_editor unittests src/lib.rs::street::vm::compare::tests::a_piece_of_another_kind_in_b_is_listed_as_becoming_it: 3 faults, the first: crates/cityloom_editor/src/street/model/compare.rs: replace pieces -> (bool, Vec<PieceChange>) with (true, vec![]); crates/cityloom_editor/src/street/model/compare.rs: replace pieces -> (bool, Vec<PieceChange>) with (false, vec![]); crates/cityloom_editor/src/street/model/compare.rs: replace == with != in pieces
+  caught: cityloom_editor unittests src/lib.rs::street::vm::compare::tests::a_piece_removed_in_b_is_listed_with_its_kind_and_width: 3 faults, the first: crates/cityloom_editor/src/street/model/compare.rs: replace pieces -> (bool, Vec<PieceChange>) with (true, vec![]); crates/cityloom_editor/src/street/i18n/en.ftl: remove the message cmp-piece-removed; crates/cityloom_editor/src/street/i18n/en.ftl: remove the placeable { $kind } of cmp-piece-removed
+  caught: cityloom_editor unittests src/lib.rs::street::vm::compare::tests::each_other_difference_is_named_in_also: 2 faults, the first: crates/cityloom_editor/src/street/model/compare.rs: replace Other::key -> &'static str with ""; crates/cityloom_editor/src/street/model/compare.rs: replace Other::key -> &'static str with "xyzzy"
+  caught: cityloom_editor unittests src/lib.rs::street::vm::green_tests::a_drag_begun_with_no_element_chosen_is_refused_and_opens_nothing: 2 faults, the first: crates/cityloom_editor/src/street/vm/mod.rs: replace StreetVm::begin_green_drag -> bool with true; crates/cityloom_editor/src/street/vm/mod.rs: replace StreetVm::begin_green_drag -> bool with false
+  caught: cityloom_editor unittests src/lib.rs::street::vm::level_tests::a_name_typed_before_the_stop_is_added_names_it_on_the_path: 2 faults, the first: crates/cityloom_editor/src/street/vm/level.rs: replace chosen -> Option<Said> with None; crates/cityloom_editor/src/street/vm/level.rs: replace path -> Vec<(Level, Said)> with vec![]
+  caught: cityloom_editor unittests src/lib.rs::street::vm::level_tests::a_named_stop_is_named_on_the_path: 2 faults, the first: crates/cityloom_editor/src/street/vm/level.rs: replace chosen -> Option<Said> with None; crates/cityloom_editor/src/street/vm/level.rs: replace path -> Vec<(Level, Said)> with vec![]
+  caught: cityloom_editor unittests src/lib.rs::street::vm::tests::a_scenario_the_browser_cannot_keep_is_said_and_not_made: 3 faults, the first: crates/cityloom_editor/src/city/binding.rs: replace scenario_actions::act -> Option<Option<u32>> with None; crates/cityloom_editor/src/city/binding.rs: replace scenario_actions::act -> Option<Option<u32>> with Some(None); crates/cityloom_editor/src/city/binding.rs: replace scenario_actions::act -> Option<Option<u32>> with Some(Some(0))
+  caught: cityloom_editor unittests src/lib.rs::street::vm::tests::a_typed_length_that_is_not_a_number_is_said: 1 fault, the first: crates/cityloom_editor/src/street/vm/mod.rs: replace StreetVm::say_bad_number with ()
+  not caught by any new test: crates/cityloom_editor/src/street/vm/mod.rs: delete ! in StreetVm::begin_green_drag
+  not caught by any new test: crates/cityloom_editor/src/street/vm/level.rs: replace == with != in chosen
+  not caught by any new test: crates/cityloom_editor/src/street/i18n/en.ftl: remove the placeable { $width } of cmp-piece-added
+  not caught by any new test: crates/cityloom_editor/src/street/i18n/en.ftl: remove the placeable { $width } of cmp-piece-removed
+  not caught by any new test: crates/cityloom_editor/src/city/binding.rs: replace scenario_actions::act -> Option<Option<u32>> with Some(Some(1))
+  not caught by any new test: crates/cityloom_editor/src/street/i18n/en.ftl: rename the variable $kind of cmp-piece-added
+  not caught by any new test: crates/cityloom_editor/src/street/i18n/en.ftl: rename the variable $kind of cmp-piece-removed
+  not caught by any new test: crates/cityloom_editor/src/street/i18n/en.ftl: rename the variable $width of cmp-piece-added
+  not caught by any new test: crates/cityloom_editor/src/street/i18n/en.ftl: rename the variable $width of cmp-piece-removed
+  not caught by any new test: crates/cityloom_editor/src/street/model/compare.rs: replace != with == in pieces
+  not caught by any new test: crates/cityloom_editor/src/street/model/compare.rs: replace != with == in pieces
+  not caught by any new test: crates/cityloom_editor/src/street/model/compare.rs: delete ! in pieces
+  not caught by any new test: crates/cityloom_editor/src/street/model/compare.rs: replace == with != in pieces
+  not caught by any new test: crates/cityloom_editor/src/street/model/compare.rs: replace != with == in pieces
+  did not compile: crates/cityloom_editor/src/street/vm/level.rs: replace chosen -> Option<Said> with Some(Default::default())
+  did not compile: crates/cityloom_editor/src/street/vm/level.rs: replace path -> Vec<(Level, Said)> with vec![(Default::default(), Default::default())]
+  did not compile: crates/cityloom_editor/src/street/model/compare.rs: replace pieces -> (bool, Vec<PieceChange>) with (true, vec![Default::default()])
+  did not compile: crates/cityloom_editor/src/street/model/compare.rs: replace pieces -> (bool, Vec<PieceChange>) with (false, vec![Default::default()])
