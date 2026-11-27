@@ -203,6 +203,11 @@ mod tests {
         group(&r.vm().summary(), "cmp-h-pieces").lines.clone()
     }
 
+    /// The lines as the page says them in English.
+    fn english(lines: &[Said]) -> Vec<String> {
+        lines.iter().map(crate::shared::testing::en).collect()
+    }
+
     #[test]
     fn a_piece_added_in_b_is_listed_with_its_kind_and_width() {
         let r = rig_with(
@@ -214,9 +219,8 @@ mod tests {
         );
         let lines = piece_lines(&r);
         let added = Said::new("cmp-piece-added").with("kind", Arg::KindLower("bike")).with("width", Arg::Length(1_500));
-        let line = lines.iter().find(|l| l.key == "cmp-piece-added").unwrap_or_else(|| panic!("{lines:?}"));
-        assert_eq!(*line, added);
-        assert!(crate::shared::testing::en(line).starts_with("Added: "), "{}", crate::shared::testing::en(line));
+        assert_eq!(lines, [added], "the one piece added, and nothing else");
+        assert_eq!(english(&lines), ["Added: bike lane, 1.5 m"]);
     }
 
     #[test]
@@ -228,13 +232,11 @@ mod tests {
             }],
         );
         let gone = baseline_of(&r).segments.last().unwrap().clone();
+        assert_eq!((gone.kind, gone.width_mm), (kind("sidewalk"), 3_500), "the sample's last piece");
         let lines = piece_lines(&r);
-        let removed = Said::new("cmp-piece-removed")
-            .with("kind", Arg::KindLower(crate::shared::catalogue::KINDS[gone.kind].id))
-            .with("width", Arg::Length(gone.width_mm));
-        let line = lines.iter().find(|l| l.key == "cmp-piece-removed").unwrap_or_else(|| panic!("{lines:?}"));
-        assert_eq!(*line, removed);
-        assert!(crate::shared::testing::en(line).starts_with("Removed: "), "{}", crate::shared::testing::en(line));
+        let removed = Said::new("cmp-piece-removed").with("kind", Arg::KindLower("sidewalk")).with("width", Arg::Length(3_500));
+        assert_eq!(lines, [removed], "the one piece removed, and nothing else");
+        assert_eq!(english(&lines), ["Removed: sidewalk, 3.5 m"]);
     }
 
     #[test]
@@ -248,12 +250,11 @@ mod tests {
                 s.segments[1].curb = None;
             }],
         );
-        let was = baseline_of(&r).segments[1].kind;
-        assert_ne!(was, kind("bike"), "the sample's second piece is of another kind");
+        assert_eq!(baseline_of(&r).segments[1].kind, kind("planting"), "the sample's second piece");
         let lines = piece_lines(&r);
-        let becomes = Said::new("cmp-piece-kind").with("from", Arg::Kind(crate::shared::catalogue::KINDS[was].id)).with("to", Arg::KindLower("bike"));
-        assert_eq!(lines.iter().filter(|l| l.key == "cmp-piece-kind").collect::<Vec<_>>(), [&becomes], "{lines:?}");
-        assert!(!lines.iter().any(|l| l.key == "cmp-piece-added" || l.key == "cmp-piece-removed"), "{lines:?}");
+        let becomes = Said::new("cmp-piece-kind").with("from", Arg::Kind("planting")).with("to", Arg::KindLower("bike"));
+        assert_eq!(lines, [becomes], "the one piece of another kind, neither added nor removed");
+        assert_eq!(english(&lines), ["Planting strip becomes bike lane"]);
     }
 
     #[test]
