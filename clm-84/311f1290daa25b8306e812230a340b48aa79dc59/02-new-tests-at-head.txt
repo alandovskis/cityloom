@@ -1,0 +1,16 @@
+Each new test of CLM-84 run alone at 311f1290daa25b8306e812230a340b48aa79dc59
+
+$ cargo test -p cityloom_editor --lib map::model::corridor::tests::a_change_the_storage_will_not_keep_is_reported_and_leaves_every_street_as_it_was -- --exact
+running 1 test
+test map::model::corridor::tests::a_change_the_storage_will_not_keep_is_reported_and_leaves_every_street_as_it_was ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3991 filtered out; finished in 0.17s
+
+$ cargo test -p cityloom_editor --lib map::model::corridor::tests::a_street_edited_since_refuses_the_undo_before_anything_is_written_even_when_the_storage_refuses -- --exact
+running 1 test
+test map::model::corridor::tests::a_street_edited_since_refuses_the_undo_before_anything_is_written_even_when_the_storage_refuses ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3991 filtered out; finished in 0.20s
+
+$ cargo test -p cityloom_editor --lib map::model::corridor::tests::an_undo_the_storage_will_not_keep_names_the_streets_and_can_be_tried_again -- --exact
+running 1 test
+test map::model::corridor::tests::an_undo_the_storage_will_not_keep_names_the_streets_and_can_be_tried_again ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3991 filtered out; finished in 0.29s
