@@ -4036,7 +4036,8 @@ mod tests {
         j
     }
 
-    /// Leaves the signal of `j` for a roundabout and gives the step's message key, in English and in French.
+    /// Leaves the signal of `j` for a roundabout and gives the step's message key and its whole sentence in English and in
+    /// French, with the engine's non-breaking spaces as ordinary ones.
     fn left_for_a_roundabout(mut j: Junction) -> (&'static str, String, String) {
         assert!(j.set_control(ROUNDABOUT), "{:?}", j.refusal());
         let label = j.current().label.clone();
@@ -4047,24 +4048,24 @@ mod tests {
     fn leaving_a_signal_with_bike_boxes_and_its_timing_says_both_went() {
         let (key, en, fr) = left_for_a_roundabout(biked_and_timed(true, false));
         assert_eq!(key, "jn-rev-control-boxes-timing");
-        assert!(en.ends_with("; bike boxes and signal timing removed"), "{en}");
-        assert!(fr.ends_with("; sas cyclables et réglage des feux retirés"), "{fr}");
+        assert_eq!(en, "Control: roundabout; bike boxes and signal timing removed");
+        assert_eq!(fr, "Signalisation : carrefour giratoire; sas cyclables et réglage des feux retirés");
     }
 
     #[test]
     fn leaving_a_signal_with_protected_corners_and_its_timing_says_both_went() {
         let (key, en, fr) = left_for_a_roundabout(biked_and_timed(false, true));
         assert_eq!(key, "jn-rev-control-protected-timing");
-        assert!(en.ends_with("; protected corners and signal timing removed"), "{en}");
-        assert!(fr.ends_with("; coins protégés et réglage des feux retirés"), "{fr}");
+        assert_eq!(en, "Control: roundabout; protected corners and signal timing removed");
+        assert_eq!(fr, "Signalisation : carrefour giratoire; coins protégés et réglage des feux retirés");
     }
 
     #[test]
     fn leaving_a_signal_with_bike_boxes_protected_corners_and_its_timing_says_all_went() {
         let (key, en, fr) = left_for_a_roundabout(biked_and_timed(true, true));
         assert_eq!(key, "jn-rev-control-all");
-        assert!(en.ends_with("; bike boxes, protected corners and signal timing removed"), "{en}");
-        assert!(fr.ends_with("; sas cyclables, coins protégés et réglage des feux retirés"), "{fr}");
+        assert_eq!(en, "Control: roundabout; bike boxes, protected corners and signal timing removed");
+        assert_eq!(fr, "Signalisation : carrefour giratoire; sas cyclables, coins protégés et réglage des feux retirés");
     }
 
     #[test]
