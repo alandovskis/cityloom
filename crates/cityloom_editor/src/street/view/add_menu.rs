@@ -296,3 +296,10 @@ fn item(w: SheetWatch, parts: MenuParts, e: Entry, described: Option<String>, re
         </li>
     }
 }
+
+#[cfg(test)]
+/// The search's results for `query`, for the component tests: host rendering sends no `input` event, so `<AddMenu/>`
+/// never shows them there.
+pub(super) fn search_results(vm: Rc<StreetVm>, query: &str) -> impl IntoView {
+    results(SheetWatch::new(vm), MenuParts::new(".add-item"), query.to_string())
+}
