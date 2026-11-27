@@ -1326,6 +1326,81 @@ fn a_city_junction_s_streets_link_to_the_street_editor_and_cannot_be_removed() {
     assert!(!h.contains("Remove this street"));
 }
 
+/// A signalled junction of the city whose east street (90°) only leaves it: one lane, going out, between two sidewalks.
+fn one_way_out_in(locale: crate::shared::i18n::Locale) -> Rc<JunctionVm> {
+    use crate::shared::catalogue::{Side, StreetClass, kind_index};
+    use crate::street::model::{Piece, Street};
+    let pieces: Vec<Piece> = [("sidewalk", 2000), ("travel", 3200), ("sidewalk", 2000)]
+        .iter()
+        .map(|&(id, width_mm)| Piece { kind: kind_index(id).unwrap(), width_mm, direction: (id == "travel").then_some(0), variants: Vec::new() })
+        .collect();
+    let mut state = Junction::new(0).current().clone();
+    for a in &mut state.arms {
+        a.edge = a.uid;
+        if a.bearing == 90 {
+            a.section = Some(Street::imported(StreetClass::Local, Side::Right, &pieces));
+        }
+    }
+    let j = Junction::from_city(crate::street::model::named_said("Test"), &state, &state, 0).expect("it draws");
+    JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), j, None)
+}
+
+/// `h` from the heading with id `heading` to the end of its section.
+fn section_from<'a>(h: &'a str, heading: &str) -> &'a str {
+    let s = &h[h.find(&format!(r#"id="{heading}""#)).unwrap_or_else(|| panic!("no {heading} in {h}"))..];
+    &s[..s.find("</section>").unwrap_or_else(|| panic!("{heading} ends no section: {s}"))]
+}
+
+#[test]
+fn a_street_nothing_enters_from_has_a_signal_section_that_says_it_has_no_green_of_its_own_in_both_languages() {
+    use crate::shared::i18n::Locale;
+    for (locale, heading, words) in [
+        (Locale::En, "Signal timing", "Nothing enters from this street, so it has no green of its own."),
+        (Locale::FrCa, "Réglage des feux", "Rien n\u{2019}entre par cette rue\u{a0}: elle n\u{2019}a pas de vert à elle."),
+    ] {
+        let s = one_way_out_in(locale);
+        assert!(s.view_now().signal.is_some(), "the junction runs a signal");
+        let e = arm(&s, 90);
+        s.edit(|j| j.select(Target::Arm(e)));
+        let h = panel(&s);
+        let sig = section_from(&h, "i-h-signal");
+        assert!(sig.contains(heading), "{locale:?}: {sig}");
+        assert!(sig.contains(&format!(r#"<p class="insp-range">{words}</p>"#)), "{locale:?}: {sig}");
+        assert!(!h.contains(r#"id="i-h-green""#), "{locale:?}: no timing field: {h}");
+        assert_eq!(s.i18n().missing(), Vec::<String>::new(), "{locale:?}");
+        // A street that traffic enters from has its timing, not the sentence.
+        let n = arm(&s, 0);
+        s.edit(|j| j.select(Target::Arm(n)));
+        let h = panel(&s);
+        assert!(!h.contains(words) && h.contains(r#"id="i-h-green""#), "{locale:?}: {h}");
+    }
+}
+
+#[test]
+fn a_street_that_only_leaves_says_no_lanes_come_in_and_lists_none_in_both_languages() {
+    use crate::shared::i18n::Locale;
+    for (locale, heading, words) in [
+        (Locale::En, "Lanes coming in", "One way out. No lanes come in."),
+        (Locale::FrCa, "Voies entrantes", "Sens unique sortant. Aucune voie n\u{2019}entre."),
+    ] {
+        let s = one_way_out_in(locale);
+        let e = arm(&s, 90);
+        s.edit(|j| j.select(Target::Arm(e)));
+        let h = panel(&s);
+        let lanes = section_from(&h, "i-h-lanes");
+        assert!(lanes.contains(heading), "{locale:?}: {lanes}");
+        assert!(lanes.contains(&format!(r#"<p class="insp-range">{words}</p>"#)), "{locale:?}: {lanes}");
+        assert!(!h.contains(r#"<ul class="lanes">"#), "{locale:?}: no lane is listed: {h}");
+        assert_eq!(s.i18n().missing(), Vec::<String>::new(), "{locale:?}");
+        // A street that traffic enters from lists its lanes, not the sentence.
+        let n = arm(&s, 0);
+        s.edit(|j| j.select(Target::Arm(n)));
+        let h = panel(&s);
+        let lanes = section_from(&h, "i-h-lanes");
+        assert!(lanes.contains(r#"<ul class="lanes">"#) && !h.contains(words), "{locale:?}: {lanes}");
+    }
+}
+
 #[test]
 fn a_corner_panel_names_its_two_streets_and_gives_the_radius() {
     let s = shared(0);
@@ -4390,6 +4465,31 @@ fn the_plan_offers_each_street_with_a_phase_recall_or_actuated_and_shows_the_pla
     let approaches = &act[act.find(r#"id="actuation-approaches""#).unwrap()..];
     let row = &approaches[approaches.find("<tbody>").unwrap()..approaches.find("</tbody>").unwrap()];
     assert!(row.contains(&format!(r#"<td>{}</td><td>{}</td>"#, a.vehicles, a.served)), "{row}");
+}
+
+#[test]
+fn an_approach_that_served_no_vehicle_says_so_to_a_screen_reader_in_both_wait_cells_in_both_languages() {
+    use crate::shared::i18n::Locale;
+    for (locale, said) in [(Locale::En, "no vehicle served"), (Locale::FrCa, "aucun véhicule servi")] {
+        let s = shared_in(0, locale);
+        let n = arm(&s, 0);
+        assert!(s.set_actuated(n, true));
+        assert!(s.set_actuation(n, crate::junction::model::actuation::Field::Vehicles, 0));
+        s.show_plan();
+        let v = s.view_now();
+        let approaches = &v.signal.as_ref().unwrap().actuation.approaches;
+        assert_eq!(approaches.len(), 1, "one actuated approach");
+        let a = approaches[0];
+        assert_eq!((a.arm, a.vehicles, a.served, a.average_wait_s, a.longest_wait_s), (n, 0, 0, None, None), "no vehicle, so no wait");
+        let h = panel(&s);
+        let act = actuation_of(&h);
+        let table = &act[act.find(r#"id="actuation-approaches""#).unwrap()..];
+        let row = &table[table.find("<tbody>").unwrap()..table.find("</tbody>").unwrap()];
+        let cells: Vec<&str> = row.split("<td").skip(1).map(|t| &t[t.find('>').unwrap() + 1..t.find("</td>").unwrap()]).collect();
+        let none = format!(r#"<span aria-hidden="true">–</span><span class="sr-only">{said}</span>"#);
+        assert_eq!(cells, ["0", "0", "0", none.as_str(), none.as_str()], "{locale:?}: {row}");
+        assert_eq!(s.i18n().missing(), Vec::<String>::new(), "{locale:?}");
+    }
 }
 
 #[test]
