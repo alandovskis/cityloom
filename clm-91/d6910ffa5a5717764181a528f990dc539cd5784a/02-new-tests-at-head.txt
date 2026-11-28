@@ -1,0 +1,36 @@
+Each new test of CLM-91 run alone at d6910ffa5a5717764181a528f990dc539cd5784a
+
+$ cargo test -p cityloom_editor --lib timeline::tests::the_author_is_whoever_is_signed_in_asked_once -- --exact
+running 1 test
+test timeline::tests::the_author_is_whoever_is_signed_in_asked_once ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4024 filtered out; finished in 0.03s
+
+$ cargo test -p cityloom_editor --lib timeline::tests::a_blank_name_or_nobody_signed_in_leaves_the_author_empty -- --exact
+running 1 test
+test timeline::tests::a_blank_name_or_nobody_signed_in_leaves_the_author_empty ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4024 filtered out; finished in 0.03s
+
+$ cargo test -p cityloom_editor --lib timeline::tests::a_comparison_names_streets_junctions_and_rules_from_their_records -- --exact
+running 1 test
+test timeline::tests::a_comparison_names_streets_junctions_and_rules_from_their_records ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4024 filtered out; finished in 0.02s
+
+$ cargo test -p cityloom_editor --lib timeline::tests::a_changed_place_says_each_aspect_that_changed_in_words -- --exact
+running 1 test
+test timeline::tests::a_changed_place_says_each_aspect_that_changed_in_words ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4024 filtered out; finished in 0.02s
+
+$ cargo test -p cityloom_editor --lib timeline::tests::a_milestone_of_no_work_says_nothing_was_edited -- --exact
+running 1 test
+test timeline::tests::a_milestone_of_no_work_says_nothing_was_edited ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4024 filtered out; finished in 0.01s
+
+$ cargo test -p cityloom_editor --lib timeline::tests::work_that_cannot_be_read_now_cannot_be_compared -- --exact
+running 1 test
+test timeline::tests::work_that_cannot_be_read_now_cannot_be_compared ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4024 filtered out; finished in 0.01s
+
+$ cargo test -p cityloom_editor --lib timeline::tests::restoring_a_milestone_deleted_meanwhile_says_it_is_gone_and_changes_nothing -- --exact
+running 1 test
+test timeline::tests::restoring_a_milestone_deleted_meanwhile_says_it_is_gone_and_changes_nothing ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4024 filtered out; finished in 0.01s

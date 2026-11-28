@@ -1,0 +1,39 @@
+PASS tests gate
+  new test: cityloom_editor unittests src/lib.rs::timeline::tests::a_blank_name_or_nobody_signed_in_leaves_the_author_empty
+  new test: cityloom_editor unittests src/lib.rs::timeline::tests::a_changed_place_says_each_aspect_that_changed_in_words
+  new test: cityloom_editor unittests src/lib.rs::timeline::tests::a_comparison_names_streets_junctions_and_rules_from_their_records
+  new test: cityloom_editor unittests src/lib.rs::timeline::tests::a_milestone_of_no_work_says_nothing_was_edited
+  new test: cityloom_editor unittests src/lib.rs::timeline::tests::restoring_a_milestone_deleted_meanwhile_says_it_is_gone_and_changes_nothing
+  new test: cityloom_editor unittests src/lib.rs::timeline::tests::the_author_is_whoever_is_signed_in_asked_once
+  new test: cityloom_editor unittests src/lib.rs::timeline::tests::work_that_cannot_be_read_now_cannot_be_compared
+  the faults run again: the branch's changes differ from those proved, beyond the version lines
+  caught: cityloom_editor unittests src/lib.rs::timeline::tests::a_blank_name_or_nobody_signed_in_leaves_the_author_empty: 3 faults, the first: crates/cityloom_editor/src/timeline/vm.rs: replace TimelineVm::load_author with (); crates/cityloom_editor/src/timeline/vm.rs: delete ! in TimelineVm::load_author; crates/cityloom_editor/src/timeline/text.rs: replace author_text -> String with "xyzzy".into()
+  caught: cityloom_editor unittests src/lib.rs::timeline::tests::a_changed_place_says_each_aspect_that_changed_in_words: 3 faults, the first: crates/cityloom_editor/src/timeline/vm.rs: replace TimelineVm::comparison -> Option<Comparison> with None; crates/cityloom_editor/src/timeline/text.rs: replace aspect_key -> &'static str with ""; crates/cityloom_editor/src/timeline/text.rs: replace text_at -> Option<&'a str> with None
+  caught: cityloom_editor unittests src/lib.rs::timeline::tests::a_comparison_names_streets_junctions_and_rules_from_their_records: 3 faults, the first: crates/cityloom_editor/src/timeline/vm.rs: replace TimelineVm::comparison -> Option<Comparison> with None; crates/cityloom_editor/src/timeline/text.rs: replace text_at -> Option<&'a str> with None; crates/cityloom_editor/src/timeline/text.rs: replace place_label -> String with String::new()
+  caught: cityloom_editor unittests src/lib.rs::timeline::tests::a_milestone_of_no_work_says_nothing_was_edited: 3 faults, the first: crates/cityloom_editor/src/timeline/text.rs: replace summary_text -> String with String::new(); crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-summary-empty; crates/cityloom_editor/src/timeline/text.rs: replace summary_text -> String with "xyzzy".into()
+  caught: cityloom_editor unittests src/lib.rs::timeline::tests::restoring_a_milestone_deleted_meanwhile_says_it_is_gone_and_changes_nothing: 3 faults, the first: crates/cityloom_editor/src/timeline/vm.rs: replace TimelineVm::confirm_restore -> bool with true; crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-gone; crates/cityloom_editor/src/timeline/vm.rs: replace TimelineVm::confirm_restore -> bool with false
+  caught: cityloom_editor unittests src/lib.rs::timeline::tests::the_author_is_whoever_is_signed_in_asked_once: 3 faults, the first: crates/cityloom_editor/src/timeline/vm.rs: replace TimelineVm::load_author with (); crates/cityloom_editor/src/timeline/vm.rs: replace TimelineVm::set_author with (); crates/cityloom_editor/src/timeline/text.rs: replace author_text -> String with String::new()
+  caught: cityloom_editor unittests src/lib.rs::timeline::tests::work_that_cannot_be_read_now_cannot_be_compared: 3 faults, the first: crates/cityloom_editor/src/timeline/vm.rs: replace TimelineVm::comparison -> Option<Comparison> with None; crates/cityloom_editor/src/timeline/vm.rs: replace TimelineVm::compare_summary -> String with String::new(); crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-compare-unusable
+  not caught by any new test: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-by
+  not caught by any new test: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-street-unnamed
+  not caught by any new test: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-junction
+  not caught by any new test: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-junction-unknown
+  not caught by any new test: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-rule
+  not caught by any new test: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-rule-unnamed
+  not caught by any new test: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-aspect-name
+  not caught by any new test: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-aspect-class
+  not caught by any new test: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-aspect-lanes
+  not caught by any new test: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-aspect-speed
+  not caught by any new test: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-aspect-zones
+  not caught by any new test: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-aspect-arms
+  not caught by any new test: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-aspect-control
+  not caught by any new test: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-aspect-rule
+  not caught by any new test: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-aspect-outline
+  not caught by any new test: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-aspect-other
+  not caught by any new test: crates/cityloom_editor/src/timeline/vm.rs: replace TimelineVm::compare_summary -> String with "xyzzy".into()
+  not caught by any new test: crates/cityloom_editor/src/timeline/text.rs: replace aspect_key -> &'static str with "xyzzy"
+  not caught by any new test: crates/cityloom_editor/src/timeline/text.rs: replace text_at -> Option<&'a str> with Some("")
+  not caught by any new test: crates/cityloom_editor/src/timeline/text.rs: replace place_label -> String with "xyzzy".into()
+  did not compile: crates/cityloom_editor/src/timeline/vm.rs: replace TimelineVm::comparison -> Option<Comparison> with Some(Default::default())
+  left out by the limit: 10 faults: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the placeable { $name } of timeline-rule; crates/cityloom_editor/src/timeline/vm.rs: replace == with != in TimelineVm::comparison; crates/cityloom_editor/src/timeline/text.rs: replace text_at -> Option<&'a str> with Some("xyzzy"); crates/cityloom_editor/src/timeline/text.rs: delete match arm Kind::Street in place_label; crates/cityloom_editor/src/timeline/i18n/en.ftl: rename the variable $author of timeline-by; crates/cityloom_editor/src/timeline/i18n/en.ftl: rename the variable $node of timeline-junction; crates/cityloom_editor/src/timeline/i18n/en.ftl: rename the variable $name of timeline-rule; crates/cityloom_editor/src/timeline/text.rs: delete ! in text_at; crates/cityloom_editor/src/timeline/text.rs: delete match arm Kind::Junction in place_label; crates/cityloom_editor/src/timeline/text.rs: delete match arm Kind::Rule in place_label
+  not run, every new test had caught three: 2 faults
