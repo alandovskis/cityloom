@@ -75,7 +75,6 @@ WASM_BUILD = [
 TEST_FILES = (
     "**/tests.rs",
     "*/**/tests/**",  # a tests/ folder below the root; the root's tests/e2e/ is named entry by entry
-
     "tests/e2e/tests/**",
     "tests/e2e/fixtures/**",
     "tests/e2e/tiers.json",

@@ -419,7 +419,33 @@ class Coverage(unittest.TestCase):
 
     def test_the_browser_tests_live_under_tests(self):
         self.assertTrue((ROOT / "tests" / "e2e" / "tiers.json").is_file())
-        self.assertFalse((ROOT / "e2e").exists())
+        # A checkout from before the move keeps an untracked e2e/ (node_modules, generated fixtures): only git's files count.
+        self.assertEqual(ci_changes.git("ls-files", "e2e").splitlines(), [])
+
+    def test_nothing_names_the_old_folder(self):
+        # The plans and designs under docs/superpowers record what was true when they were written.
+        old = re.compile(r"(?<![\w/.-])e2e/|\bcd e2e\b|in `e2e`|et dans `e2e`|in e2e\b|<wt>/e2e\b")
+        found = []
+        for f in ci_changes.git("ls-files").splitlines():
+            if f.startswith("docs/superpowers/") or f.endswith("package-lock.json") or f == "scripts/include/tests/test_ci_changes.py" or not (ROOT / f).is_file():
+                continue
+            try:
+                text = (ROOT / f).read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            found += [f"{f}:{n}" for n, line in enumerate(text.splitlines(), 1) if old.search(line)]
+        self.assertEqual(found, [], "these still name e2e/, which is tests/e2e/ now")
+
+    def test_the_prettier_commands_run_from_tests_e2e_reach_the_root(self):
+        command = re.compile(r"cd tests/e2e && npx prettier --ignore-path (\S+)[^`\n]*?((?:\.\./)+[\w.*/-]+)?[`\n]")
+        checked = 0
+        for f in ci_changes.git("ls-files", "*.md", "justfile").splitlines():
+            for m in command.finditer((ROOT / f).read_text(encoding="utf-8")):
+                for target in filter(None, m.groups()):
+                    checked += 1
+                    with self.subTest(f"{f}: {target}"):
+                        self.assertTrue((ROOT / "tests" / "e2e" / target.split("*")[0]).resolve().exists(), f"{target} from tests/e2e/")
+        self.assertGreater(checked, 0)
 
     def test_every_source_folder_has_a_rule(self):
         for entry in sorted((ROOT / "crates/cityloom_editor" / "src").iterdir()):
@@ -434,13 +460,14 @@ class Coverage(unittest.TestCase):
                 self.assertTrue(ci_changes.matched(MAP, path), f"no rule in scripts/ci/spec-map.json names {path}")
 
     def test_every_top_level_entry_has_a_rule(self):
-        for entry in sorted(ROOT.iterdir()):
-            if entry.name.startswith(".git") and entry.name not in (".github", ".gitignore"):
+        # What git tracks: an untracked folder (a build's output, an old checkout's e2e/) is no change a PR can make.
+        tracked = ci_changes.git("ls-files").splitlines()
+        entries = sorted({f.split("/", 1)[0] + ("/x" if "/" in f else "") for f in tracked})
+        for path in entries:
+            name = path.removesuffix("/x")
+            # The crates are checked on their own; the rest is the assistant's.
+            if name in (".claude", ".impeccable", "crates"):
                 continue
-            # src and the crates are checked on their own; the rest is not in git or is the assistant's.
-            if entry.name in ("target", "node_modules", ".claude", ".impeccable", ".tools", ".env", "crates", "data"):
-                continue
-            path = f"{entry.name}/x" if entry.is_dir() else entry.name
             with self.subTest(path):
                 self.assertTrue(ci_changes.matched(MAP, path), f"no rule in scripts/ci/spec-map.json names {path}")
 

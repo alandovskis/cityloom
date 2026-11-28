@@ -21,7 +21,7 @@ ses tâches; lancez `just` sans argument pour les lister.
 just setup
 ```
 
-La recette exécute `npm ci` à la racine (la bibliothèque d’exécution de la carte, MapLibre) et dans `e2e`
+La recette exécute `npm ci` à la racine (la bibliothèque d’exécution de la carte, MapLibre) et dans `tests/e2e`
 (Playwright), installe `wasm-bindgen-cli` dans `.tools` à la version fixée dans `crates/cityloom_editor/Cargo.toml` et installe Chromium pour
 Playwright.
 

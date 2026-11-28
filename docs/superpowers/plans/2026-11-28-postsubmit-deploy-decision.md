@@ -83,7 +83,8 @@ Branch `claude/move-e2e-to-tests` from `origin/main` (`git fetch origin && git s
 
 - [ ] **Step 1: Bump the version.** Raise the patch of `crates/cityloom_editor/Cargo.toml`, run `cargo update -p cityloom_editor`, then commit `Raise the version to <x.y.z>`.
 - [ ] **Step 2: Open the PR.** Push the branch and open the PR with `gh pr create`. Title: `Move the browser tests to tests/e2e (<x.y.z>)`. The body says what moved, the paths that kept their names (`target/e2e`), and that open factory branches will be rebased afterwards. Then bind it with the ccd_pr tools.
-- [ ] **Step 3: List the work on the old layout.** After the user's merge, list the open PRs that touch `e2e/` (`gh pr list --state open --json number,headRefName,files`) and the worktrees under `../worktrees/clm-*`. Give the list to the user, then rebase each one on their go-ahead. For each: `git rebase origin/main`, fix any path the branch itself added under the old folder, and re-run its gate from the main checkout. Close Dependabot's `/e2e` PR, and Dependabot opens it again against `/tests/e2e`.
+- [ ] **Step 3: Clean up each existing checkout.** In the main checkout and each factory worktree, once it's on the new layout: `rm -rf e2e` (git leaves the old folder's ignored `node_modules`, `test-results` and `fixtures/generated` behind), then `cd tests/e2e && npm ci`.
+- [ ] **Step 4: List the work on the old layout.** After the user's merge, list the open PRs that touch `e2e/` (`gh pr list --state open --json number,headRefName,files`) and the worktrees under `../worktrees/clm-*`. Give the list to the user, then rebase each one on their go-ahead. For each: `git rebase origin/main`, fix any path the branch itself added under the old folder, and re-run its gate from the main checkout. Close Dependabot's `/e2e` PR, and Dependabot opens it again against `/tests/e2e`.
 
 ---
 

@@ -29,7 +29,7 @@ just check           # everything
 just format          # rustfmt + Prettier; `just format-check` only checks, as CI does
 just serve           # server on http://127.0.0.1:8137/ (E2E_PORT moves it); without DATABASE_URL the account side answers 503
 just docs            # Docusaurus site in website/ (English, fr-CA) on :3000; `just docs-build` fails on a broken link; `just setup-docs` once
-just setup           # once: wasm-bindgen-cli (version from Cargo.toml), `npm ci` at the root and in e2e, Playwright's Chromium
+just setup           # once: wasm-bindgen-cli (version from Cargo.toml), `npm ci` at the root and in tests/e2e, Playwright's Chromium
 just setup-deploy    # once, for deploy: cargo-zigbuild, musl target; zig via `brew install zig` or `pip install ziglang`
 ```
 

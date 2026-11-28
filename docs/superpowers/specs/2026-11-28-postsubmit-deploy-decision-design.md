@@ -65,7 +65,9 @@ Done when `git grep -nE '(^|[^a-z_/.-])e2e/'` outside `docs/superpowers/` finds 
 #327 and others), unpushed factory worktrees (`../worktrees/clm-<n>`) and Dependabot's #316 (`/e2e`) are on the old
 layout. Once it is merged, each is brought onto it by hand, one at a time: rebase onto `main` (git follows the renames;
 a spec the branch added under `e2e/tests/` moves to `tests/e2e/tests/`), fix any path the branch itself added, and re-run
-its gate from the main checkout (whose `gate.py` now names the new paths) before it goes back to the factory. Dependabot's
+its gate from the main checkout (whose `gate.py` now names the new paths) before it goes back to the factory. Every
+checkout, the main one included, then removes the untracked leftovers of the old folder (`rm -rf e2e`: git leaves its
+ignored `node_modules`, `test-results` and `fixtures/generated` behind) and runs `npm ci` in `tests/e2e`. Dependabot's
 PR is closed for Dependabot to open again against the new directory. The merge and integrate agents still stop on such a
 conflict; this rebase is done by a person or this session, not by them. The builder lists the branches open at the time.
 

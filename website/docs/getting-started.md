@@ -21,7 +21,7 @@ argument to list them.
 just setup
 ```
 
-It runs `npm ci` at the root (the map's runtime library, MapLibre) and in `e2e` (Playwright), installs
+It runs `npm ci` at the root (the map's runtime library, MapLibre) and in `tests/e2e` (Playwright), installs
 `wasm-bindgen-cli` at the version pinned in `crates/cityloom_editor/Cargo.toml` into `.tools`, and installs Playwright's Chromium.
 
 ## Build and serve
