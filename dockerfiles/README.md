@@ -85,10 +85,12 @@ docker run --rm -it --user "$(id -u):$(id -g)" -p 127.0.0.1:3000:3000 -v "$PWD":
 
 Run the UI tier of the browser tests. Run the JS image's `npm ci` from above first, because the build copies MapLibre
 from the root's `node_modules`. `just e2e*` also writes into the checkout's `target/`: the pinned server goes in
-`target/e2e` and the archive in `target/e2e-archive`. So one more volume covers the checkout's `target/`:
+`target/e2e` and the archive in `target/e2e-archive`. So one more volume covers the checkout's `target/`. And an empty
+`web/data` hides the city data that `just prepare` leaves in the checkout. That data is real OpenStreetMap tiles, which the
+tests would otherwise reach in place of their fixtures. CI has none, so the tests see what they see in CI:
 
 ```bash
-docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/src -v "$v-node-modules":/src/node_modules -v "$v-e2e-node-modules":/src/e2e/node_modules -v "$v-tools":/src/.tools -v "$v-target":/target -v "$v-checkout-target":/src/target -v cityloom-cargo:/cargo cityloom-e2e sh -c 'cd e2e && npm ci && cd .. && just e2e-ui'
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/src -v "$v-node-modules":/src/node_modules -v "$v-e2e-node-modules":/src/e2e/node_modules -v "$v-tools":/src/.tools -v "$v-target":/target -v "$v-checkout-target":/src/target --mount type=tmpfs,dst=/src/web/data -v cityloom-cargo:/cargo cityloom-e2e sh -c 'cd e2e && npm ci && cd .. && just e2e-ui'
 ```
 
 The integration tier, and `just test` for the server's tests, need a Postgres. Start one on the host with `just db`. It
