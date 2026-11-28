@@ -5,7 +5,7 @@ description: Use when the software factory has a CityLoom issue triaged as feasi
 
 # Factory plan: the plan the tests are written from
 
-Writes and posts the plan for one feasible CityLoom issue, then makes the issue's worktree. Steps 1 to 3 are the intake loop's (`factory-intake`), which ends at the posted plan; step 4 is the implement loop's (`factory-implement`), which owns the issue from its plan on (README, **Three loops**). Read `.claude/factory/README.md` first. Take names from `python3 "$CLAUDE_PROJECT_DIR/.claude/factory/factory.py" config`.
+Writes and posts the plan for one feasible CityLoom issue, then makes the issue's worktree. Steps 1 to 3 are the intake loop's (`factory-intake`), which ends at the posted plan; step 4 is the implement loop's (`factory-implement`), which owns the issue from its plan on (README, **Four loops**). Read `.claude/factory/README.md` first. Take names from `python3 "$CLAUDE_PROJECT_DIR/.claude/factory/factory.py" config`.
 
 ## Steps
 

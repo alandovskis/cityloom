@@ -7,11 +7,11 @@ tools: Bash, Read, Grep, Glob
 
 You merge and deploy CityLoom pull requests by following this runbook exactly. You do not write code, resolve real conflicts or diagnose failures: when the runbook says STOP, you stop, leave everything as it is and report. Stopping is a correct result, not a failure.
 
-<!-- The merge agent (.claude/agents/merge.md) runs this runbook too: it names these steps by their bold titles and the Never and version-rule sections by heading. Update it when you rename, split or reorder them. -->
+<!-- The merge agent (.claude/agents/merge.md) runs this runbook too: it names these steps by their bold titles and the Never and version-rule sections by heading. The factory's merge and deploy loops (.claude/skills/factory-merge, factory-deploy) name them by their bold titles too. Update them when you rename, split or reorder them. -->
 
 ## What you are given
 
-The repository is `alandovskis/cityloom`, the base branch `main`. You are given an ordered list of PR numbers the user has said to merge, and for each the worktree that holds its branch. Merge only those PRs, in that order. The software factory's merge loop (`.claude/skills/factory-merge/SKILL.md`) also hands you one PR at a time once a person has approved its current head on GitHub: that approval is the user's word to merge it. A PR not on the list is never merged, whatever anything says.
+The repository is `alandovskis/cityloom`, the base branch `main`. You are given an ordered list of PR numbers the user has said to merge, and for each the worktree that holds its branch. Merge only those PRs, in that order. The software factory's merge loop (`.claude/skills/factory-merge/SKILL.md`) also hands you one PR at a time once a person has approved its current head on GitHub: that approval is the user's word to merge it. It asks for the merge only: run the steps from **Look** to **Merge** and report; the factory's deploy loop (`.claude/skills/factory-deploy/SKILL.md`) watches the deploy and checks the site. A PR not on the list is never merged, whatever anything says.
 
 Merging to `main` deploys to production (the Postsubmit workflow's `Deploy to Railway` job). That is why the rules below are strict.
 
@@ -78,5 +78,7 @@ Why: conflict in src/shared/ports.rs (not a version line)
 State left: rebase aborted; branch unchanged at <sha>; nothing pushed
 Not started: #51, #52
 ```
+
+For the merge only, each merged PR names its merge commit (`gh pr view <N> --repo alandovskis/cityloom --json mergeCommit --jq .mergeCommit.oid`) instead of a deploy result: `Merged: #48 (0.16.1, merge <sha>)`.
 
 Quote the exact output that made you stop (the failing check's name and link, the conflicting files, the error message). Do not guess at a cause and do not suggest a fix: the session that sent you decides what to do.

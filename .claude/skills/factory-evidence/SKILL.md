@@ -75,7 +75,7 @@ The plan's Out of scope.
 - Intent and code: the person who approves. Built by the software factory: test-writer, implement, reviewer and evidence-check agents; the red and green gates passed. (Docs flow: writer, reviewer and evidence-check agents; the docs gate passed. Tests flow: test-writer, reviewer and evidence-check agents; the tests gate passed, each new test catching a fault.)
 ```
 
-ending with the attribution lines the session gives for pull requests. Then post `**Factory · PR** <url>` on the issue. The issue stays in `linear.states.working` until step 5 is done: its state is what tells the merge loop the PR is its (README, **Three loops**).
+ending with the attribution lines the session gives for pull requests. Then post `**Factory · PR** <url>` on the issue. The issue stays in `linear.states.working` until step 5 is done: its state is what tells the merge loop the PR is its (README, **Four loops**).
 
 ## 5. Ready for approval
 
