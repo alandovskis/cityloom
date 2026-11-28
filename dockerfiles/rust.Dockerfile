@@ -4,21 +4,26 @@
 # Built from the repository root, which only the pinned wasm-bindgen version is read from
 # (rust.Dockerfile.dockerignore keeps everything else out of the context).
 
+# The Rust release the image is built on, the newest stable when it was set. CI takes whatever stable is current
+# (`dtolnay/rust-toolchain`), so raise this when a new stable comes out; bake can also override it with
+# `--set rust.args.RUST_VERSION=<version>`.
+ARG RUST_VERSION=1.100.0
+
 # The wasm-bindgen pin alone, as a one-line file: the install below is keyed on it, not on the whole Cargo.toml,
 # whose `version` every pull request raises.
-FROM rust:1-slim AS pin
+FROM rust:${RUST_VERSION}-slim AS pin
 COPY crates/cityloom_editor/Cargo.toml /Cargo.toml
 RUN sed -n 's/^wasm-bindgen = "\(.*\)"/\1/p' /Cargo.toml > /wasm-bindgen-version \
     && [ -s /wasm-bindgen-version ] \
     || { echo "no 'wasm-bindgen = \"<version>\"' line in crates/cityloom_editor/Cargo.toml: the image cannot pin wasm-bindgen-cli" >&2; exit 1; }
 
-FROM rust:1-slim
+FROM rust:${RUST_VERSION}-slim
 # procps: two tests send a signal through an external `kill` (the server's SIGTERM, citymodel_builder's Ctrl-C),
 # which the slim image does not have.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends procps \
     && rm -rf /var/lib/apt/lists/*
-# Stable, as CI's `dtolnay/rust-toolchain` takes it, with the wasm target and the components the recipes use.
+# The wasm target and the components the recipes use.
 RUN rustup target add wasm32-unknown-unknown \
     && rustup component add rustfmt clippy
 # wasm-bindgen-cli must match the wasm-bindgen crate exactly, so its version is the editor's pin, as the

@@ -11,8 +11,10 @@ is something else: it is the runtime image that `just deploy` uploads.
 | `cityloom-docs` | `docs.Dockerfile` | Node LTS, Python 3                                                                                                                                                                                 | the documentation site in `website/`                       |
 | `cityloom-e2e`  | `e2e.Dockerfile`  | everything in `cityloom-rust`, plus Node LTS with npm, and Chromium at the build that the locked Playwright expects                                                                                | `just build`, `just e2e` and its tiers                     |
 
-The Rust and Node versions follow CI: `rust:1-slim` is the latest stable and `node:lts-slim` is the current LTS. When
-you rebuild an image you get the newest of each. Run `docker buildx bake --pull` to fetch new base images.
+Rust is pinned: `RUST_VERSION` in `rust.Dockerfile` (1.100.0, the newest stable when it was set). CI takes whatever
+stable is current, so raise the pin when a new stable comes out. To try another release without editing the file, run
+`docker buildx bake -f dockerfiles/docker-bake.hcl --set rust.args.RUST_VERSION=<version>`. Node follows CI:
+`node:lts-slim` is the current LTS, and a rebuild with `docker buildx bake --pull` fetches the newest.
 
 Two versions are read from the checkout when an image is built, not when it runs: the `wasm-bindgen` line of
 `crates/cityloom_editor/Cargo.toml` and `@playwright/test` in `tests/e2e/package-lock.json`. After a pull that changes either
