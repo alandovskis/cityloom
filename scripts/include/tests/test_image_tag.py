@@ -7,13 +7,17 @@ to anything else must keep it, or every pull request would build the images agai
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
+import os
 import re
 import shutil
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts" / "ci"))
@@ -109,6 +113,15 @@ class ImageTag(unittest.TestCase):
         with self.assertRaises(SystemExit) as raised:
             self.tag()
         self.assertIn("tests/e2e/package-lock.json", str(raised.exception))
+
+    def test_the_command_prints_the_tag_and_exits_zero(self):
+        # images.yml runs the script and reads its exit status, as ci_changes.py's `main() -> int`.
+        out = io.StringIO()
+        argv = ["image_tag.py", "--root", str(self.root)]
+        with mock.patch.object(sys, "argv", argv), mock.patch.dict(os.environ), contextlib.redirect_stdout(out):
+            os.environ.pop("GITHUB_OUTPUT", None)
+            self.assertEqual(image_tag.main(), 0)
+        self.assertEqual(out.getvalue().strip(), self.tag())
 
     def test_the_repositorys_own_tree_has_a_tag(self):
         # The real checkout has both pins in the form the images read them in.

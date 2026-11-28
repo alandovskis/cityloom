@@ -58,7 +58,7 @@ def image_tag(root: Path) -> str:
     return digest.hexdigest()[:16]
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
     tag = image_tag(parser.parse_args().root)
@@ -66,6 +66,7 @@ def main() -> None:
     if output := os.environ.get("GITHUB_OUTPUT"):
         with open(output, "a", encoding="utf-8") as f:
             f.write(f"tag={tag}\n")
+    return 0
 
 
 if __name__ == "__main__":
