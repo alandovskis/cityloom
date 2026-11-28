@@ -1,0 +1,26 @@
+A variable renamed by hand in fr.ftl, at a7a301843fd23f3e3de44fac062743c2f6cb3152: $backup → $backup-renamed in timeline-restored, then the new test run alone, then the file restored with git checkout
+
+$ git diff
+diff --git a/crates/cityloom_editor/src/timeline/i18n/fr.ftl b/crates/cityloom_editor/src/timeline/i18n/fr.ftl
+index b53fa77d..2eaf5d23 100644
+--- a/crates/cityloom_editor/src/timeline/i18n/fr.ftl
++++ b/crates/cityloom_editor/src/timeline/i18n/fr.ftl
+@@ -86,7 +86,7 @@ timeline-delete-yes = Supprimer le jalon
+ # Le nom du jalon enregistré avant une restauration.
+ timeline-backup-name = Avant la restauration de { $name }
+ timeline-created = Jalon { $name } enregistré.
+-timeline-restored = { $name } restauré. Le travail précédent est enregistré sous { $backup }.
++timeline-restored = { $name } restauré. Le travail précédent est enregistré sous { $backup-renamed }.
+ timeline-restored-same = Le travail est déjà comme il était dans { $name }.
+ timeline-deleted = Jalon { $name } supprimé.
+ timeline-gone = Ce jalon n’est plus ici.
+
+$ cargo test -p cityloom_editor --lib timeline::tests::the_ftl_files_have_the_same_messages_and_variables -- --exact
+running 1 test
+test timeline::tests::the_ftl_files_have_the_same_messages_and_variables ... FAILED
+thread 'timeline::tests::the_ftl_files_have_the_same_messages_and_variables' (67497053) panicked at crates/cityloom_editor/src/timeline/tests.rs:355:5:
+  left: ["timeline-restored: variables differ (en: backup, name; fr: backup-renamed, name)"]
+ right: []
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4018 filtered out; finished in 0.16s
+
+$ git status --short   (after git checkout)

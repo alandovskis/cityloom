@@ -1,0 +1,4 @@
+PASS tests gate
+  new test: cityloom_editor unittests src/lib.rs::timeline::tests::the_ftl_files_have_the_same_messages_and_variables
+  caught: cityloom_editor unittests src/lib.rs::timeline::tests::the_ftl_files_have_the_same_messages_and_variables: 3 faults, the first: crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-heading; crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-created; crates/cityloom_editor/src/timeline/i18n/en.ftl: remove the message timeline-skip
+  not run, every new test had caught three: 12 faults
