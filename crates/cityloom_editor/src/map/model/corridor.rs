@@ -244,6 +244,12 @@ mod tests {
         CityStore::sample(Rc::new(MemoryStorage::default()))
     }
 
+    /// The sample city's store, and its storage, which a test can make refuse every write.
+    fn store_and_storage() -> (CityStore, Rc<MemoryStorage>) {
+        let storage = Rc::new(MemoryStorage::default());
+        (CityStore::sample(storage.clone()), storage)
+    }
+
     /// A street of the sample city that takes the Greenway, and the freeway, which takes none.
     const FREEWAY: u32 = 23;
 
@@ -364,5 +370,60 @@ mod tests {
         undo.keep_only(&[b]);
         assert_eq!(undo.len(), 1);
         assert_eq!(undo.steps[0].street, b);
+    }
+
+    #[test]
+    fn a_change_the_storage_will_not_keep_is_reported_and_leaves_every_street_as_it_was() {
+        let (store, storage) = store_and_storage();
+        let [a, b] = two_that_take_greenway(&store);
+        let (before_a, before_b, before_free) = (stored(&store, a), stored(&store, b), stored(&store, FREEWAY));
+        storage.blocked(true);
+        let report = apply(&store, Op::Template(Template::Greenway), &[a, FREEWAY, b]);
+        assert_eq!(report.not_kept, vec![a, b], "the streets that took the change but were not kept, in the order selected");
+        assert!(report.changed.is_empty(), "no street was kept");
+        assert!(report.undo.steps.is_empty(), "nothing was changed, so nothing is to undo");
+        assert_eq!(report.refused.len(), 1);
+        assert_eq!(report.refused[0].0, FREEWAY);
+        assert_eq!(report.refused[0].1.key, "template-refused-freeway");
+        assert_eq!((stored(&store, a), stored(&store, b), stored(&store, FREEWAY)), (before_a, before_b, before_free), "every street is as it was");
+        assert_eq!(
+            report.said(),
+            Said::new("corridor-done-failed")
+                .with("changed", Arg::Num(0))
+                .with("left", Arg::Num(1))
+                .with("name", Arg::Said(Box::new(Said::new(Template::Greenway.name_key()))))
+                .with("failed", Arg::Num(2))
+        );
+    }
+
+    #[test]
+    fn an_undo_the_storage_will_not_keep_names_the_streets_and_can_be_tried_again() {
+        let (store, storage) = store_and_storage();
+        let [a, b] = two_that_take_greenway(&store);
+        let (before_a, before_b) = (stored(&store, a), stored(&store, b));
+        let report = apply(&store, Op::Template(Template::Greenway), &[a, b]);
+        assert_eq!(report.changed, vec![a, b]);
+        let (changed_a, changed_b) = (stored(&store, a), stored(&store, b));
+        storage.blocked(true);
+        assert_eq!(undo(&store, &report.undo), Undone::NotKept(vec![a, b]));
+        assert_eq!((stored(&store, a), stored(&store, b)), (changed_a, changed_b), "each street stays as the change left it");
+        storage.blocked(false);
+        assert_eq!(undo(&store, &report.undo), Undone::Restored(vec![a, b]), "the same undo, tried again once the storage keeps writes");
+        assert_eq!((stored(&store, a), stored(&store, b)), (before_a, before_b));
+    }
+
+    #[test]
+    fn a_street_edited_since_refuses_the_undo_before_anything_is_written_even_when_the_storage_refuses() {
+        let (store, storage) = store_and_storage();
+        let [a, b] = two_that_take_greenway(&store);
+        let report = apply(&store, Op::Template(Template::Greenway), &[a, b]);
+        let mut editor = store.open().street_editor(b, 0).unwrap();
+        let u = editor.view().segments[0].uid;
+        assert!(editor.set_width(u, editor.view().segments[0].width_mm + 100));
+        assert!(store.write_street(b, editor.snapshot()));
+        let (now_a, now_b) = (stored(&store, a), stored(&store, b));
+        storage.blocked(true);
+        assert_eq!(undo(&store, &report.undo), Undone::Refused(vec![b]), "an edited street refuses it before any write is tried");
+        assert_eq!((stored(&store, a), stored(&store, b)), (now_a, now_b));
     }
 }
