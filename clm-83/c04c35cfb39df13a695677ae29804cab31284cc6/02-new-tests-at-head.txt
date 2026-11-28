@@ -1,0 +1,16 @@
+Each new test of CLM-83 run alone at c04c35cfb39df13a695677ae29804cab31284cc6
+
+$ cargo test -p cityloom_editor --lib junction::view::tests::a_street_nothing_enters_from_has_a_signal_section_that_says_it_has_no_green_of_its_own_in_both_languages -- --exact
+running 1 test
+test junction::view::tests::a_street_nothing_enters_from_has_a_signal_section_that_says_it_has_no_green_of_its_own_in_both_languages ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4007 filtered out; finished in 0.04s
+
+$ cargo test -p cityloom_editor --lib junction::view::tests::a_street_that_only_leaves_says_no_lanes_come_in_and_lists_none_in_both_languages -- --exact
+running 1 test
+test junction::view::tests::a_street_that_only_leaves_says_no_lanes_come_in_and_lists_none_in_both_languages ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4007 filtered out; finished in 0.04s
+
+$ cargo test -p cityloom_editor --lib junction::view::tests::an_approach_that_served_no_vehicle_says_so_to_a_screen_reader_in_both_wait_cells_in_both_languages -- --exact
+running 1 test
+test junction::view::tests::an_approach_that_served_no_vehicle_says_so_to_a_screen_reader_in_both_wait_cells_in_both_languages ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4007 filtered out; finished in 0.06s

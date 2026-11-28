@@ -1,0 +1,5 @@
+PASS tests gate
+  new test: cityloom_editor unittests src/lib.rs::junction::view::tests::a_street_nothing_enters_from_has_a_signal_section_that_says_it_has_no_green_of_its_own_in_both_languages
+  new test: cityloom_editor unittests src/lib.rs::junction::view::tests::a_street_that_only_leaves_says_no_lanes_come_in_and_lists_none_in_both_languages
+  new test: cityloom_editor unittests src/lib.rs::junction::view::tests::an_approach_that_served_no_vehicle_says_so_to_a_screen_reader_in_both_wait_cells_in_both_languages
+  the faults were run at 2c1bd7f1c6b38aaff1c4f1254004b8da78d34c01: the branch is the same since, but for the version lines, and no faulted file changed
