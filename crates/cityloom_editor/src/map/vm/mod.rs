@@ -1999,6 +1999,53 @@ mod tests {
         assert_eq!(vm.chosen_href(), None);
     }
 
+    /// The street a search result is, by its `s-<uid>`.
+    fn street_of(row: &PlaceRow) -> u32 {
+        row.hot.strip_prefix("s-").and_then(|u| u.parse().ok()).unwrap_or_else(|| panic!("{} is no street", row.hot))
+    }
+
+    #[test]
+    fn shift_enter_adds_the_first_result_to_the_selection_and_a_second_takes_it_out() {
+        let (vm, ..) = vm();
+        vm.set_search("avenue");
+        let first = vm.results()[0].clone();
+        assert!(first.hot.starts_with("s-"), "the first result is a street: {}", first.hot);
+        vm.toggle_chosen();
+        assert_eq!(vm.selection().streets(), vec![street_of(&first)]);
+        vm.toggle_chosen();
+        assert!(vm.selection().streets().is_empty(), "{:?}", vm.selection().streets());
+    }
+
+    #[test]
+    fn shift_enter_adds_the_result_the_arrow_keys_are_on() {
+        let (vm, ..) = vm();
+        vm.set_search("avenue");
+        let results = vm.results();
+        assert!(results.len() >= 2 && results[..2].iter().all(|r| r.hot.starts_with("s-")), "two streets found");
+        vm.move_active(1);
+        vm.move_active(1);
+        assert_eq!(vm.active_result(), Some(1));
+        vm.toggle_chosen();
+        assert_eq!(vm.selection().streets(), vec![street_of(&results[1])]);
+        assert!(!vm.selection().contains(street_of(&results[0])));
+    }
+
+    #[test]
+    fn shift_enter_with_nothing_found_changes_nothing() {
+        let (vm, said, _) = vm();
+        vm.toggle_selected(Some("s-1"));
+        let level = vm.level();
+        said.take();
+        for search in ["zzz", ""] {
+            vm.set_search(search);
+            assert!(vm.results().is_empty(), "nothing found for {search:?}");
+            vm.toggle_chosen();
+            assert_eq!(vm.selection().streets(), vec![1], "for {search:?}");
+            assert_eq!(vm.level(), level, "for {search:?}");
+            assert!(said.take().is_empty(), "nothing said for {search:?}");
+        }
+    }
+
     #[test]
     fn clearing_the_search_finds_nothing_and_says_nothing() {
         let (vm, ..) = vm();
@@ -3061,6 +3108,45 @@ mod tests {
         vm.apply_corridor();
         let label = vm.corridor_undo_label().unwrap();
         assert!(label.starts_with("Undo: Make pedestrian"), "{label}");
+    }
+
+    fn stored_street(vm: &MapVm, street: u32) -> crate::street::model::Street {
+        vm.store.open().street_editor(street, 0).unwrap().snapshot()
+    }
+
+    #[test]
+    fn an_undo_kept_only_in_part_says_so_and_stays_for_the_stuck_street() {
+        let (vm, said, storage) = vm();
+        change_two_streets(&vm);
+        let (_, undo) = vm.undoable.get_untracked().expect("a change to undo");
+        assert_eq!(undo.steps.len(), 2);
+        let (first, second) = (undo.steps[0].clone(), undo.steps[1].clone());
+        assert_ne!(first.before, first.after);
+        assert_ne!(second.before, second.after);
+
+        // The same change on a twin, to measure what the storage holds once the first street alone is written back.
+        let (twin, _, twin_storage) = self::vm();
+        change_two_streets(&twin);
+        assert_eq!(twin_storage.held(), storage.held(), "the twin holds what the page holds");
+        assert!(twin.store.write_street(first.street, first.before.clone()));
+        let quota = twin_storage.held();
+        assert!(twin.store.write_street(second.street, second.before.clone()));
+        assert!(twin_storage.held() > quota, "writing the second street back takes more room");
+
+        storage.hold_at_most(quota);
+        said.take();
+        vm.undo_corridor();
+        assert_eq!(said.take(), vec!["1 street could not be written back; the others were restored.".to_string()]);
+        assert_eq!(stored_street(&vm, first.street), first.before, "the first street is as it was");
+        assert_eq!(stored_street(&vm, second.street), second.after, "the second is as the change left it");
+        assert_eq!(vm.corridor_undo_label().as_deref(), Some("Undo: Neighbourhood greenway on 1 street"));
+
+        storage.refuse_nothing();
+        storage.hold_at_most(usize::MAX);
+        vm.undo_corridor();
+        assert_eq!(said.take(), vec!["Undone: Neighbourhood greenway. 1 street is as it was.".to_string()]);
+        assert_eq!(stored_street(&vm, second.street), second.before, "the stuck street is put back too");
+        assert_eq!(vm.corridor_undo_label(), None);
     }
 
     #[test]

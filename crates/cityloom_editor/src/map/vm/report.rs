@@ -439,7 +439,135 @@ pub fn slug(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::city::store::CityStore;
     use crate::shared::i18n::Locale;
+    use crate::shared::ports::MemoryStorage;
+    use crate::shared::said::Said;
+    use crate::street::model::Editor;
+    use std::rc::Rc;
+
+    /// The sample city kept in a storage of its own.
+    fn sample() -> CityStore {
+        CityStore::sample(Rc::new(MemoryStorage::default()))
+    }
+
+    /// A street of the sample city that is no freeway.
+    fn a_street(store: &CityStore) -> u32 {
+        store.open().view(0).edges.iter().find(|e| !e.freeway).expect("a street that is no freeway").uid
+    }
+
+    /// The street's editor, changed by `edit` and written back.
+    fn change_street(store: &CityStore, uid: u32, edit: impl FnOnce(&mut Editor)) {
+        let mut e = store.open().street_editor(uid, 0).unwrap();
+        edit(&mut e);
+        assert!(store.write_street(uid, e.snapshot()));
+    }
+
+    /// The place pages of the city as it is stored, in English.
+    fn pages_of(store: &CityStore) -> Vec<Vec<Block>> {
+        let city = store.open();
+        place_pages(&city, &city.view(0), 0, &crate::i18n_for(Locale::En), Units::Metres).0
+    }
+
+    /// The paragraphs of a page, in order.
+    fn paragraphs(page: &[Block]) -> Vec<String> {
+        page.iter().filter_map(|b| if let Block::Paragraph { text } = b { Some(text.clone()) } else { None }).collect()
+    }
+
+    /// The one place page there is, for the one street changed.
+    fn the_page(store: &CityStore) -> Vec<Block> {
+        let pages = pages_of(store);
+        assert_eq!(pages.len(), 1, "one place changed");
+        pages.into_iter().next().unwrap()
+    }
+
+    #[test]
+    fn a_street_whose_class_changed_has_the_class_line() {
+        let store = sample();
+        let uid = a_street(&store);
+        let i18n = crate::i18n_for(Locale::En);
+        let before = store.open().street_editor_today(uid, 0).unwrap().view().class;
+        change_street(&store, uid, |e| {
+            while let Some(u) = e
+                .view()
+                .segments
+                .iter()
+                .find(|s| crate::shared::catalogue::is_motor(s.kind) || s.alt_kinds.iter().any(|&k| crate::shared::catalogue::is_motor(k)))
+                .map(|s| s.uid)
+            {
+                assert!(e.remove(u));
+            }
+            assert!(!e.view().has_motor, "every motor piece is gone");
+        });
+        let after = store.open().street_editor(uid, 0).unwrap().view().class;
+        assert_ne!(before, after, "the class changed with the motor pieces");
+        let class = |c| i18n.tr_now(class_key(c), &Args::new());
+        let line = format!("Class: {} before, {} after.", class(before), class(after));
+        assert!(paragraphs(&the_page(&store)).contains(&line), "{line} in {:?}", paragraphs(&the_page(&store)));
+    }
+
+    #[test]
+    fn added_and_removed_pieces_are_counted_on_the_street_page() {
+        let store = sample();
+        let uid = a_street(&store);
+        let bike = crate::shared::catalogue::kind_index("bike").unwrap();
+        change_street(&store, uid, |e| {
+            let others: Vec<u32> = e.view().segments.iter().filter(|s| !crate::shared::catalogue::is_motor(s.kind)).map(|s| s.uid).take(2).collect();
+            assert_eq!(others.len(), 2, "two pieces that are not motor pieces");
+            for u in others {
+                assert!(e.remove(u));
+            }
+            assert_ne!(e.add(bike, 0), 0);
+        });
+        let page = the_page(&store);
+        assert!(paragraphs(&page).contains(&"Pieces: 1 added, 2 removed.".to_string()), "{:?}", paragraphs(&page));
+        assert!(!paragraphs(&page).iter().any(|p| p.starts_with("Class:")), "the class stayed: {:?}", paragraphs(&page));
+
+        let store = sample();
+        change_street(&store, uid, |e| {
+            assert_ne!(e.add(bike, 0), 0);
+            assert_ne!(e.add(bike, 0), 0);
+        });
+        let page = the_page(&store);
+        assert!(paragraphs(&page).contains(&"Pieces: 2 added, 0 removed.".to_string()), "{:?}", paragraphs(&page));
+    }
+
+    #[test]
+    fn a_change_to_none_of_width_class_speed_or_pieces_says_the_other_line() {
+        let store = sample();
+        let uid = a_street(&store);
+        change_street(&store, uid, |e| e.split_zone(None).expect("the street can be split"));
+        let page = the_page(&store);
+        let lines = paragraphs(&page);
+        let other = "The change is to details this page does not summarise, such as zones, curbside uses or stops. The figures and the checks show the result.";
+        assert!(lines.contains(&other.to_string()), "{lines:?}");
+        for start in ["Width:", "Class:", "Speed limit:", "Pieces:"] {
+            assert!(!lines.iter().any(|p| p.starts_with(start)), "{start} in {lines:?}");
+        }
+    }
+
+    #[test]
+    fn a_junction_that_cannot_be_drawn_and_fails_checks_lists_them() {
+        let store = sample();
+        let city = store.open();
+        let mut view = city.view(0);
+        let plain = view.nodes.iter().position(|n| !n.junction).expect("a node that is no junction");
+        view.nodes[plain].junction = true;
+        view.nodes[plain].edited = true;
+        view.nodes[plain].failing = vec![Said::new("map-report-pass"), Said::new("map-report-notice")];
+        let (pages, _) = place_pages(&city, &view, 0, &crate::i18n_for(Locale::En), Units::Metres);
+        assert_eq!(pages.len(), 1, "only the node made a changed junction");
+        let page = &pages[0];
+        assert!(matches!(&page[0], Block::Heading { level: 2, .. }));
+        assert_eq!(
+            paragraphs(page),
+            [
+                "This junction could not be drawn, before or after the change, so this page has no figures.".to_string(),
+                "Checks that fail: Pass; Notice.".to_string(),
+            ]
+        );
+        assert!(!page.iter().any(|b| matches!(b, Block::Figures { .. } | Block::Table { .. })), "{page:?}");
+    }
 
     #[test]
     fn the_time_is_written_in_utc() {
