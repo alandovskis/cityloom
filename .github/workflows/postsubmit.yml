@@ -30,6 +30,8 @@ concurrency:
 
 permissions:
   contents: read
+  # The build and test jobs run in the toolchain images of dockerfiles/, pulled from GHCR (images.yml).
+  packages: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -66,43 +68,51 @@ jobs:
           BASE: ${{ steps.base.outputs.sha }}
         run: scripts/ci/ci_changes.py --event push --base "$BASE"
 
+  # The toolchain images the build and test jobs run in: their tag, and a build and push only when GHCR lacks them.
+  images:
+    name: Toolchain images
+    uses: ./.github/workflows/images.yml
+    permissions:
+      contents: read
+      packages: write
+
+  # rustfmt and Prettier together: the e2e image is the one with Rust and Node.
   format:
     name: Format
+    needs: images
     runs-on: ubuntu-26.04
+    container:
+      image: ${{ needs.images.outputs.registry }}cityloom-e2e:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # v1
-        with:
-          toolchain: stable
-          components: rustfmt
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: lts/*
-          cache: npm
-          cache-dependency-path: tests/e2e/package-lock.json
-      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
-        with:
-          just-version: ${{ env.JUST_VERSION }}
       - run: npm ci
         working-directory: tests/e2e
       - run: just format-check
 
   test:
     name: Unit tests
+    needs: images
     runs-on: ubuntu-26.04
+    container:
+      image: ${{ needs.images.outputs.registry }}cityloom-rust:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    # From inside the container the service is reached by its name.
     env:
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/cityloom
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/cityloom
     services:
       postgres:
         image: postgres:18
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: cityloom
-        ports:
-          - 5432:5432
         options: >-
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     timeout-minutes: 20
@@ -110,32 +120,29 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # v1
-        with:
-          toolchain: stable
+      # The Rust cache below keeps <workspace>/target, not the image's CARGO_TARGET_DIR (/target): build there instead.
+      - run: echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/target" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
-        with:
-          just-version: ${{ env.JUST_VERSION }}
       - run: just test-host
 
   # A type-check of the code only the wasm32 target compiles, beside the host tests (`just test` runs both in turn).
   wasm:
     name: Wasm type-check
+    needs: images
     runs-on: ubuntu-26.04
+    container:
+      image: ${{ needs.images.outputs.registry }}cityloom-rust:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # v1
-        with:
-          toolchain: stable
-          targets: wasm32-unknown-unknown
+      # The Rust cache below keeps <workspace>/target, not the image's CARGO_TARGET_DIR (/target): build there instead.
+      - run: echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/target" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
-        with:
-          just-version: ${{ env.JUST_VERSION }}
       - run: just test-wasm
 
   # The issue system's labels, forms and labeler rules, and the CI selector's own tests (standard library only, no setup).
@@ -154,24 +161,28 @@ jobs:
 
   server-release:
     name: Release server has no fake provider
+    needs: images
     runs-on: ubuntu-26.04
+    container:
+      image: ${{ needs.images.outputs.registry }}cityloom-rust:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # v1
-        with:
-          toolchain: stable
+      # The Rust cache below keeps <workspace>/target, not the image's CARGO_TARGET_DIR (/target): build there instead.
+      - run: echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/target" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
-        with:
-          just-version: ${{ env.JUST_VERSION }}
       - run: just check-no-fake
-      # A positive control: the check must fail on a build with the fake provider, or its markers have drifted.
+      # A positive control: the check must fail on a build with the fake provider, or its markers have drifted. The image
+      # builds into its own CARGO_TARGET_DIR, so target-dir.sh says where the binary is.
       - run: |
           cargo build --release -p cityloom_server --features test-provider
-          if ./scripts/check-no-fake.sh target/release/cityloom_server; then
+          dir=$(./scripts/target-dir.sh)
+          if ./scripts/check-no-fake.sh "$dir/release/cityloom_server"; then
             echo "check-no-fake.sh passed a build with the fake provider" >&2
             exit 1
           fi
@@ -180,35 +191,25 @@ jobs:
   # not triple the build.
   build:
     name: Build for the browser tests
+    needs: images
     runs-on: ubuntu-26.04
+    # Rust and Node: `just build` compresses what it built (scripts/precompress.mjs).
+    container:
+      image: ${{ needs.images.outputs.registry }}cityloom-e2e:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # v1
-        with:
-          toolchain: stable
-          targets: wasm32-unknown-unknown
+      # The Rust cache below keeps <workspace>/target, not the image's CARGO_TARGET_DIR (/target): build there instead.
+      - run: echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/target" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
-        with:
-          just-version: ${{ env.JUST_VERSION }}
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: lts/*
-          cache: npm
-          cache-dependency-path: package-lock.json
 
-      # wasm-bindgen-cli takes minutes to compile, so keep it for as long as its version holds.
-      - id: wasm-bindgen
-        run: echo "version=$(just --evaluate wasm_bindgen)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .tools
-          key: wasm-bindgen-cli-${{ runner.os }}-${{ steps.wasm-bindgen.outputs.version }}
+      # wasm-bindgen-cli, at the version the editor pins, is in the image.
       - run: npm ci
-      - run: cargo install wasm-bindgen-cli --version ${{ steps.wasm-bindgen.outputs.version }} --root .tools
       - run: just build
       # The server the tiers start, copied to target/e2e (scripts/pin-server.sh).
       - run: just server
@@ -231,8 +232,13 @@ jobs:
   # the tests (fullyParallel).
   ui:
     name: UI tests (${{ matrix.shard }}/6)
-    needs: build
+    needs: [images, build]
     runs-on: ubuntu-26.04
+    container:
+      image: ${{ needs.images.outputs.registry }}cityloom-e2e:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -259,18 +265,22 @@ jobs:
   # Integration tier: the real server and a Postgres (sign-in, the account, the sync).
   integration:
     name: Integration tests
-    needs: build
+    needs: [images, build]
     runs-on: ubuntu-26.04
+    container:
+      image: ${{ needs.images.outputs.registry }}cityloom-e2e:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    # From inside the container the service is reached by its name.
     env:
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/cityloom
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/cityloom
     services:
       postgres:
         image: postgres:18
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: cityloom
-        ports:
-          - 5432:5432
         options: >-
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     timeout-minutes: 30
@@ -296,16 +306,20 @@ jobs:
   # Rust, and no database) and unpacked by a fresh server; the delivery specs read the real server's headers and ranges.
   e2e:
     name: E2E tests
-    needs: build
+    needs: [images, build]
     runs-on: ubuntu-26.04
+    container:
+      image: ${{ needs.images.outputs.registry }}cityloom-e2e:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # v1
-        with:
-          toolchain: stable
+      # The Rust cache below keeps <workspace>/target, not the image's CARGO_TARGET_DIR (/target): build there instead.
+      - run: echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/target" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - uses: ./.github/actions/browser-tests
       - run: scripts/e2e-archive.sh
@@ -324,7 +338,7 @@ jobs:
   ci:
     name: All checks
     if: always()
-    needs: [changes, format, test, wasm, scripts, build, ui, integration, e2e, server-release]
+    needs: [changes, images, format, test, wasm, scripts, build, ui, integration, e2e, server-release]
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
@@ -357,9 +371,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The Rust release CI's images are built on (dockerfiles/rust.Dockerfile), so what CI tested is what this builds.
+      - id: rust
+        run: echo "version=$(sed -n 's/^ARG RUST_VERSION=//p' dockerfiles/rust.Dockerfile)" >> "$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # v1
         with:
-          toolchain: stable
+          toolchain: ${{ steps.rust.outputs.version }}
           targets: wasm32-unknown-unknown, x86_64-unknown-linux-musl
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with:

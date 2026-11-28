@@ -51,7 +51,7 @@ Workspace binary and library, not built to wasm (`just test` type-checks wasm wi
 - Versioned URLs: `public, max-age=31536000, immutable`. Pages: filled per request, whole, weak `ETag` (no ranges, no `Last-Modified`; `If-None-Match` weak, lists and `*`; HEAD from the GET); a 304 carries the 200's `Cache-Control`, which keeps the configured `CACHE_CONTROL` (`no-cache` in production).
 - New code references must be `v/{{build}}/`; `cityloom_server/tests/static_files.rs` fails on any other and on a reference to a missing file. Exceptions: favicons and `logo-*` svgs by name; `boot.js` is the one script not under `v/`.
 - Not versioned: `data/` (tile index `max-age=300, stale-while-revalidate=600`; tiles `CACHE_CONTROL`: a cached old tile would persist under a new checksum), `glyphs/`, `fonts/` (one day).
-- `scripts/precompress.mjs` (from `build.sh`) writes `.br`/`.gz` beside `web/pkg` and `web/vendor` files (gitignored); sent as is unless older than the file (then that coding is left out and the file compressed on the fly). Other text, the metro `.json` tiles included, is compressed on the fly (full 200 responses only; Range requests stay raw 206).
+- `scripts/precompress.mjs` (run by `just build` and `scripts/deploy.sh` after `build.sh`) writes `.br`/`.gz` beside `web/pkg` and `web/vendor` files (gitignored); sent as is unless older than the file (then that coding is left out and the file compressed on the fly). Other text, the metro `.json` tiles included, is compressed on the fly (full 200 responses only; Range requests stay raw 206).
 
 ### Boot failure
 

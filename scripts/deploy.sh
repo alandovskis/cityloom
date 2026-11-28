@@ -14,6 +14,7 @@ rustup target list --installed 2>/dev/null | grep -qx x86_64-unknown-linux-musl 
 [ -z "$missing" ] || { echo "missing:$missing: run 'just setup-deploy' (it says how to get zig)" >&2; exit 1; }
 [ -f web/data/metro/index.json ] || { echo "web/data/metro/index.json is missing: run 'just prepare' first" >&2; exit 1; }
 ./scripts/build.sh
+node scripts/precompress.mjs web/pkg web/vendor
 target=x86_64-unknown-linux-musl
 cargo zigbuild --release --target "$target" -p cityloom_server
 dir=$(./scripts/target-dir.sh)

@@ -4,19 +4,21 @@ Four toolchain images, so that CityLoom can be built and tested without installi
 holds tools only. The checkout is mounted at `/src` and the usual commands run inside the container. `deploy/Dockerfile`
 is something else: it is the runtime image that `just deploy` uploads.
 
-| Image           | Dockerfile        | What it holds                                                                                                                                                                                                | For                                                          |
-| --------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| `cityloom-rust` | `rust.Dockerfile` | Rust stable, the `wasm32-unknown-unknown` target, rustfmt, clippy, `wasm-bindgen-cli` (the version pinned in `crates/cityloom_editor/Cargo.toml`), `just`, procps (`kill`, for two tests), Node LTS with npm | `just build`, `just test`, `just format-check`'s `cargo fmt` |
-| `cityloom-js`   | `js.Dockerfile`   | Node LTS                                                                                                                                                                                                     | `npm ci` at the root (MapLibre), `scripts/precompress.mjs`   |
-| `cityloom-docs` | `docs.Dockerfile` | Node LTS, Python 3                                                                                                                                                                                           | the documentation site in `website/`                         |
-| `cityloom-e2e`  | `e2e.Dockerfile`  | everything in `cityloom-rust`, plus Chromium at the build that the locked Playwright expects                                                                                                                 | `just e2e` and its tiers                                     |
+| Image           | Dockerfile        | What it holds                                                                                                                                                                                      | For                                                        |
+| --------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `cityloom-rust` | `rust.Dockerfile` | Rust stable, the `wasm32-unknown-unknown` target, rustfmt, clippy, `wasm-bindgen-cli` (the version pinned in `crates/cityloom_editor/Cargo.toml`), `just`, procps (`kill`, for two tests); no Node | `scripts/build.sh`, `just test`, `cargo fmt`               |
+| `cityloom-js`   | `js.Dockerfile`   | Node LTS                                                                                                                                                                                           | `npm ci` at the root (MapLibre), `scripts/precompress.mjs` |
+| `cityloom-docs` | `docs.Dockerfile` | Node LTS, Python 3                                                                                                                                                                                 | the documentation site in `website/`                       |
+| `cityloom-e2e`  | `e2e.Dockerfile`  | everything in `cityloom-rust`, plus Node LTS with npm, and Chromium at the build that the locked Playwright expects                                                                                | `just build`, `just e2e` and its tiers                     |
 
-The Rust and Node versions follow CI: `rust:1-slim` is the latest stable and `node:lts-slim` is the current LTS. When
-you rebuild an image you get the newest of each. Run `docker buildx bake --pull` to fetch new base images.
+Rust is pinned: `RUST_VERSION` in `rust.Dockerfile` (1.100.0, the newest stable when it was set). CI's jobs, the
+deploy and Sonar all build with it, so raise the pin when a new stable comes out. To try another release without editing the file, run
+`docker buildx bake -f dockerfiles/docker-bake.hcl --set rust.args.RUST_VERSION=<version>`. Node follows CI:
+`node:lts-slim` is the current LTS, and a rebuild with `docker buildx bake --pull` fetches the newest.
 
 Two versions are read from the checkout when an image is built, not when it runs: the `wasm-bindgen` line of
 `crates/cityloom_editor/Cargo.toml` and `@playwright/test` in `tests/e2e/package-lock.json`. After a pull that changes either
-one, build the images again. Otherwise `just build` fails on a wasm-bindgen version mismatch, or Playwright reports that
+one, build the images again. Otherwise `scripts/build.sh` fails on a wasm-bindgen version mismatch, or Playwright reports that
 its browser executable does not exist. The rebuild redoes only the steps that use the changed version.
 
 ## Building
@@ -31,6 +33,14 @@ This builds all four images, and builds `cityloom-rust` before `cityloom-e2e`, w
 add its name after the command, for example `docs`. To build the e2e image on its own with `docker build`, point it at a
 Rust image that is already built:
 `docker build --build-context rust=docker-image://cityloom-rust -f dockerfiles/e2e.Dockerfile -t cityloom-e2e .`
+
+## In CI
+
+CI's build and test jobs run in these images. `.github/workflows/images.yml` names them
+`ghcr.io/<owner>/cityloom-<name>:<tag>`. The tag comes from `scripts/ci/image_tag.py`, a hash of this folder (its
+Markdown left out) and of the wasm-bindgen and Playwright versions. A run pushes the images only when GHCR lacks them at
+that tag. `docker buildx bake` takes the same `REGISTRY` and `TAG` variables, so the CI images can be built the same way
+here. `.github/workflows/presubmit.yml` and `website/docs/testing/when-tests-run.md` say which job runs in which image.
 
 ## Running
 
@@ -60,15 +70,24 @@ docker volume ls -q --filter "name=^$v-" | xargs docker volume rm
 `--user` makes the files the container writes into the checkout belong to you. You need it on Linux. On macOS it does
 no harm.
 
-Build the pages. This runs `npm ci` in the JS image, then the wasm build in the Rust image:
+Build the pages in three steps, which are what `just build` does on the host. The Rust image has no Node, so the first
+and last steps run in the JS image: `npm ci`, then `scripts/build.sh` (the wasm, and MapLibre copied into `web/vendor`)
+in the Rust image, then the compressed copies that the server sends:
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/src -v "$v-node-modules":/src/node_modules cityloom-js npm ci
 ```
 
 ```bash
-docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/src -v "$v-node-modules":/src/node_modules -v "$v-tools":/src/.tools -v "$v-target":/target -v cityloom-cargo:/cargo cityloom-rust just build
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/src -v "$v-node-modules":/src/node_modules -v "$v-tools":/src/.tools -v "$v-target":/target -v cityloom-cargo:/cargo cityloom-rust ./scripts/build.sh
 ```
+
+```bash
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/src cityloom-js node scripts/precompress.mjs web/pkg web/vendor
+```
+
+If you skip the last step, the server still works. It skips a compressed copy that is older than its file and
+compresses that file on the fly.
 
 Build the documentation site in English and fr-CA:
 

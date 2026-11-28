@@ -1,0 +1,73 @@
+name: Toolchain images
+
+# The images of dockerfiles/ that CI's build and test jobs run in (presubmit.yml, postsubmit.yml, docs.yml call this
+# first). Their tag is a hash of what they are built from (scripts/ci/image_tag.py): when GHCR already has all four at
+# that tag, nothing is built; otherwise they are baked and pushed. A pull request that changes a Dockerfile, or moves
+# wasm-bindgen or Playwright, is therefore tested on its own images.
+on:
+  workflow_call:
+    outputs:
+      tag:
+        description: The images' tag, the same for the four of them.
+        value: ${{ jobs.images.outputs.tag }}
+      registry:
+        description: Where they are, ending in a slash (ghcr.io/<owner>/, lowercase, as GHCR names it).
+        value: ${{ jobs.images.outputs.registry }}
+
+jobs:
+  images:
+    name: Toolchain images
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    # Pushing is the one thing here that needs more than reading; a pull request from a fork cannot push, so it can
+    # use only images a maintainer's run has already pushed.
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      registry: ${{ steps.tag.outputs.registry }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: tag
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          scripts/ci/image_tag.py
+          echo "registry=ghcr.io/$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')/" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: check
+        name: Look for the images at the tag
+        env:
+          REGISTRY: ${{ steps.tag.outputs.registry }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          missing=false
+          for image in cityloom-rust cityloom-js cityloom-docs cityloom-e2e; do
+            if docker buildx imagetools inspect "$REGISTRY$image:$TAG" >/dev/null 2>&1; then
+              echo "$REGISTRY$image:$TAG is there"
+            else
+              echo "$REGISTRY$image:$TAG is missing"
+              missing=true
+            fi
+          done
+          echo "missing=$missing" >> "$GITHUB_OUTPUT"
+      - if: steps.check.outputs.missing == 'true'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      # Two runs that find the same tag missing both push the same images under it; the second overwrites the first.
+      - name: Build and push the images
+        if: steps.check.outputs.missing == 'true'
+        env:
+          REGISTRY: ${{ steps.tag.outputs.registry }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if ! docker buildx bake -f dockerfiles/docker-bake.hcl --push --set '*.platform=linux/amd64'; then
+            echo "::error::could not build or push the toolchain images at tag $TAG. A pull request from a fork, or a token without packages: write, cannot push them; a maintainer's run will."
+            exit 1
+          fi

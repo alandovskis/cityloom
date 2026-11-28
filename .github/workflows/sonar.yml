@@ -48,9 +48,12 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # The Rust release CI's images are built on (dockerfiles/rust.Dockerfile), so what CI tested is what this builds.
+      - id: rust
+        run: echo "version=$(sed -n 's/^ARG RUST_VERSION=//p' dockerfiles/rust.Dockerfile)" >> "$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # v1
         with:
-          toolchain: stable
+          toolchain: ${{ steps.rust.outputs.version }}
           components: clippy, llvm-tools-preview
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4

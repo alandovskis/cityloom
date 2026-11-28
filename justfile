@@ -23,9 +23,10 @@ check-no-fake:
     cargo build --release -p cityloom_server
     dir=$(./scripts/target-dir.sh) && ./scripts/check-no-fake.sh "$dir/release/cityloom_server"
 
-# Build the WebAssembly module into web/pkg.
+# Build the WebAssembly module into web/pkg, then the compressed copies the server sends (scripts/precompress.mjs).
 build:
     ./scripts/build.sh
+    node scripts/precompress.mjs web/pkg web/vendor
 
 # Unit tests on the host, and a type-check of the wasm-only code that they do not compile. CI runs the two as separate jobs.
 test: test-host test-wasm
