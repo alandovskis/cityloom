@@ -1,0 +1,7 @@
+PASS tests gate
+  new test: cityloom_editor unittests src/lib.rs::junction::vm::compare::tests::a_changed_corner_is_named_among_the_other_differences
+  new test: cityloom_editor unittests src/lib.rs::junction::vm::compare::tests::a_raised_table_is_named_among_the_other_differences
+  new test: cityloom_editor unittests src/lib.rs::junction::vm::compare::tests::a_turbo_layout_on_one_side_is_a_line_of_the_control_group
+  new test: cityloom_editor unittests src/lib.rs::junction::vm::text::tests::a_stop_in_the_bus_lane_says_so_in_both_languages
+  new test: cityloom_editor unittests src/lib.rs::junction::vm::text::tests::a_stop_on_no_entering_lane_says_only_where_it_stands_in_both_languages
+  the faults were run at 73ab8bc737231a95d32a01b09b7f8d3240e48cab: the branch is the same since, but for the version lines, and no faulted file changed
