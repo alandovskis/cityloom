@@ -55,11 +55,11 @@ without whitespace and comments, removes each `#[cfg(test)]` item, and returns `
     `struct S { #[cfg(test)] a: u8, }`, marked item running to end of file: `None`.
 - [ ] **Step 2:** `python3 -m unittest scripts/include/tests/test_ci_changes.py -k Deploy` → FAIL (`AttributeError`).
 - [ ] **Step 3:** Implement. Lexer: one regex alternation tried at each position (whitespace, `//` line comment, nested
-  `/* */` by a counter, raw strings by counting `#`s, `b"`/`c"`/`"` strings with escapes, char `'x'`/`'\…'` tried before
-  lifetime `'ident`, identifiers, numbers, single punctuation). Remover: walk tokens; at `# [ cfg ( test ) ]`, skip any
-  further `# [ … ]`, then scan with a bracket stack: `;` at depth 0 ends it; the `}` closing the first `{` at depth 0 ends
-  it (eat one following `;`); `,`, a closer at depth 0, mismatched closer, or end of tokens → `None`. Check balance of the
-  whole remainder too (mismatched → `None`).
+      `/* */` by a counter, raw strings by counting `#`s, `b"`/`c"`/`"` strings with escapes, char `'x'`/`'\…'` tried before
+      lifetime `'ident`, identifiers, numbers, single punctuation). Remover: walk tokens; at `# [ cfg ( test ) ]`, skip any
+      further `# [ … ]`, then scan with a bracket stack: `;` at depth 0 ends it; the `}` closing the first `{` at depth 0 ends
+      it (eat one following `;`); `,`, a closer at depth 0, mismatched closer, or end of tokens → `None`. Check balance of the
+      whole remainder too (mismatched → `None`).
 - [ ] **Step 4:** Tests pass.
 - [ ] **Step 5:** Commit "Read a Rust file without its #[cfg(test)] items".
 
@@ -80,7 +80,7 @@ git error is True).
   - `test_without_a_base_the_path_decides`: `deploys(["crates/x/src/a.rs"])` is True (existing tests stay as they are).
 - [ ] **Step 2:** Run → FAIL.
 - [ ] **Step 3:** Implement: in `deploys`, a served `.rs` file with a base counts only if `changed_outside_tests`.
-  `main` passes `a.base, a.head` (empty base when `a.files` is used). Docstring's `deploy` line says so.
+      `main` passes `a.base, a.head` (empty base when `a.files` is used). Docstring's `deploy` line says so.
 - [ ] **Step 4:** `just test-scripts` → all pass (Script tests may show #336's `dockerfiles/` failure until it merges).
 - [ ] **Step 5:** Commit "Skip the deploy of a push that changes only #[cfg(test)] code".
 
@@ -90,9 +90,9 @@ git error is True).
 `website/i18n/fr-CA/docusaurus-plugin-content-docs/current/testing/when-tests-run.md`.
 
 - [ ] **Step 1:** Replace "The list goes by file: a test added to a `#[cfg(test)]` module … deploys" with how a served
-  `.rs` file is read without its `#[cfg(test)]` items, and that anything unreadable deploys (both languages; OQLF
-  spacing in fr-CA).
+      `.rs` file is read without its `#[cfg(test)]` items, and that anything unreadable deploys (both languages; OQLF
+      spacing in fr-CA).
 - [ ] **Step 2:** `just format-check` and `just docs-build` pass.
 - [ ] **Step 3:** Measurement: for main's last 40 merges, run old and new `deploys` with base = parent; table of the
-  merges whose decision changes.
+      merges whose decision changes.
 - [ ] **Step 4:** Commit, push, PR with the measurement; CI green.
