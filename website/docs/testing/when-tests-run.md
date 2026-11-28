@@ -42,8 +42,12 @@ deployed (`scripts/ci/last_deploy.py`: the newest earlier run whose `Deploy to R
 from it with `scripts/ci/ci_changes.py --event push`. The deploy runs only when a file the site is built from changed,
 by the list `DEPLOY_INPUTS` of `ci_changes.py`: the crates (but their tests and guards), `web/`, `deploy/`, `cities/`,
 the manifests, the justfile and the scripts the deploy runs. A merge of CI configuration, or of tests in their own files
-(the specs, `tests.rs`, `crates/*/tests/`), passes every check and skips the deploy. The list goes by file: a test added
-to a `#[cfg(test)]` module inside a source file changes that file, and the merge deploys. A site change whose own run failed is still in the next push's diff, and goes out with it.
+(the specs, `tests.rs`, `crates/*/tests/`), passes every check and skips the deploy. So does a test added inside a
+source file: a changed Rust file counts only when it differs outside its `#[cfg(test)]` items (`outside_tests`, which
+compares the two sides' tokens without whitespace, comments or those items). A file that scanner cannot read with
+confidence (a marked field, argument or match arm, a string that does not end), a new or deleted file, and any other
+condition (`cfg(all(test, …))`, the `test-provider` feature) count as changed. A site change whose own run failed is
+still in the next push's diff, and goes out with it.
 When the last deploy cannot be found, the push deploys. Every file git tracks is in `DEPLOY_INPUTS` or in
 `NOT_SERVED`; `just test-scripts` fails on one in neither, so a new kind of file is put on one side by the pull
 request that adds it.

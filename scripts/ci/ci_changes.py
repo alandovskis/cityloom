@@ -21,7 +21,9 @@ decided and, when GITHUB_OUTPUT is set, writes the job's outputs:
     e2e        true when the E2E tier runs (`just e2e-archive`: the unpacked archive and the delivery specs)
     e2e_specs  its Playwright arguments
     deploy     push only: true when a file the site is built from (DEPLOY_INPUTS) changed since --base, which
-               postsubmit.yml sets to the last deployed commit; also true when that base is not known or not behind HEAD
+               postsubmit.yml sets to the last deployed commit; also true when that base is not known or not behind HEAD.
+               A Rust file whose only change is inside #[cfg(test)] items is not a change (outside_tests); one it
+               cannot read is.
 
 Only a pull request is narrowed. postsubmit.yml, which checks main, runs every spec and does not call this. Anything
 doubtful runs every spec too: no files, a base that is not there, a file no rule names. A version bump alone
@@ -331,9 +333,164 @@ def served(path: str) -> bool:
     return any(glob(p, path) for p in DEPLOY_INPUTS) and not any(glob(p, path) for p in CARVED_OUT)
 
 
-def deploys(files: list[str] | None) -> bool:
-    """Whether a push with these changed files deploys; None (the change is not known) deploys."""
-    return files is None or any(served(f) for f in files)
+# Rust's tokens, as far as telling code from #[cfg(test)] items needs: whitespace and comments are not tokens, a string
+# or char is one token whatever it holds, and an operator of several characters is one token (so `- >` is not `->`).
+OPERATORS = sorted(
+    "<<= >>= ... ..= :: -> => == != <= >= && || += -= *= /= %= ^= &= |= << >> ..".split(), key=len, reverse=True
+)
+RAW_STRING_START = re.compile(r"[bc]?r(#*)\"")
+STRING = re.compile(r"[bc]?\"(?:[^\"\\]|\\.)*\"", re.DOTALL)
+CHAR = re.compile(r"b?'(?:\\(?:x[0-9a-fA-F]{2}|u\{[0-9a-fA-F_]{1,6}\}|.)|[^'\\\n])'")
+LIFETIME = re.compile(r"'(?:r#)?[^\W\d]\w*")
+WORD = re.compile(r"(?:r#)?\w+")  # identifiers, keywords and numbers (a number's parts may split; both sides alike)
+MARK = ["#", "[", "cfg", "(", "test", ")", "]"]  # exactly #[cfg(test)]: the code that only `cargo test` builds
+PAIRS = {")": "(", "]": "[", "}": "{"}
+
+
+def rust_tokens(text: str) -> list[str] | None:
+    """The tokens of a Rust file; None when a string, char or comment does not end."""
+    tokens: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if c.isspace():
+            i += 1
+        elif text.startswith("//", i):
+            end = text.find("\n", i)
+            i = n if end < 0 else end + 1
+        elif text.startswith("/*", i):
+            depth, i = 1, i + 2
+            while depth:
+                if i >= n:
+                    return None
+                if text.startswith("/*", i):
+                    depth, i = depth + 1, i + 2
+                elif text.startswith("*/", i):
+                    depth, i = depth - 1, i + 2
+                else:
+                    i += 1
+        elif m := RAW_STRING_START.match(text, i):
+            end = text.find('"' + m.group(1), m.end())
+            if end < 0:
+                return None
+            end += 1 + len(m.group(1))
+            tokens.append(text[i:end])
+            i = end
+        elif c == '"' or (c in "bc" and text.startswith('"', i + 1)):
+            m = STRING.match(text, i)
+            if m is None:
+                return None
+            tokens.append(m.group())
+            i = m.end()
+        elif m := CHAR.match(text, i) or LIFETIME.match(text, i) or WORD.match(text, i):
+            tokens.append(m.group())
+            i = m.end()
+        else:
+            op = next((o for o in OPERATORS if text.startswith(o, i)), c)
+            tokens.append(op)
+            i += len(op)
+    return tokens
+
+
+def item_end(tokens: list[str], i: int) -> int | None:
+    """Where the item that starts at i ends (after any further outer attributes): after its first `;` outside brackets, or
+    after the `}` closing its first block (and a `;` right after it). None when it reaches a `,` (outside `<…>`, which
+    holds a signature's generics), a `=>`, its parent's closer or the end first: a field, an argument or an arm, which
+    this does not take apart."""
+    stack: list[str] = []
+    angles = 0  # `<` minus `>` outside brackets; a `<` that is less-than only keeps a `,` from ending the item
+    bounds = False  # past a `where`, whose bounds a `,` separates (no field, argument or arm holds the keyword)
+    for k in range(i, len(tokens)):
+        t = tokens[k]
+        if not stack and t == "where":
+            bounds = True
+        elif not stack and t in ("<", ">", ">>"):
+            angles += {"<": 1, ">": -1, ">>": -2}[t]
+        elif not stack and t == "=>":
+            return None
+        elif t in "([{":
+            stack.append(t)
+        elif t in PAIRS:
+            if not stack or stack.pop() != PAIRS[t]:
+                return None
+            if not stack and t == "}":
+                return k + 2 if tokens[k + 1 : k + 2] == [";"] else k + 1
+        elif not stack and t == ";":
+            return k + 1
+        elif not stack and t == "," and angles <= 0 and not bounds:
+            return None
+    return None
+
+
+def balanced(tokens: list[str]) -> bool:
+    stack: list[str] = []
+    for t in tokens:
+        if t in "([{":
+            stack.append(t)
+        elif t in PAIRS and (not stack or stack.pop() != PAIRS[t]):
+            return False
+    return not stack
+
+
+def drop_outer_attributes(out: list[str]) -> None:
+    """Remove the outer attributes (`#[…]`, not `#![…]`) that end the tokens kept so far."""
+    while out and out[-1] == "]":
+        depth, k = 0, len(out) - 1
+        while k >= 0:
+            depth += {"]": 1, "[": -1}.get(out[k], 0)
+            if depth == 0:
+                break
+            k -= 1
+        if k < 1 or out[k - 1] != "#":
+            return  # an index or array, or an inner attribute's `!`: not an outer attribute
+        del out[k - 1 :]
+
+
+def outside_tests(text: str) -> list[str] | None:
+    """The tokens of a Rust file with every #[cfg(test)] item left out: what the deployed site is built from. None when
+    the file cannot be read with confidence (it then counts as changed)."""
+    tokens = rust_tokens(text)
+    if tokens is None or not balanced(tokens):
+        return None
+    out: list[str] = []
+    i = 0
+    while i < len(tokens):
+        if tokens[i : i + len(MARK)] == MARK:
+            end = item_end(tokens, i + len(MARK))
+            if end is None:
+                return None
+            drop_outer_attributes(out)  # the attributes above the mark are the item's too
+            i = end
+        else:
+            out.append(tokens[i])
+            i += 1
+    return out
+
+
+def changed_outside_tests(path: str, base: str, head: str) -> bool:
+    """Whether a Rust file differs between base and head outside its #[cfg(test)] items. A file missing on a side, one
+    that cannot be read, and any git error count as changed."""
+    if not (REVISION.fullmatch(base) and REVISION.fullmatch(head)):
+        return True
+    try:
+        old, new = (outside_tests(git("show", f"{rev}:{path}")) for rev in (base, head))
+    except (subprocess.CalledProcessError, UnicodeDecodeError):
+        return True
+    return old is None or new is None or old != new
+
+
+def deploys(files: list[str] | None, base: str = "", head: str = "HEAD") -> bool:
+    """Whether a push with these changed files deploys; None (the change is not known) deploys. With the base, a served
+    Rust file whose only change is inside #[cfg(test)] items does not count: no code the site is built from changed."""
+    if files is None:
+        return True
+
+    def counts(f: str) -> bool:
+        if not served(f):
+            return False
+        return not (base and f.endswith(".rs")) or changed_outside_tests(f, base, head)
+
+    return any(counts(f) for f in files)
 
 
 def behind(base: str, head: str) -> bool:
@@ -397,7 +554,7 @@ def main() -> int:
         "e2e_specs": s.spec_args("e2e"),
     }
     if a.event == "push":
-        out["deploy"] = str(deploys(files)).lower()
+        out["deploy"] = str(deploys(files, "" if a.files else a.base, a.head)).lower()
     print(json.dumps(out))
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:

@@ -48,8 +48,12 @@ déploiement ne se fait que si un fichier dont le site est construit a changé, 
 `ci_changes.py` : les crates (sauf leurs tests et leurs gardes), `web/`, `deploy/`, `cities/`, les manifestes, le
 justfile et les scripts que le déploiement exécute. Une fusion qui ne touche que la configuration de
 l’intégration continue, ou des tests dans leurs propres fichiers (les spécifications, `tests.rs`, `crates/*/tests/`),
-passe toutes les vérifications et saute le déploiement. La liste se lit par fichier : un test ajouté à un module
-`#[cfg(test)]` d’un fichier source change ce fichier, et la fusion déploie. Un changement du site dont l’exécution a
+passe toutes les vérifications et saute le déploiement. Il en va de même d’un test ajouté dans un fichier source : un
+fichier Rust modifié ne compte que s’il diffère hors de ses éléments `#[cfg(test)]` (`outside_tests`, qui compare les
+jetons des deux côtés sans les espaces, les commentaires ni ces éléments). Un fichier que cette analyse ne peut pas
+lire avec certitude (un champ, un argument ou une branche de `match` marqué, une chaîne qui ne se termine pas), un
+fichier ajouté ou supprimé, et toute autre condition (`cfg(all(test, …))`, la fonctionnalité `test-provider`) comptent
+comme modifiés. Un changement du site dont l’exécution a
 échoué reste dans la comparaison de la poussée suivante, et part avec elle. Quand le dernier déploiement est
 introuvable, la poussée déploie. Chaque fichier que git suit est dans `DEPLOY_INPUTS` ou dans `NOT_SERVED`;
 `just test-scripts` échoue sur un fichier qui n’est dans aucune des deux, si bien qu’un nouveau genre de fichier est
