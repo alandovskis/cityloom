@@ -8,7 +8,59 @@ Todo ─ queue ─ triage ─ plan ─ test-writer ─ red gate ─ implement �
        queue    triage   plan                                                  review    evidence                  merge.md, deploy.md
 ```
 
-`/factory` (`.claude/skills/factory/SKILL.md`) runs the line; each station is a skill beside it, and the agents it dispatches are in `.claude/agents/` (`triage`, `planner`, `test-writer`, `implement`, `writer`, `reviewer`, `evidence-check`, and the existing `merge` and `deploy`).
+Three loops run the line (below); `/factory` (`.claude/skills/factory/SKILL.md`) runs one pass of each. Each station is a skill beside them, and the agents they dispatch are in `.claude/agents/` (`triage`, `planner`, `test-writer`, `implement`, `writer`, `reviewer`, `evidence-check`, and the existing `merge` and `deploy`).
+
+## Three loops
+
+The line is cut in three where it waits on someone else: the intake ends at a posted plan, the implement loop at a PR waiting for a person's approval, and the merge loop starts from that approval. Each loop is a skill that runs one pass, and may run on its own, `/loop /factory-<loop>`, at its own pace; `/factory` runs one pass of each.
+
+```
+          factory-intake                     factory-implement                               factory-merge
+Todo ─ queue ─ triage ─ plan ─┬─ worktree ─ build ─ review ─ evidence ─ PR ─ merge agent ─┬─ approval ─ deploy agent ─ Done
+                              │                                                          │  (person)
+                  Factory · plan record                                    issue moved to In Review
+```
+
+| Loop | Skill | Owns the issues (**Where an issue is**) | Hands on by |
+| --- | --- | --- | --- |
+| intake | `factory-intake` | in `linear.intake` or `linear.fallback` (10), and feasible with no plan (9) | posting the `**Factory · plan**` record |
+| implement | `factory-implement` | planned, from the worktree to the PR (4 to 8), and a PR open while its issue is in `linear.states.working` (3) | moving the issue to `linear.states.review` once the `merge` agent hands its PR back green and `CLEAN` |
+| merge | `factory-merge` | a PR open while its issue is in `linear.states.review` (3), and a PR merged without a `deployed` record (1) | moving the issue to `linear.states.done`; or back to `linear.states.working`, for the implement loop, when an unapproved PR fell behind `main` or a check went red |
+
+Each issue is owned by one loop at a time, read from its records and its Linear state, so the loops never act on the same issue and need nothing from each other but those. The rules that keep them apart:
+
+- **One session per loop.** Two passes of one loop at once would run one issue's station twice. Running `/factory` and a loop's own `/loop` together is two passes of that loop.
+- **One machine.** The worktrees, the red commits and `cargo-mutants` live in the main checkout's folder: the implement and merge loops run in sessions on the machine that holds them. The intake touches no worktree and may run anywhere Linear answers.
+- **Room.** The intake takes issues only while the queue finds room (`caps.inFlight`, `caps.awaitingApproval`), and the room counts every issue in `linear.states.working`, planned or building, so the implement loop is never given more than it may build. The implement loop opens a PR only while fewer than `caps.awaitingApproval` are open.
+- **The main checkout's git** is shared by all three: its commands take their turn (**Side by side**).
+
+## Status
+
+Every run of a loop, and of `/factory`, ends by printing the line's status, whatever happened: after a pass that moved nothing, and after one stopped in **Before a pass** (then with `stopped:` and the reason, and the rest as far as it could be read). It is the last thing the run prints, in this shape:
+
+```
+Factory status · <loop: intake, implement, merge, or all> · <UTC time> · <moved | idle | stopped: reason>
+In flight: <n>/<caps.inFlight> · PRs open: <n>/<caps.awaitingApproval> · Waiting for a person: <n>
+
+| Issue  | Title | Loop      | Where                    | Waits for              | This run          |
+| ------ | ----- | --------- | ------------------------ | ---------------------- | ----------------- |
+| CLM-12 | …     | implement | green, in review round 2 | the reviewer           | review 1 findings |
+| CLM-15 | …     | merge     | PR #310 open             | approval of `abc1234`  | —                 |
+| CLM-17 | …     | —         | handed back (build)      | a person: S-needs-review | handed back     |
+
+Running: <each agent or gate still running in the background, with its issue>, or none
+```
+
+The table holds every issue the factory has in hand, not only the running loop's: each issue in `linear.states.working` or `linear.states.review` with a factory record, and each closed this run. Its loop is the one that owns it (**Three loops**), `—` when it waits for a person. A loop reads the other loops' issues only to place them, from their state, labels and records, and never acts on them. The counts are the queue's (`factory-queue`, **Room**).
+
+## Before a pass
+
+Every loop starts with these, from the main checkout (`$CLAUDE_PROJECT_DIR`); each loop's skill says which it needs:
+
+1. `python3 .claude/factory/factory.py config`: every problem it lists stops the pass. Report them; do not fill in a value yourself.
+2. `export GH_TOKEN=$(python3 .claude/factory/factory.py token)`, noting the time; mint again after 55 minutes or on an authentication error. A failure stops the pass.
+3. `git fetch -q origin` and the database for the gates: `just db`, exporting the `DATABASE_URL` it prints (it starts the one container if another loop has not).
+4. The Linear tools answer (`list_issue_statuses` for `linear.team`, and every state of `linear.states`, `linear.intake` and `linear.fallback` is among them). If not, stop and say so.
 
 ## Three flows
 
@@ -74,9 +126,9 @@ Everything the line knows, it reads back each pass from three places, so stoppin
 
 Read in this order; the first that holds says where the issue is:
 
-1. Closed (Done, Canceled, Duplicate): nothing to do, unless it has a factory PR merged without a `deployed` record: watch that deploy (factory, **Deploy**).
+1. Closed (Done, Canceled, Duplicate): nothing to do, unless it has a factory PR merged without a `deployed` record: watch that deploy (factory-merge).
 2. Labelled `needsReview`, `needsSetup`, `deployFailed` or `blocked`: waiting for a person. Left alone; when the person removes the label, the issue is read again from step 3 (the person may have answered on the issue, changed the plan, or fixed the worktree).
-3. A factory PR, open: waiting for approval, or merge (factory, **Approved PRs**).
+3. A factory PR, open. Its issue in `linear.states.working`: the PR is being prepared, by the `merge` agent and the evidence again (factory-evidence step 5). In `linear.states.review`: waiting for approval, or merge (factory-merge).
 4. A `green` (or, docs flow, `docs`; tests flow, `tests`) record at the worktree's HEAD, and the latest `review` record at that HEAD is `pass`: evidence and PR (factory-evidence).
 5. A `green` (or `docs`, or `tests`) record at the worktree's HEAD: review (factory-review).
 6. Code flow: a `red` record whose sha is in the worktree's history, or, after a rebase, a commit carrying the trailer `Factory-Red: CLM-<n>`: build, from the implementer (factory-build, step 3).
@@ -89,14 +141,14 @@ The worktree, red commit and local commits after it live only on this machine un
 
 ## Side by side
 
-The line works up to `caps.inFlight` issues and `caps.awaitingApproval` open PRs at once. The orchestrator runs every issue's stations itself, interleaved, each agent and each gate in the background (factory, **Issues in flight**). What the issues share is kept apart this way:
+The line works up to `caps.inFlight` issues and `caps.awaitingApproval` open PRs at once. The orchestrator runs every issue's stations itself, interleaved, each agent and each gate in the background (factory-implement, **Issues in flight**). What the issues share is kept apart this way:
 
 - **Worktree and target.** Each issue has its own worktree and so its own `target/` (never a shared `CARGO_TARGET_DIR`: a stale binary would keep another checkout's paths). Five builds at once need the disk for five targets, a few GB each.
 - **Port.** Each issue's browser tests and app run on their own port, `E2E_PORT=$((20000 + <n>))` for CLM-<n>, set for every gate, `just e2e`, `just serve` and capture of that issue and given to every agent dispatched for it (test-writer, implement, writer, merge). Playwright reuses a server already listening on its port, so two issues on one port would test each other's build.
-- **Database.** One Postgres (`just db`) serves them all: the server's tests make a database of their own for each test (`#[sqlx::test]`).
+- **Database.** One Postgres (`just db`) serves them all, and every loop: the server's tests make a database of their own for each test (`#[sqlx::test]`).
 - **The main checkout's git.** Commands that change the main repository's refs or worktrees (`git fetch`, `git worktree add` and `remove`, `git branch -D`, the evidence branch's scratch worktree) run one at a time; a lock error (`cannot lock ref`, `index.lock`) is waited out and run again, not handed back. Commits inside an issue's worktree need no turn.
 - **The evidence branch.** Several issues push to it: a rejected push is fetched, rebased onto `origin/<evidenceBranch>` and pushed again, up to five times.
-- **Merging.** The `merge` agent prepares several PRs at once, each in its PR's worktree; the `deploy` agent merges and deploys them one at a time, since each merge moves `main` and deploys it (factory, **Approved PRs**). Each PR then needs the version line rebased, which the `deploy` agent does.
+- **Merging.** The `merge` agent prepares several PRs at once, each in its PR's worktree (the implement loop); the `deploy` agent merges and deploys them one at a time, since each merge moves `main` and deploys it (factory-merge). Each PR then needs the version line rebased, which the `deploy` agent does.
 
 ## Acting on GitHub as the App
 
