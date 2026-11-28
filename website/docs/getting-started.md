@@ -84,7 +84,7 @@ Opening a place needs the road tiles: without them no place opens, the default o
 ```sh
 just db            # a throwaway Postgres in Docker for the server's tests and the account spec
 just test          # cargo test --workspace, and a wasm32 build of the code plain `cargo test` does not compile; needs `DATABASE_URL`
-just e2e           # builds, then runs the three tiers of Playwright tests in e2e/ (`just e2e-ui`, `just e2e-integration` and `just e2e-archive` run one each); the integration tier needs `DATABASE_URL`
+just e2e           # builds, then runs the three tiers of Playwright tests in tests/e2e/ (`just e2e-ui`, `just e2e-integration` and `just e2e-archive` run one each); the integration tier needs `DATABASE_URL`
 just check         # both
 just format        # rustfmt and Prettier
 just format-check  # the same, without changing anything
@@ -104,7 +104,7 @@ merge.
 
 `just db` starts the Postgres in a container named `cityloom-db` on 127.0.0.1:55432 and prints the line to run:
 `export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom`. The server's tests and the account spec
-(`e2e/tests/account-server.spec.ts`) need it, and say so when it is missing. `just db-stop` removes the container.
+(`tests/e2e/tests/account-server.spec.ts`) need it, and say so when it is missing. `just db-stop` removes the container.
 
 ## Accounts and deployment
 

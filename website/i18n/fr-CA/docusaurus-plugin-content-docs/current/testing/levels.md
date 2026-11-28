@@ -83,7 +83,7 @@ ce que produit l’importateur change pour les mêmes données.
 - Les tests de l’éditeur écrivent le rapport par l’écrivain de PDF : `cityloom_report_pdf` est l’une des dépendances
   de développement de l’éditeur, et reste donc hors de la construction de l’éditeur lui-même. `scripts/build.sh` échoue
   si le JavaScript de l’éditeur exporte `report_pdf`.
-- Dans le navigateur, `e2e/tests/report.spec.ts` lit le PDF que fait une page avec `pdfjs-dist`.
+- Dans le navigateur, `tests/e2e/tests/report.spec.ts` lit le PDF que fait une page avec `pdfjs-dist`.
 
 ## Tests des scripts
 
@@ -98,8 +98,8 @@ complète, et la part des tests Rust qu’aucune fonctionnalité ne nomme reste 
 
 ## Tests dans le navigateur
 
-Les tests dans le navigateur sont des spécifications Playwright, `e2e/tests/*.spec.ts`, exécutées contre le
-`web/pkg` construit et un serveur construit avec le faux fournisseur. `e2e/tiers.json` donne à chaque spécification un
+Les tests dans le navigateur sont des spécifications Playwright, `tests/e2e/tests/*.spec.ts`, exécutées contre le
+`web/pkg` construit et un serveur construit avec le faux fournisseur. `tests/e2e/tiers.json` donne à chaque spécification un
 seul niveau :
 
 - **Interface** (35 spécifications) : une page, le réseau simulé, le serveur statique seulement; ni base de données ni
@@ -111,7 +111,7 @@ seul niveau :
 - **`archive_also`** : `map` et `street` sont des spécifications de l’interface que le niveau de bout en bout exécute
   de nouveau sur l’archive extraite.
 
-`e2e/playwright.config.ts` crée un projet Playwright par niveau, et lève une erreur quand une spécification n’est dans
+`tests/e2e/playwright.config.ts` crée un projet Playwright par niveau, et lève une erreur quand une spécification n’est dans
 aucun niveau ou dans deux. Avec `E2E_ARCHIVE=1`, seul le projet de bout en bout s’exécute, avec les spécifications
 d’`archive_also` en plus. Chaque projet est Desktop Chrome en 1440 sur 900. Dans l’intégration continue, un test en
 échec est repris une fois, `test.only` fait échouer l’exécution, et deux processus travaillent. Le serveur est
