@@ -21,7 +21,9 @@ decided and, when GITHUB_OUTPUT is set, writes the job's outputs:
     e2e        true when the E2E tier runs (`just e2e-archive`: the unpacked archive and the delivery specs)
     e2e_specs  its Playwright arguments
     deploy     push only: true when a file the site is built from (DEPLOY_INPUTS) changed since --base, which
-               postsubmit.yml sets to the last deployed commit; also true when that base is not known or not behind HEAD
+               postsubmit.yml sets to the last deployed commit; also true when that base is not known or not behind HEAD.
+               A Rust file whose only change is inside #[cfg(test)] items is not a change (outside_tests); one it
+               cannot read is.
 
 Only a pull request is narrowed. postsubmit.yml, which checks main, runs every spec and does not call this. Anything
 doubtful runs every spec too: no files, a base that is not there, a file no rule names. A version bump alone
@@ -450,9 +452,30 @@ def outside_tests(text: str) -> list[str] | None:
     return out
 
 
-def deploys(files: list[str] | None) -> bool:
-    """Whether a push with these changed files deploys; None (the change is not known) deploys."""
-    return files is None or any(served(f) for f in files)
+def changed_outside_tests(path: str, base: str, head: str) -> bool:
+    """Whether a Rust file differs between base and head outside its #[cfg(test)] items. A file missing on a side, one
+    that cannot be read, and any git error count as changed."""
+    if not (REVISION.fullmatch(base) and REVISION.fullmatch(head)):
+        return True
+    try:
+        old, new = (outside_tests(git("show", f"{rev}:{path}")) for rev in (base, head))
+    except subprocess.CalledProcessError:
+        return True
+    return old is None or new is None or old != new
+
+
+def deploys(files: list[str] | None, base: str = "", head: str = "HEAD") -> bool:
+    """Whether a push with these changed files deploys; None (the change is not known) deploys. With the base, a served
+    Rust file whose only change is inside #[cfg(test)] items does not count: no code the site is built from changed."""
+    if files is None:
+        return True
+
+    def counts(f: str) -> bool:
+        if not served(f):
+            return False
+        return not (base and f.endswith(".rs")) or changed_outside_tests(f, base, head)
+
+    return any(counts(f) for f in files)
 
 
 def behind(base: str, head: str) -> bool:
@@ -516,7 +539,7 @@ def main() -> int:
         "e2e_specs": s.spec_args("e2e"),
     }
     if a.event == "push":
-        out["deploy"] = str(deploys(files)).lower()
+        out["deploy"] = str(deploys(files, "" if a.files else a.base, a.head)).lower()
     print(json.dumps(out))
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:

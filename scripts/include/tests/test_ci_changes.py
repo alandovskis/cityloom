@@ -827,6 +827,58 @@ class Deploy(unittest.TestCase):
             with self.subTest(text):
                 self.assertIsNone(ci_changes.outside_tests(text))
 
+    RS = "crates/x/src/a.rs"
+
+    def deploys_between(self, *commits: dict[str, str | None]) -> bool:
+        """Whether the files changed from the first commit to the last deploy, in a repository of its own (CI's checkouts
+        are shallow). Each commit maps a path to its new text, or None to delete it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            run = lambda *a: subprocess.run(["git", "-C", tmp, *a], check=True, capture_output=True, text=True).stdout.strip()
+            run("init", "-q")
+            for n, files in enumerate(commits):
+                for path, text in files.items():
+                    if text is None:
+                        run("rm", "-q", path)
+                    else:
+                        (Path(tmp) / path).parent.mkdir(parents=True, exist_ok=True)
+                        (Path(tmp) / path).write_text(text, encoding="utf-8")
+                        run("add", path)
+                run("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", str(n), "--allow-empty")
+            base, head = run("rev-list", "--max-parents=0", "HEAD"), run("rev-parse", "HEAD")
+            with mock.patch.object(ci_changes, "ROOT", Path(tmp)):
+                return ci_changes.deploys(ci_changes.changed_files(base, head), base, head)
+
+    def test_a_change_to_test_code_alone_does_not_deploy(self):
+        base = self.CODE + self.TESTS
+        head = self.CODE + self.TESTS[: self.TESTS.rindex("}")] + self.MORE
+        self.assertFalse(self.deploys_between({self.RS: base}, {self.RS: head}))
+
+    def test_a_change_to_code_beside_tests_deploys(self):
+        head = self.CODE.replace("a + b", "b + a") + self.TESTS
+        self.assertTrue(self.deploys_between({self.RS: self.CODE + self.TESTS}, {self.RS: head}))
+
+    def test_a_new_or_deleted_file_deploys(self):
+        only_tests = "#[cfg(test)]\nmod tests {}\n"
+        self.assertTrue(self.deploys_between({"web/app.js": ""}, {self.RS: only_tests}))
+        self.assertTrue(self.deploys_between({self.RS: only_tests}, {self.RS: None}))
+
+    def test_a_file_that_cannot_be_read_deploys(self):
+        self.assertTrue(self.deploys_between({self.RS: "fn f() { (] }\n"}, {self.RS: "fn f() { (] }\n// x\n"}))
+
+    def test_a_served_file_that_is_not_rust_deploys(self):
+        self.assertTrue(self.deploys_between({"web/app.js": "a"}, {"web/app.js": "b"}))
+
+    def test_test_code_beside_a_site_change_deploys(self):
+        commits = ({self.RS: self.CODE, "web/app.js": "a"}, {self.RS: self.CODE + self.TESTS, "web/app.js": "b"})
+        self.assertTrue(self.deploys_between(*commits))
+
+    def test_without_a_base_the_path_decides(self):
+        self.assertTrue(ci_changes.deploys([self.RS]))
+
+    def test_a_git_error_counts_as_changed(self):
+        self.assertTrue(ci_changes.changed_outside_tests(self.RS, "0" * 40, "HEAD"))
+        self.assertTrue(ci_changes.changed_outside_tests(self.RS, "HEAD~1; rm -rf /", "HEAD"))
+
 
 class Revisions(unittest.TestCase):
     def test_only_a_commit_id_or_head_reaches_git(self):
