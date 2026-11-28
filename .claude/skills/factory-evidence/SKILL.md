@@ -75,13 +75,13 @@ The plan's Out of scope.
 - Intent and code: the person who approves. Built by the software factory: test-writer, implement, reviewer and evidence-check agents; the red and green gates passed. (Docs flow: writer, reviewer and evidence-check agents; the docs gate passed. Tests flow: test-writer, reviewer and evidence-check agents; the tests gate passed, each new test catching a fault.)
 ```
 
-ending with the attribution lines the session gives for pull requests. Then post `**Factory · PR** <url>` on the issue and move it to `linear.states.review`.
+ending with the attribution lines the session gives for pull requests. Then post `**Factory · PR** <url>` on the issue. The issue stays in `linear.states.working` until step 5 is done: its state is what tells the merge loop the PR is its (README, **Three loops**).
 
 ## 5. Ready for approval
 
 Dispatch the `merge` agent with the PR's number, `<wt>` and the issue's `E2E_PORT` (README, **Side by side**), in the background: it brings the PR up to date with `main`, fixes failing checks and SonarCloud issues on the branch, and hands it back green and `CLEAN`; it never merges. If it changed the head, run the green gate on the new head (`factory-build` step 4, which posts a new green record and pushes nothing new; docs flow: the docs gate, step D2; tests flow: the tests gate, step T2, with `--proved <sha>`, the sha of the last `**Factory · tests**` record, which keeps that proof when the rebase changed nothing it rests on and runs the faults again otherwise) and capture, check and publish again (steps 1 to 3), then replace the PR's Proof with `gh pr edit <pr> --body-file <file>`, as the App. A STOP from the merge agent is a hand-back, quoting its report.
 
-The PR now waits for a person's approval on its head.
+Once the merge agent has handed it back green and `CLEAN` (and the evidence is up to date with its head), move the issue to `linear.states.review`. The PR now waits for a person's approval on its head, and the merge loop (`factory-merge`) owns it; if it later falls behind `main` unapproved or a check goes red, the merge loop moves the issue back to `linear.states.working` and the implement loop runs this step again.
 
 **Hand-back**: `labels.needsReview`, `**Factory · handed back** (evidence)` with the gaps or the merge agent's report.
 
