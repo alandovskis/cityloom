@@ -1,0 +1,4 @@
+PASS tests gate
+  new test: cityloom_editor unittests src/lib.rs::standards::tests::english_and_french_hold_the_same_messages
+  caught: cityloom_editor unittests src/lib.rs::standards::tests::english_and_french_hold_the_same_messages: 3 faults, the first: crates/cityloom_editor/src/standards/i18n/en.ftl: remove the message standards-refused-length; crates/cityloom_editor/src/standards/i18n/en.ftl: remove the message standards-note-length; crates/cityloom_editor/src/standards/i18n/en.ftl: remove the message standards-note-width
+  not run, every new test had caught three: 32 faults
