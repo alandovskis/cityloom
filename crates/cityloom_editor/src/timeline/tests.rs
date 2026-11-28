@@ -349,3 +349,8 @@ fn a_stale_milestone_has_its_own_refusal_in_both_languages() {
         assert!(!crate::i18n_for(locale).tr_now("timeline-refused-stale", &Default::default()).is_empty());
     }
 }
+
+#[test]
+fn the_ftl_files_have_the_same_messages_and_variables() {
+    assert_eq!(crate::shared::i18n::tests::parity_problems(super::RESOURCES.en, super::RESOURCES.fr), Vec::<String>::new());
+}
