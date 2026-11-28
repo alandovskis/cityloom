@@ -22,7 +22,7 @@ qu’ils contiennent s’assemble.
 | `docs/`    | Des documents de travail absents de ce site : le glossaire français (`glossary-fr-ca.md`) et les spécifications de conception et les plans de mise en œuvre dans `superpowers/`. Le modèle de données est dessiné sur ce site : [Modèle de données : rues et jonctions](architecture/data-model-streets-junctions.md). |
 | `deploy/`  | Le `Dockerfile` de l’image que `just deploy` téléverse vers Railway. Rien n’y est compilé.                                                                                                                                                                                                                             |
 | `.github/` | Les flux de travail de l’intégration continue, les formulaires de billets, les étiquettes (`labels.yml`), les règles qui changent les réponses d’un billet en étiquettes, les réglages de Dependabot et l’action `browser-tests` que partagent tous les niveaux de tests dans le navigateur.                           |
-| `.claude/` | Les agents qu’utilise Claude Code, comme celui qui fusionne et déploie les demandes de fusion.                                                                                                                                                                                                                         |
+| `.claude/` | Les agents qu’utilise Claude Code, comme ceux qui fusionnent les demandes de fusion et suivent leur déploiement.                                                                                                                                                                                                       |
 
 Les fichiers du premier niveau :
 

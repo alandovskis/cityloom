@@ -5,13 +5,13 @@ description: Use when asked to run the software factory's merge loop - to merge 
 
 # Factory merge: approved PRs, merged
 
-One pass of the factory's merge loop (README, **Four loops**): it reads every factory PR whose issue is in `linear.states.review`, and merges the approved ones with the `deploy` agent, one at a time and each only once the deploy of the merge before it is done. It watches no deploy: once a PR is merged, its deploy is the deploy loop's (`factory-deploy`). It changes no branch itself: a PR that needs preparing again goes back to the implement loop. Read `.claude/factory/README.md` first. It keeps no state: each pass reads Linear and GitHub again.
+One pass of the factory's merge loop (README, **Four loops**): it reads every factory PR whose issue is in `linear.states.review`, and merges the approved ones with the `integrate` agent, one at a time and each only once the deploy of the merge before it is done. It watches no deploy: once a PR is merged, its deploy is the deploy loop's (`factory-deploy`). It changes no branch itself: a PR that needs preparing again goes back to the implement loop. Read `.claude/factory/README.md` first. It keeps no state: each pass reads Linear and GitHub again.
 
 **Unattended**: `/loop /factory-merge`, about every ten minutes (it waits on a person's approval, on CI and on the deploy loop), in its own session beside the other loops.
 
 ## 0. Before anything
 
-README, **Before a pass**, steps 1 to 4: the configuration, the App's token (to read the PRs), `git fetch` and the database (the `deploy` agent runs the tests again), Linear.
+README, **Before a pass**, steps 1 to 4: the configuration, the App's token (to read the PRs), `git fetch` and the database (the `integrate` agent runs the tests again), Linear.
 
 ## 1. Read where everything is
 
@@ -33,11 +33,11 @@ Read every open factory PR whose issue is in `linear.states.review` and carries 
 1. **Approved?** Read the reviews over REST (`gh api --paginate repos/<github.repo>/pulls/<pr>/reviews`) and the head (`gh pr view <pr> --json headRefOid,mergeStateStatus,statusCheckRollup`). Take each reviewer's latest review by `submitted_at`, ignoring `COMMENTED`. It is approved only when at least one latest review is `APPROVED` with `commit_id` equal to the head (full sha), from an `author_association` `OWNER`, `MEMBER` or `COLLABORATOR`, a `user.type` other than `Bot` and a `user.login` other than the PR's author, and no reviewer's latest is `CHANGES_REQUESTED`. Not approved:
    - it went `BEHIND` or `DIRTY`, or a check failed: it needs preparing again. Move the issue back to `linear.states.working` and leave it; the implement loop's next pass runs `factory-evidence` step 5 on it (the `merge` agent, then the gate and the evidence again) and moves it back here, where it waits for an approval of its new head;
    - otherwise (clean, or a check still pending) it waits: leave it.
-2. **Merge**, when the deploy is clear (section 2). Dispatch the `deploy` agent with this one approved PR and its worktree, for the merge only: the person's approval of the head is the person's word to merge it. It rebases on the version line only (a PR only behind `main` needs nothing more), re-runs the tests, waits for CI and merges (its steps **Look** to **Merge**), and stops on anything else.
+2. **Merge**, when the deploy is clear (section 2). Dispatch the `integrate` agent with this one approved PR and its worktree: the person's approval of the head is the person's word to merge it. It rebases on the version line only (a PR only behind `main` needs nothing more), re-runs the tests, waits for CI, checks that `main` is green and merges, and stops on anything else. It watches no deploy.
    - `Merged: #<pr> (<version>, merge <sha>)`: post `**Factory · merged** <pr url> \`<sha>\`` on the issue. Leave the issue in `linear.states.review` and its worktree as they are: the deploy loop owns it now, and closes it once its deploy is done.
    - A STOP (a conflict beyond the version line, a red check, a refused merge): hand back (`labels.needsReview`, `**Factory · handed back** (merge)`) with the agent's report.
 
-**One at a time.** At most one PR is merged per pass, the first approved: the next waits until the deploy loop has recorded this one's deploy, which clears the deploy again (section 2). Each merge moves `main` and deploys it, so a second merge started meanwhile would be tested against a `main` that no longer exists, and a deploy that failed would have another merge on top of it. The next approved PR is then behind the new `main`; the `deploy` agent rebases it on the version line as it does any.
+**One at a time.** At most one PR is merged per pass, the first approved: the next waits until the deploy loop has recorded this one's deploy, which clears the deploy again (section 2). Each merge moves `main` and deploys it, so a second merge started meanwhile would be tested against a `main` that no longer exists, and a deploy that failed would have another merge on top of it. The next approved PR is then behind the new `main`; the `integrate` agent rebases it on the version line as it does any.
 
 ## 4. Report
 

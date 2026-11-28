@@ -8,25 +8,25 @@ Todo ─ queue ─ triage ─ plan ─ test-writer ─ red gate ─ implement �
        queue    triage   plan                                                  review    evidence                    merge      deploy
 ```
 
-Four loops run the line (below); `/factory` (`.claude/skills/factory/SKILL.md`) runs one pass of each. Each station is a skill beside them, and the agents they dispatch are in `.claude/agents/` (`triage`, `planner`, `test-writer`, `implement`, `writer`, `reviewer`, `evidence-check`, and the existing `merge` and `deploy`).
+Four loops run the line (below); `/factory` (`.claude/skills/factory/SKILL.md`) runs one pass of each. Each station is a skill beside them, and the agents they dispatch are in `.claude/agents/` (`triage`, `planner`, `test-writer`, `implement`, `writer`, `reviewer`, `evidence-check`, and the existing `merge`, `integrate` and `deploy`: the `merge` agent prepares a PR for approval, the `integrate` agent merges it, the `deploy` agent watches its deploy).
 
 ## Four loops
 
 The line is cut in four where it waits on someone else: the intake ends at a posted plan, the implement loop at a PR waiting for a person's approval, the merge loop starts from that approval and ends at the merge, and the deploy loop waits on the deploy that follows it. Merging and deploying are apart so that neither waits in the other's pass: the merge loop never sits watching a deploy, and the deploy loop, which only reads, records each deploy as soon as it ends; the merge loop merges the next approved PR only once the deploy before it is recorded (`factory-merge`, **The deploy is clear**). Each loop is a skill that runs one pass, and may run on its own, `/loop /factory-<loop>`, at its own pace; `/factory` runs one pass of each.
 
 ```
-          factory-intake                     factory-implement                               factory-merge                   factory-deploy
-Todo ─ queue ─ triage ─ plan ─┬─ worktree ─ build ─ review ─ evidence ─ PR ─ merge agent ─┬─ approval ─ deploy agent ─┬─ watch ─ site ─ Done
-                              │                                                          │  (person)   (merge only)  │
-                  Factory · plan record                                    issue moved to In Review       Factory · merged record
+          factory-intake                     factory-implement                               factory-merge                  factory-deploy
+Todo ─ queue ─ triage ─ plan ─┬─ worktree ─ build ─ review ─ evidence ─ PR ─ merge agent ─┬─ approval ─ integrate agent ─┬─ deploy agent ─ Done
+                              │                                                          │    (person)                   │
+                  Factory · plan record                               issue moved to In Review               Factory · merged record
 ```
 
 | Loop | Skill | Owns the issues (**Where an issue is**) | Hands on by |
 | --- | --- | --- | --- |
 | intake | `factory-intake` | in `linear.intake` or `linear.fallback` (10), and feasible with no plan (9) | posting the `**Factory · plan**` record |
 | implement | `factory-implement` | planned, from the worktree to the PR (4 to 8), and a PR open while its issue is in `linear.states.working` (3) | moving the issue to `linear.states.review` once the `merge` agent hands its PR back green and `CLEAN` |
-| merge | `factory-merge` | a PR open while its issue is in `linear.states.review` (3) | posting the `**Factory · merged**` record once the `deploy` agent merged it; or moving the issue back to `linear.states.working`, for the implement loop, when an unapproved PR fell behind `main` or a check went red |
-| deploy | `factory-deploy` | a PR merged without a `deployed` record (1) | posting the `**Factory · deployed**` record and moving the issue to `linear.states.done`; or handing it back, labelled `deployFailed`, when the deploy or the site failed |
+| merge | `factory-merge` | a PR open while its issue is in `linear.states.review` (3) | posting the `**Factory · merged**` record once the `integrate` agent merged it; or moving the issue back to `linear.states.working`, for the implement loop, when an unapproved PR fell behind `main` or a check went red |
+| deploy | `factory-deploy` | a PR merged without a `deployed` record (1) | posting the `**Factory · deployed**` record once the `deploy` agent saw it deployed, and moving the issue to `linear.states.done`; or handing it back, labelled `deployFailed`, when the deploy or the site failed |
 
 Each issue is owned by one loop at a time, read from its records and its Linear state, so the loops never act on the same issue and need nothing from each other but those. The rules that keep them apart:
 
@@ -120,7 +120,7 @@ Everything the line knows, it reads back each pass from three places, so stoppin
 | `**Factory · tests** \`<sha>\`` | factory-build (tests flow) | the tests gate passed at `<sha>`, with its report (each new test and the faults it caught), and the branch was pushed: the tests flow's green. After a rebase that kept the proof, it names the head the faults ran at |
 | `**Factory · review <k>: pass** \`<sha>\`` or `**Factory · review <k>: findings** \`<sha>\`` | factory-review | round `<k>`'s verdict on `<sha>`, and its findings |
 | `**Factory · PR** <url>` | factory-evidence | the PR is open, with its evidence |
-| `**Factory · merged** <pr url> \`<sha>\`` | factory-merge | the `deploy` agent merged the PR, as merge commit `<sha>`; its deploy is the deploy loop's |
+| `**Factory · merged** <pr url> \`<sha>\`` | factory-merge | the `integrate` agent merged the PR, as merge commit `<sha>`; its deploy is the deploy loop's |
 | `**Factory · deployed** <run url>` | factory-deploy | the merge deployed and the site answered |
 | `**Factory · handed back** (<station>)` | any station | why a person must look; the issue is labelled needs review or needs setup |
 
@@ -150,7 +150,7 @@ The line works up to `caps.inFlight` issues and `caps.awaitingApproval` open PRs
 - **Database.** One Postgres (`just db`) serves them all, and every loop: the server's tests make a database of their own for each test (`#[sqlx::test]`).
 - **The main checkout's git.** Commands that change the main repository's refs or worktrees (`git fetch`, `git worktree add` and `remove`, `git branch -D`, the evidence branch's scratch worktree) run one at a time; a lock error (`cannot lock ref`, `index.lock`) is waited out and run again, not handed back. Commits inside an issue's worktree need no turn.
 - **The evidence branch.** Several issues push to it: a rejected push is fetched, rebased onto `origin/<evidenceBranch>` and pushed again, up to five times.
-- **Merging and deploying.** The `merge` agent prepares several PRs at once, each in its PR's worktree (the implement loop); the `deploy` agent merges them one at a time (the merge loop), and the deploy loop watches each merge's deploy. A merge waits until the deploy before it is recorded, since each merge moves `main` and deploys it (factory-merge, **The deploy is clear**). Each PR then needs the version line rebased, which the `deploy` agent does.
+- **Merging and deploying.** The `merge` agent prepares several PRs at once, each in its PR's worktree (the implement loop); the `integrate` agent merges them one at a time (the merge loop), and the `deploy` agent watches each merge's deploy (the deploy loop). A merge waits until the deploy before it is recorded, since each merge moves `main` and deploys it (factory-merge, **The deploy is clear**). Each PR then needs the version line rebased, which the `integrate` agent does.
 
 ## Acting on GitHub as the App
 
@@ -162,7 +162,7 @@ git -c credential.helper= -c 'credential.helper=!f() { echo username=x-access-to
     -c url.https://github.com/.pushInsteadOf=git@github.com: push ...
 ```
 
-Commits keep the local git identity. Merging is the `deploy` agent's, as the person (`gh` without `GH_TOKEN`), once the person approved the PR's head.
+Commits keep the local git identity. Merging is the `integrate` agent's, as the person (`gh` without `GH_TOKEN`), once the person approved the PR's head.
 
 ## Hand-back
 

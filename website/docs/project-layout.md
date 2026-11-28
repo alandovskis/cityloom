@@ -22,7 +22,7 @@ fits together.
 | `docs/`    | Working documents that are not on this site: the French glossary (`glossary-fr-ca.md`) and the design specs and implementation plans in `superpowers/`. The data model is drawn on this site: [Data model: streets and junctions](architecture/data-model-streets-junctions.md). |
 | `deploy/`  | The `Dockerfile` of the image that `just deploy` uploads to Railway. Nothing is compiled in it.                                                                                                                                                                                  |
 | `.github/` | The CI workflows, the issue forms, the labels (`labels.yml`), the rules that turn issue answers into labels, Dependabot's settings and the `browser-tests` action that every browser tier shares.                                                                                |
-| `.claude/` | The agents used by Claude Code, such as the one that merges and deploys pull requests.                                                                                                                                                                                           |
+| `.claude/` | The agents used by Claude Code, such as the ones that merge pull requests and watch their deploys.                                                                                                                                                                               |
 
 The files at the top level:
 
