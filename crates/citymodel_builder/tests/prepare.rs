@@ -112,7 +112,10 @@ fn the_whole_pipeline_runs_in_order_against_fake_tools() {
         root,
         "osmium",
         // the import needs real OSM data: osmium's merge writes a small extract of the Plateau as the roads
-        &format!(r#"if [ "$1" = merge ]; then cp '{}' "$5"; fi"#, Path::new(env!("CARGO_MANIFEST_DIR")).join("../../e2e/fixtures/plateau.osm.pbf").display()),
+        &format!(
+            r#"if [ "$1" = merge ]; then cp '{}' "$5"; fi"#,
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/e2e/fixtures/plateau.osm.pbf").display()
+        ),
     );
     let job = job(root, osmium.to_str().unwrap());
     let (progress, sink) = quiet_progress(prepare::steps(&job), root);

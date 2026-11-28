@@ -14,7 +14,7 @@ const HIGHWAYS: &str = "motorway,motorway_link,trunk,trunk_link,primary,primary_
 /// A small real OSM extract (part of the Plateau, in Montréal), which the fake osmium's `merge` writes as the roads:
 /// the import step needs OSM data it can read, and the osmium steps before it only filter.
 fn plateau() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../e2e/fixtures/plateau.osm.pbf")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/e2e/fixtures/plateau.osm.pbf")
 }
 
 /// A fake osmium body: `merge` copies `roads` to its output (`-o`, the fifth argument); every other call does nothing.

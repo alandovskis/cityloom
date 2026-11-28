@@ -104,7 +104,7 @@ fn montreals_config_is_its_numbers_bit_for_bit() {
 
 /// Part of the Plateau, in Montréal, which the fake osmium's `merge` writes as the roads.
 fn plateau() -> PathBuf {
-    repository().join("e2e/fixtures/plateau.osm.pbf")
+    repository().join("tests/e2e/fixtures/plateau.osm.pbf")
 }
 
 fn fake_osmium(dir: &Path) -> String {

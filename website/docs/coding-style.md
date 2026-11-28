@@ -21,13 +21,13 @@ editor's files are relative to `crates/cityloom_editor/src/`.
 
 ## What tools decide
 
-- rustfmt lays out the Rust, and Prettier lays out `e2e/`, `web/*.js` and `website/`. `just format` runs both and
+- rustfmt lays out the Rust, and Prettier lays out `tests/e2e/`, `web/*.js` and `website/`. `just format` runs both and
   `just format-check` only checks, as CI does (see [Tests and formatting](getting-started.md#tests-and-formatting));
   for `website/` alone, the Documentation workflow runs the Prettier check. Example: `justfile` (`format`). **Tool**
 - The code compiles with no warning: CI denies every compiler warning. Example: `.github/workflows/presubmit.yml`
   (`RUSTFLAGS`). **Tool**
 - No formatter covers the rest, such as `web/*.css`, the HTML, `scripts/`, the SQL, the `.ftl` files, and the Markdown
-  outside `website/` and `e2e/`: these are laid out by hand. Example: `web/app.css` (`:root`). **Review**
+  outside `website/` and `tests/e2e/`: these are laid out by hand. Example: `web/app.css` (`:root`). **Review**
 
 Clippy denies nothing: it runs only for [SonarCloud](testing/when-tests-run.md#sonarcloud), with its lints capped at warnings.
 
@@ -200,10 +200,10 @@ What belongs in JavaScript is in [Architecture](architecture/index.md#javascript
 
 ### TypeScript
 
-- A spec takes `test` and `expect` from `./fixtures`. Example: `e2e/tests/shell.spec.ts` (`expect`, `test`).
+- A spec takes `test` and `expect` from `./fixtures`. Example: `tests/e2e/tests/shell.spec.ts` (`expect`, `test`).
   **Review**
 - The title of a spec's test is a sentence that states the behaviour. It begins in lower case, unless its first word
-  is a name such as a key, a control or a language, and has no final period. Example: `e2e/tests/street.spec.ts`
+  is a name such as a key, a control or a language, and has no final period. Example: `tests/e2e/tests/street.spec.ts`
   (`a piece is selected with the arrow keys, announced, and shown in the details`). **Review**
 
 ### Python

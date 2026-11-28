@@ -25,7 +25,7 @@ feature's tests at that level.
   - The Component cells of every `map` feature, and of every `street` feature but `street.standards`, are 0. The
     component tests of the two pages are `street/view/tests.rs` (185 tests) and `map/view/tests.rs` (122 tests) in
     `crates/cityloom_editor/src/`, which are unmapped.
-  - `pages.credits` is 0 at every level. `e2e/tests/home.spec.ts` and `e2e/tests/about.spec.ts`, which belong to other
+  - `pages.credits` is 0 at every level. `tests/e2e/tests/home.spec.ts` and `tests/e2e/tests/about.spec.ts`, which belong to other
     features, open `/credits.html`.
   - The Server cells of `projects.share`, `account.sync` and `account.sign-in` leave out `share_api.rs`, `work_api.rs`
     and `auth_flow.rs` of `crates/cityloom_server/tests/`, which are unmapped.

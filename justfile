@@ -10,7 +10,7 @@ default:
 setup:
     npm ci
     cargo install wasm-bindgen-cli --version {{wasm_bindgen}} --root .tools
-    cd e2e && npm ci && npx playwright install chromium
+    cd tests/e2e && npm ci && npx playwright install chromium
 
 # Install what building the server for deployment needs (once): the musl target, cargo-zigbuild and a hint for zig.
 setup-deploy:
@@ -74,35 +74,35 @@ server:
     cargo build -p cityloom_server --features test-provider
     ./scripts/pin-server.sh
 
-# The browser tests' road data: each OSM fixture of e2e/fixtures imported (`citymodel_builder fixture`) into one network
-# tile, e2e/fixtures/generated/<name>.json (gitignored), which the specs serve as a metro tile and the E2E tier packs.
+# The browser tests' road data: each OSM fixture of tests/e2e/fixtures imported (`citymodel_builder fixture`) into one network
+# tile, tests/e2e/fixtures/generated/<name>.json (gitignored), which the specs serve as a metro tile and the E2E tier packs.
 [private]
 e2e-fixtures:
     #!/usr/bin/env sh
     set -eu
-    mkdir -p e2e/fixtures/generated
+    mkdir -p tests/e2e/fixtures/generated
     for name in plateau turbo open-ends; do
-        cargo run -q -p citymodel_builder -- fixture "e2e/fixtures/$name.osm.pbf" "e2e/fixtures/generated/$name.json"
+        cargo run -q -p citymodel_builder -- fixture "tests/e2e/fixtures/$name.osm.pbf" "tests/e2e/fixtures/generated/$name.json"
     done
 
-# All three tiers of browser tests (e2e/tiers.json) after one build; with arguments, just those specs whatever their tier, `archive.spec.ts` skipping itself: `just e2e tests/street.spec.ts`. The integration tier needs `DATABASE_URL`.
+# All three tiers of browser tests (tests/e2e/tiers.json) after one build; with arguments, just those specs whatever their tier, `archive.spec.ts` skipping itself: `just e2e tests/street.spec.ts`. The integration tier needs `DATABASE_URL`.
 e2e *args: build server e2e-fixtures
     #!/usr/bin/env sh
     set -eu
-    cd e2e
+    cd tests/e2e
     if [ -n "{{args}}" ]; then exec npx playwright test {{args}}; fi
     npx playwright test --project=ui
     npx playwright test --project=integration
-    cd ..
+    cd ../..
     scripts/e2e-archive.sh
 
 # UI tier: one page, the network stubbed, the static server only (no database, no archive). Builds first, like `e2e`.
 e2e-ui *args: build server e2e-fixtures
-    cd e2e && npx playwright test --project=ui {{args}}
+    cd tests/e2e && npx playwright test --project=ui {{args}}
 
 # Integration tier: the real server and a Postgres (`DATABASE_URL`: `just db` starts one): sign-in, the account and the sync. Builds first.
 e2e-integration *args: build server e2e-fixtures
-    cd e2e && npx playwright test --project=integration {{args}}
+    cd tests/e2e && npx playwright test --project=integration {{args}}
 
 # E2E tier: the whole path from data to page. Packs the e2e fixtures (`citymodel_builder pack`) into target/e2e-archive and runs `archive.spec.ts` and the delivery specs, and the map and street specs again, against a fresh server that unpacks it (E2E_ARCHIVE=1). Builds first, like `e2e`.
 e2e-archive *args: build server e2e-fixtures
@@ -118,12 +118,12 @@ test-scripts:
 # Format the Rust (rustfmt.toml), the scripts and the documentation site (.prettierrc.json).
 format:
     cargo fmt
-    cd e2e && npx prettier --ignore-path ../.prettierignore --write . ../web/*.js ../website
+    cd tests/e2e && npx prettier --ignore-path ../../.prettierignore --write . ../../web/*.js ../../website
 
 # Fail if anything is not formatted, without changing it.
 format-check:
     cargo fmt --check
-    cd e2e && npx prettier --ignore-path ../.prettierignore --check . ../web/*.js ../website
+    cd tests/e2e && npx prettier --ignore-path ../../.prettierignore --check . ../../web/*.js ../../website
 
 # What the SonarCloud analysis reads, in target/sonar: the Rust coverage as LCOV (host tests only: the wasm-only code and the browser tests are not measured), and Clippy's findings as JSON. Sonar judges the findings, so lints are capped at warnings here; a build error still fails. Needs cargo-llvm-cov (`cargo install cargo-llvm-cov --locked`) and the llvm-tools component.
 sonar-reports:
@@ -162,4 +162,4 @@ deploy:
 # Remove build output.
 clean:
     cargo clean
-    rm -rf web/pkg e2e/test-results e2e/playwright-report
+    rm -rf web/pkg tests/e2e/test-results tests/e2e/playwright-report

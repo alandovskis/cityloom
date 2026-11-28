@@ -11,9 +11,9 @@ This page says what checks accessibility, translation and security. The levels a
 
 The target is WCAG 2.2 AA.
 
-- `e2e/tests/a11y.spec.ts` runs axe (`@axe-core/playwright`) with the tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`
+- `tests/e2e/tests/a11y.spec.ts` runs axe (`@axe-core/playwright`) with the tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`
   and `wcag22aa`. `compare.spec.ts` runs axe too.
-- `e2e/tests/junction-a11y.spec.ts` measures the junction's targets at 1440, 1050, 600 and 280 px wide.
+- `tests/e2e/tests/junction-a11y.spec.ts` measures the junction's targets at 1440, 1050, 600 and 280 px wide.
 - `shared/contrast.rs` measures the colour tokens of the CSS (see [The guards](levels.md#the-guards)).
 
 ## Translation
@@ -23,7 +23,7 @@ The target is WCAG 2.2 AA.
   `restriction`, `share`, `shell`, `street` and `sync`.
 - `i18n_guard` finds wording left in the code (see [The guards](levels.md#the-guards)).
 - `shared::i18n::typography` applies the OQLF's spacing to fr-CA, and is tested beside it.
-- `e2e/tests/language.spec.ts` switches a page to fr-CA from the account menu.
+- `tests/e2e/tests/language.spec.ts` switches a page to fr-CA from the account menu.
 
 ## Security
 

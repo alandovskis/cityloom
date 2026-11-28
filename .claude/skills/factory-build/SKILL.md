@@ -63,7 +63,7 @@ python3 "$F/gate.py" docs --repo <wt> --base "$BASE"
 
 - `PASS`: push the branch as the App (README, **Acting on GitHub as the App**): `git -C <wt> push -u origin HEAD` with the App's credential helper. Then post `**Factory · docs** \`<HEAD sha>\``, the gate's report in a code block and the writer's `notes`. The issue goes on to `factory-review`.
 - `FAIL`: back to D1 with the gate's problems, quoted; at most `rounds.green` rounds in all, then hand back with the last report. A problem that names a file that is not documentation, or a guarded one, is never fixed by you: send it back, and if it comes again, hand back.
-- `REFUSED`: as for the red gate (a site not set up: `npm ci` in `e2e/` and `just setup-docs` in `<wt>`, then gate again).
+- `REFUSED`: as for the red gate (a site not set up: `npm ci` in `tests/e2e/` and `just setup-docs` in `<wt>`, then gate again).
 
 A push that git rejects is a hand-back: never force-push.
 

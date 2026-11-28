@@ -39,8 +39,8 @@ class Worktree(unittest.TestCase):
     def test_the_implementer_may_not_edit_a_test(self):
         for path in [
             "crates/cityloom_editor/src/street/view/tests.rs",
-            "e2e/tests/street.spec.ts",
-            "e2e/tiers.json",
+            "tests/e2e/tests/street.spec.ts",
+            "tests/e2e/tiers.json",
             "scripts/ci/spec-map.json",
             ".github/workflows/presubmit.yml",
             "scripts/check-version.sh",
@@ -61,7 +61,7 @@ class Worktree(unittest.TestCase):
                 self.assertIsNone(self.call("Edit", {"file_path": str(self.root / path)}))
 
     def test_other_agents_and_the_session_itself_pass(self):
-        path = {"file_path": str(self.root / "e2e/tests/street.spec.ts")}
+        path = {"file_path": str(self.root / "tests/e2e/tests/street.spec.ts")}
         self.assertIsNone(self.call("Write", path, agent="test-writer"))
         self.assertIsNone(self.call("Write", path, agent=None))
         # The red commit allows a dependency the plan names.
@@ -72,22 +72,22 @@ class Worktree(unittest.TestCase):
         nested = self.root / "deeper"
         nested.mkdir()
         (nested / ".git").write_text("gitdir: /x\n", encoding="utf-8")
-        self.assertIsNotNone(self.call("Edit", {"file_path": str(nested / "e2e/tests/a.spec.ts")}))
+        self.assertIsNotNone(self.call("Edit", {"file_path": str(nested / "tests/e2e/tests/a.spec.ts")}))
         self.assertIsNone(self.call("Edit", {"file_path": str(self.root / "deeper-notes/e2e/tests.txt")}))
 
     def test_a_shell_command_that_writes_a_test_is_refused(self):
         for command in [
             "sed -i '' 's/2/3/' crates/cityloom_editor/src/street/view/tests.rs",
-            "echo x > e2e/tests/street.spec.ts",
-            "cat >> e2e/tiers.json <<EOF\nx\nEOF",
+            "echo x > tests/e2e/tests/street.spec.ts",
+            "cat >> tests/e2e/tiers.json <<EOF\nx\nEOF",
             "printf x | tee scripts/ci/spec-map.json",
-            "rm e2e/tests/street.spec.ts",
+            "rm tests/e2e/tests/street.spec.ts",
             "mv a.rs crates/m/tests/a.rs",
             "cp /tmp/x .claude/settings.json",
-            "git checkout HEAD~1 -- e2e/tests/street.spec.ts",
+            "git checkout HEAD~1 -- tests/e2e/tests/street.spec.ts",
             "git restore crates/m/src/tests.rs",
             "perl -pi -e 's/a/b/' crates/m/src/tests.rs",
-            "python3 -c \"open('e2e/tests/a.spec.ts','w')\"",
+            "python3 -c \"open('tests/e2e/tests/a.spec.ts','w')\"",
             "sed -i '' 's/a/b/' crates/cityloom_editor/src/dependency_guard.rs",
         ]:
             with self.subTest(command):
@@ -108,13 +108,13 @@ class Worktree(unittest.TestCase):
 
     def test_reading_running_and_committing_pass(self):
         for command in [
-            "cat e2e/tests/street.spec.ts",
+            "cat tests/e2e/tests/street.spec.ts",
             "grep -rn splits crates/m/src/tests.rs",
             "cargo test -p cityloom_model street::tests",
             "just e2e tests/street.spec.ts",
             "scripts/check-version.sh",
             "git add crates/m/src/street.rs && git commit -m 'Split at a junction'",
-            "git diff HEAD~1 -- e2e/tests",
+            "git diff HEAD~1 -- tests/e2e/tests",
             "cargo test 2>&1 | tail -n 40 > /tmp/out.txt",
             "git log --oneline",
         ]:
@@ -130,10 +130,10 @@ class Hook(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             (Path(tmp) / ".git").mkdir()
             done = self.run_hook(
-                {"agent_type": "implement", "tool_name": "Write", "tool_input": {"file_path": f"{tmp}/e2e/tiers.json"}, "cwd": tmp}
+                {"agent_type": "implement", "tool_name": "Write", "tool_input": {"file_path": f"{tmp}/tests/e2e/tiers.json"}, "cwd": tmp}
             )
         self.assertEqual(done.returncode, 2)
-        self.assertIn("e2e/tiers.json", done.stderr)
+        self.assertIn("tests/e2e/tiers.json", done.stderr)
 
     def test_anything_else_exits_0_silently(self):
         done = self.run_hook({"tool_name": "Write", "tool_input": {"file_path": "/x/e2e/tiers.json"}, "cwd": "/x"})

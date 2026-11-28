@@ -21,14 +21,14 @@ fichiers de l’éditeur sont relatifs à `crates/cityloom_editor/src/`.
 
 ## Ce que les outils décident
 
-- rustfmt met en forme le Rust, et Prettier met en forme `e2e/`, `web/*.js` et `website/`. `just format` exécute les
+- rustfmt met en forme le Rust, et Prettier met en forme `tests/e2e/`, `web/*.js` et `website/`. `just format` exécute les
   deux et `just format-check` ne fait que vérifier, comme l’intégration continue (voir [Tests et mise en
   forme](getting-started.md#tests-et-mise-en-forme)); pour `website/` seul, le flux de travail Documentation exécute
   la vérification de Prettier. Exemple : `justfile` (`format`). **Outil**
 - Le code compile sans avertissement : l’intégration continue refuse chaque avertissement du compilateur. Exemple :
   `.github/workflows/presubmit.yml` (`RUSTFLAGS`). **Outil**
 - Aucun outil de mise en forme ne couvre le reste, comme `web/*.css`, le HTML, `scripts/`, le SQL, les fichiers `.ftl`
-  et le Markdown hors de `website/` et de `e2e/` : ils sont mis en forme à la main. Exemple : `web/app.css` (`:root`).
+  et le Markdown hors de `website/` et de `tests/e2e/` : ils sont mis en forme à la main. Exemple : `web/app.css` (`:root`).
   **Revue**
 
 Clippy ne refuse rien : il ne s’exécute que pour [SonarCloud](testing/when-tests-run.md#sonarcloud), ses constats plafonnés au niveau
@@ -214,11 +214,11 @@ Ce qui relève de JavaScript est décrit dans [Architecture](architecture/index.
 
 ### TypeScript
 
-- Une spécification prend `test` et `expect` de `./fixtures`. Exemple : `e2e/tests/shell.spec.ts` (`expect`, `test`).
+- Une spécification prend `test` et `expect` de `./fixtures`. Exemple : `tests/e2e/tests/shell.spec.ts` (`expect`, `test`).
   **Revue**
 - Le titre d’un test d’une spécification est une phrase qui énonce le comportement. Il commence par une minuscule, à
   moins que son premier mot ne soit un nom comme celui d’une touche, d’une commande ou d’une langue, et n’a pas de
-  point final. Exemple : `e2e/tests/street.spec.ts`
+  point final. Exemple : `tests/e2e/tests/street.spec.ts`
   (`a piece is selected with the arrow keys, announced, and shown in the details`). **Revue**
 
 ### Python

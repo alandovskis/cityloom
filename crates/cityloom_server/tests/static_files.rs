@@ -1,4 +1,4 @@
-//! The cases `e2e/tests/serve.spec.ts` checks, against the router itself.
+//! The cases `tests/e2e/tests/serve.spec.ts` checks, against the router itself.
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
