@@ -498,4 +498,52 @@ mod tests {
         j.select(Target::Arm(uid));
         assert_eq!(selection_text(&j.view(), &en(), Units::Metres).unwrap(), "Sample Avenue 2 (north), 0 degrees");
     }
+
+    #[test]
+    fn a_stop_in_the_bus_lane_says_so_in_both_languages() {
+        // two entering lanes beside the bus piece, the stop standing in the bus piece
+        let pieces = [
+            ("sidewalk", 3_000, None),
+            ("travel", 3_500, Some(0)),
+            ("travel", 3_500, Some(1)),
+            ("travel", 3_500, Some(1)),
+            ("bus", 3_500, Some(1)),
+            ("sidewalk", 3_000, None),
+        ];
+        let (mut j, uid) = crate::junction::view::tests::stopped(0, &pieces, |p| {
+            let mut s = crate::junction::view::tests::at_lane(p, 0, 25_000, true);
+            s.lane = p.pieces.iter().position(|x| crate::shared::catalogue::KINDS[x.kind].id == "bus");
+            s
+        });
+        let v = j.view();
+        let s = &v.arms.iter().find(|a| a.uid == uid).unwrap().stops[0];
+        assert!(s.lane.is_none() && s.in_bus_lane);
+        j.select(Target::Arm(uid));
+        assert_eq!(
+            selection_text(&j.view(), &en(), Units::Metres).unwrap(),
+            "Unnamed local street (north), 0 degrees. Curb stop on the left as seen from the centre, 25.0 m from the centre, in the bus lane."
+        );
+        assert_eq!(
+            selection_text(&j.view(), &fr(), Units::Metres).unwrap(),
+            "Rue locale sans nom (nord), 0 degré. Arrêt au trottoir à gauche vu du centre, à 25,0\u{a0}m du centre, dans la voie réservée aux autobus."
+        );
+    }
+
+    #[test]
+    fn a_stop_on_no_entering_lane_says_only_where_it_stands_in_both_languages() {
+        use crate::junction::view::tests::{end_stop, junction_with_stops};
+        let (mut j, uid) = junction_with_stops(|_| {}, |lane, walk| vec![crate::street::model::EndStop { lane: None, ..end_stop(25_000, 33_000, lane, walk) }]);
+        let v = j.view();
+        let s = &v.arms.iter().find(|a| a.uid == uid).unwrap().stops[0];
+        assert!(s.lane.is_none() && !s.in_bus_lane);
+        j.select(Target::Arm(uid));
+        assert_eq!(
+            selection_text(&j.view(), &en(), Units::Metres).unwrap(),
+            "Sample Avenue 2 (north), 0 degrees. Curb stop on the left as seen from the centre, 25.0 m from the centre."
+        );
+        assert_eq!(
+            selection_text(&j.view(), &fr(), Units::Metres).unwrap(),
+            "Sample Avenue 2 (nord), 0 degré. Arrêt au trottoir à gauche vu du centre, à 25,0\u{a0}m du centre."
+        );
+    }
 }

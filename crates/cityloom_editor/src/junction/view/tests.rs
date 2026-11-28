@@ -3687,7 +3687,7 @@ fn said_of(j: &Junction, id: &str) -> String {
 
 /// A four-way whose every arm reads a street of `pieces` (kind id, width, direction: 1 in, 0 out), in `region`, with
 /// one stop on the north arm: `make` is given that arm's profile and returns it.
-fn stopped(region: usize, pieces: &[(&str, i32, Option<usize>)], make: impl Fn(&Profile) -> crate::street::model::EndStop) -> (Junction, u32) {
+pub(crate) fn stopped(region: usize, pieces: &[(&str, i32, Option<usize>)], make: impl Fn(&Profile) -> crate::street::model::EndStop) -> (Junction, u32) {
     use crate::shared::catalogue::{REGIONS, StreetClass, kind_index};
     use crate::street::model::Piece;
     let pieces: Vec<Piece> =
@@ -3713,7 +3713,7 @@ fn lanes(enter: usize) -> Vec<(&'static str, i32, Option<usize>)> {
     v
 }
 
-fn at_lane(prof: &Profile, lane: usize, near_mm: i32, enters: bool) -> crate::street::model::EndStop {
+pub(crate) fn at_lane(prof: &Profile, lane: usize, near_mm: i32, enters: bool) -> crate::street::model::EndStop {
     use crate::shared::catalogue::Side;
     use crate::street::model::{EndStop, StopKind};
     let piece = (0..prof.pieces.len()).find(|&i| crate::junction::model::stops::lane_of(prof, i) == Some(lane)).expect("a lane");

@@ -108,7 +108,7 @@ mod tests {
     use super::*;
     use crate::city::scenario::Action;
     use crate::city::store::CityStore;
-    use crate::junction::model::{PRIORITY, SIGNAL};
+    use crate::junction::model::{Junction, PRIORITY, ROUNDABOUT, SIGNAL};
     use crate::shared::i18n::Locale;
     use crate::shared::ports::{FakePage, MemoryStorage, Page, RecordingAnnouncer, Storage, test_ports_with_time};
     use crate::shared::said::say_now;
@@ -156,6 +156,32 @@ mod tests {
         let binding = CityBinding { store: CityStore::sample(own), place: Place::Junction(node) };
         let vm = JunctionCompareVm::new(ports.clone(), crate::i18n_for(Locale::En), binding.clone());
         Rig { vm, binding, page, said, storage, ports }
+    }
+
+    /// A city with one junction and one scenario, which `edit` makes from the baseline; the page at
+    /// `/compare.html?junction=N`. As `rig(1, "")`, with `edit` instead of a changed control.
+    fn rig_with(edit: impl Fn(&mut Junction) -> bool) -> Rig {
+        let (mut ports, said, storage, _) = test_ports_with_time();
+        let page = Rc::new(FakePage::default());
+        ports.page = page.clone();
+        let own: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage.clone(), "p1"));
+        let store = CityStore::sample(own.clone());
+        let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let binding = CityBinding { store, place: Place::Junction(node) };
+        let id = binding.act(Action::Create("Scenario 0".to_string())).unwrap().unwrap();
+        let mut j = binding.junction_editor(Some(id)).unwrap();
+        assert!(edit(&mut j));
+        binding.keep_junction_in(j.snapshot(), Some(id)).unwrap();
+        *page.path.borrow_mut() = format!("/compare.html?junction={node}");
+        ports.storage = own.clone();
+        let binding = CityBinding { store: CityStore::sample(own), place: Place::Junction(node) };
+        let vm = JunctionCompareVm::new(ports.clone(), crate::i18n_for(Locale::En), binding.clone());
+        Rig { vm, binding, page, said, storage, ports }
+    }
+
+    /// One side of the comparison, read from `j` as `open_side` reads a design.
+    fn side(j: &Junction) -> Side {
+        Side { state: j.current().clone(), view: Rc::new(j.view()) }
     }
 
     fn stored(storage: &MemoryStorage) -> Vec<(String, Option<String>)> {
@@ -276,5 +302,61 @@ mod tests {
         r.vm().i18n().set(Locale::FrCa);
         r.vm().choose(Pick::B, None);
         assert_eq!(r.said.take(), ["Référence et Référence sont identiques."]);
+    }
+
+    /// Every group of the summary is empty.
+    fn no_lines(summary: &Summary) -> bool {
+        summary.groups.iter().all(|g| g.lines.is_empty())
+    }
+
+    #[test]
+    fn a_turbo_layout_on_one_side_is_a_line_of_the_control_group() {
+        let mut a = Junction::new(0);
+        assert!(a.set_control(ROUNDABOUT));
+        let mut b = a.clone();
+        assert!(b.set_turbo(Some(0)));
+        let label = b.view().turbo.as_ref().unwrap().label_key;
+        let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+
+        let summary = JunctionCompareVm::summary_of(&side(&a), &side(&b));
+        let lines = &group(&summary, "cmp-h-control").lines;
+        assert_eq!(lines.iter().map(|l| l.key).collect::<Vec<_>>(), ["cmp-jn-turbo"], "{summary:?}");
+        let line = &lines[0];
+        let arg = |name: &str| line.args.iter().find(|(n, _)| *n == name).map(|(_, a)| a.clone()).unwrap();
+        assert_eq!(arg("a"), Arg::Msg("cmp-jn-turbo-none"));
+        let Arg::Said(b_said) = arg("b") else { panic!("{line:?}") };
+        assert_eq!(b_said.key, label);
+        assert_eq!(say_now(&en, Units::default(), line), "Turbo layout: none → Basic turbo roundabout, mini size");
+        assert_eq!(say_now(&fr, Units::default(), line), "Giratoire turbo\u{a0}: aucun → Giratoire turbo de base, taille mini");
+
+        let summary = JunctionCompareVm::summary_of(&side(&b), &side(&a));
+        let lines = &group(&summary, "cmp-h-control").lines;
+        assert_eq!(lines.iter().map(|l| l.key).collect::<Vec<_>>(), ["cmp-jn-turbo"], "{summary:?}");
+        assert_eq!(say_now(&en, Units::default(), &lines[0]), "Turbo layout: Basic turbo roundabout, mini size → none");
+        assert_eq!(say_now(&fr, Units::default(), &lines[0]), "Giratoire turbo\u{a0}: Giratoire turbo de base, taille mini → aucun");
+    }
+
+    #[test]
+    fn a_raised_table_is_named_among_the_other_differences() {
+        let r = rig_with(|j| j.set_raised(true));
+        let summary = r.vm().summary();
+        assert_eq!(summary.also, [Said::new("cmp-other-raised")], "{summary:?}");
+        assert!(no_lines(&summary), "{summary:?}");
+        assert_eq!(say_now(&crate::i18n_for(Locale::En), Units::default(), &summary.also[0]), "the raised table");
+        assert_eq!(say_now(&crate::i18n_for(Locale::FrCa), Units::default(), &summary.also[0]), "le carrefour surélevé");
+    }
+
+    #[test]
+    fn a_changed_corner_is_named_among_the_other_differences() {
+        let r = rig_with(|j| {
+            let v = j.view();
+            let (uid, radius_mm) = (v.corners[0].uid, v.corners[0].radius_mm);
+            j.set_corner(uid, radius_mm + 1000)
+        });
+        let summary = r.vm().summary();
+        assert_eq!(summary.also, [Said::new("cmp-other-corners")], "{summary:?}");
+        assert!(no_lines(&summary), "{summary:?}");
+        assert_eq!(say_now(&crate::i18n_for(Locale::En), Units::default(), &summary.also[0]), "corners");
+        assert_eq!(say_now(&crate::i18n_for(Locale::FrCa), Units::default(), &summary.also[0]), "les coins");
     }
 }
