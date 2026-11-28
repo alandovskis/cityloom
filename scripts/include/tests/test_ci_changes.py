@@ -649,6 +649,110 @@ class Pipelines(unittest.TestCase):
         for image in ("rust", "js", "docs", "e2e"):
             self.assertIn(f"cityloom-{image}", images)
 
+    # The jobs that build or test run in the toolchain images, and which image each takes: Format and the browser build
+    # need Rust and Node together, which only the e2e image has.
+    IMAGE_JOBS = {
+        "presubmit.yml": {
+            "format": "e2e",
+            "test": "rust",
+            "wasm": "rust",
+            "server-release": "rust",
+            "build": "e2e",
+            "ui": "e2e",
+            "integration": "e2e",
+        },
+        "postsubmit.yml": {
+            "format": "e2e",
+            "test": "rust",
+            "wasm": "rust",
+            "server-release": "rust",
+            "build": "e2e",
+            "ui": "e2e",
+            "integration": "e2e",
+            "e2e": "e2e",
+        },
+        "docs.yml": {"build": "docs"},
+    }
+    RUNNER_JOBS = {
+        "presubmit.yml": ("changes", "scripts", "version", "ci"),
+        "postsubmit.yml": ("scripts", "ci", "deploy"),
+        "docs.yml": ("deploy",),
+    }
+
+    def test_the_toolchain_jobs_run_in_the_images(self):
+        for workflow, jobs in self.IMAGE_JOBS.items():
+            found = self.jobs(workflow)
+            for job, image in jobs.items():
+                with self.subTest(workflow=workflow, job=job):
+                    text = found[job]
+                    self.assertIn("container:", text)
+                    self.assertIn(f"cityloom-{image}:${{{{ needs.images.outputs.tag }}}}", text)
+                    needs = re.search(r"needs: (\[[^\]]*\]|\S+)", text)
+                    self.assertIsNotNone(needs)
+                    self.assertIn("images", needs.group(1))
+
+    def test_the_image_jobs_set_up_no_toolchain(self):
+        # The image has the toolchain; a setup step left in a job would put a second one beside it.
+        setups = (
+            "dtolnay/rust-toolchain",
+            "actions/setup-node",
+            "extractions/setup-just",
+            "cargo install wasm-bindgen-cli",
+            "playwright install",
+        )
+        action = (ROOT / ".github" / "actions" / "browser-tests" / "action.yml").read_text(encoding="utf-8")
+        for setup in setups:
+            self.assertNotIn(setup, action, "browser-tests action")
+        for workflow, jobs in self.IMAGE_JOBS.items():
+            found = self.jobs(workflow)
+            for job in jobs:
+                for setup in setups:
+                    with self.subTest(workflow=workflow, job=job, setup=setup):
+                        self.assertNotIn(setup, found[job])
+
+    def test_the_runner_jobs_stay_on_the_runner(self):
+        # What needs no toolchain (the selector, the script tests, the version check, the summaries) and the deploys,
+        # which need tools the images do not have, run on the runner itself.
+        for workflow, jobs in self.RUNNER_JOBS.items():
+            found = self.jobs(workflow)
+            for job in jobs:
+                with self.subTest(workflow=workflow, job=job):
+                    self.assertNotIn("container:", found[job])
+
+    def test_every_workflow_that_runs_in_the_images_calls_the_images_workflow(self):
+        for workflow in self.IMAGE_JOBS:
+            with self.subTest(workflow):
+                images = self.jobs(workflow)["images"]
+                self.assertIn("uses: ./.github/workflows/images.yml", images)
+                self.assertIn("packages: write", images)
+
+    def test_only_the_images_job_writes_packages(self):
+        # The callers read the images (`packages: read`); only their images job may push.
+        for workflow in self.IMAGE_JOBS:
+            with self.subTest(workflow):
+                text = self.text(workflow)
+                self.assertNotIn("packages: write", text.split("\njobs:")[0])
+                for job, body in self.jobs(workflow).items():
+                    if job != "images":
+                        self.assertNotIn("packages: write", body, job)
+
+    def test_a_container_job_reaches_postgres_by_its_name(self):
+        # Inside a container the service is reached by its name, not on the runner's localhost.
+        for workflow, jobs in {"presubmit.yml": ("test", "integration"), "postsubmit.yml": ("test", "integration")}.items():
+            found = self.jobs(workflow)
+            for job in jobs:
+                with self.subTest(workflow=workflow, job=job):
+                    self.assertIn("@postgres:5432/", found[job])
+                    self.assertNotIn("@localhost:", found[job])
+
+    def test_the_positive_control_asks_where_the_target_is(self):
+        # The Rust image builds into its own CARGO_TARGET_DIR, so the release server is found through target-dir.sh.
+        for workflow in ("presubmit.yml", "postsubmit.yml"):
+            with self.subTest(workflow):
+                job = self.jobs(workflow)["server-release"]
+                self.assertIn("scripts/target-dir.sh", job)
+                self.assertNotIn("target/release/cityloom_server", job)
+
     def test_the_images_workflow_alone_writes_packages(self):
         # Pushing to GHCR needs `packages: write`; the workflow asks for it on its one job, never at the top.
         images = self.text("images.yml")

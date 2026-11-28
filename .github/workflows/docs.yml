@@ -12,10 +12,16 @@ on:
     paths:
       - "website/**"
       - ".github/workflows/docs.yml"
+      # The image the build runs in, and how it is made.
+      - "dockerfiles/docs.Dockerfile"
+      - ".github/workflows/images.yml"
   pull_request:
     paths:
       - "website/**"
       - ".github/workflows/docs.yml"
+      # The image the build runs in, and how it is made.
+      - "dockerfiles/docs.Dockerfile"
+      - ".github/workflows/images.yml"
   workflow_dispatch:
 
 # A newer push to the same pull request supersedes the run in progress; runs on main always finish.
@@ -25,12 +31,28 @@ concurrency:
 
 permissions:
   contents: read
+  # The build runs in the docs image of dockerfiles/ (Node and Python), pulled from GHCR (images.yml).
+  packages: read
 
 # Actions are pinned to a commit; Dependabot proposes the updates.
 jobs:
+  # The toolchain images: their tag, and a build and push only when GHCR lacks them.
+  images:
+    name: Toolchain images
+    uses: ./.github/workflows/images.yml
+    permissions:
+      contents: read
+      packages: write
+
   build:
     name: Documentation
+    needs: images
     runs-on: ubuntu-26.04
+    container:
+      image: ${{ needs.images.outputs.registry }}cityloom-docs:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -39,13 +61,6 @@ jobs:
       # The Architecture pages name every slice, storage key and server table the code has (the test is also in
       # `just test-scripts`, which presubmit runs for a change to the code; a change to the pages alone runs only here).
       - run: python3 -m unittest discover -s scripts/include/tests -p test_architecture_docs.py
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: lts/*
-          cache: npm
-          cache-dependency-path: |
-            website/package-lock.json
-            tests/e2e/package-lock.json
       # The Prettier check of `just format-check`, for website/ (the same Prettier version, from tests/e2e/).
       - run: npm ci
         working-directory: tests/e2e
