@@ -658,6 +658,49 @@ mod tests {
         assert_eq!(j.viewing(), DEFAULT_PLAN);
     }
 
+    /// Runs `edit` on `j`, a junction with no refusal yet and no period scheduled, and asserts that it is refused for
+    /// `why` and leaves the design, its empty schedule and its history as they were.
+    fn refuses(mut j: Junction, why: Refusal, edit: impl FnOnce(&mut Junction) -> bool) {
+        assert_eq!(j.refusal(), None);
+        let before = j.current().clone();
+        let steps = j.revisions().count();
+        assert!(!edit(&mut j), "the edit is refused");
+        assert_eq!(j.refusal(), Some(why));
+        assert!(j.current().schedule.is_empty(), "no period is scheduled");
+        assert!(*j.current() == before, "the design is unchanged");
+        assert_eq!(j.revisions().count(), steps, "nothing is added to the history");
+    }
+
+    #[test]
+    fn the_schedule_is_not_changed_off_a_signal() {
+        let priority = || {
+            let j = Junction::new(1);
+            assert_eq!(j.current().control, PRIORITY);
+            j
+        };
+        refuses(priority(), Refusal::NotSignal, |j| j.add_period(DayType::Weekday, 600, DEFAULT_PLAN));
+        // The 00:00 period is always found, so it is the signal that is missing.
+        refuses(priority(), Refusal::NotSignal, |j| j.set_period_plan(DayType::Weekday, 0, DEFAULT_PLAN));
+    }
+
+    #[test]
+    fn a_period_is_not_given_a_plan_the_junction_does_not_have() {
+        refuses(signal().0, Refusal::DoesNotFit, |j| j.add_period(DayType::Weekday, 600, 9));
+        refuses(signal().0, Refusal::DoesNotFit, |j| j.set_period_plan(DayType::Weekday, 0, 9));
+    }
+
+    #[test]
+    fn a_period_that_is_not_there_is_not_removed_moved_or_given_a_plan() {
+        let with_night = || {
+            let (mut j, _) = signal();
+            assert!(j.add_plan("Night"));
+            j
+        };
+        refuses(with_night(), Refusal::DoesNotFit, |j| j.remove_period(DayType::Weekday, 600));
+        refuses(with_night(), Refusal::DoesNotFit, |j| j.set_period_start(DayType::Weekday, 600, 660));
+        refuses(with_night(), Refusal::DoesNotFit, |j| j.set_period_plan(DayType::Weekday, 600, 1));
+    }
+
     #[test]
     fn the_schedule_runs_a_plan_from_each_period_s_start_to_the_next_and_the_default_fills_the_rest() {
         let (mut j, _) = signal();

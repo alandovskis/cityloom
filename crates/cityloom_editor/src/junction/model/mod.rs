@@ -4021,6 +4021,154 @@ mod tests {
         assert!(en(&k.revisions().last().cloned().unwrap()).ends_with("; bike boxes and protected corners removed"));
     }
 
+    /// The four-way of `BIKED` on its signal, with bike boxes and protected corners on every street as asked, and the
+    /// first street's green set away from its default, so the signal has timing of its own.
+    fn biked_and_timed(boxes: bool, protected: bool) -> Junction {
+        let mut j = junction_of(&BIKED);
+        assert_eq!(j.current().control, SIGNAL);
+        for uid in j.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
+            assert!(!protected || j.set_protected(uid, true));
+            assert!(!boxes || j.set_bike_box(uid, true));
+        }
+        let first = j.current().arms[0].uid;
+        assert!(j.set_timing(first, TimingField::Green, GREEN_DEFAULT_S as i32 + 5));
+        assert!(j.current().arms[0].timing.is_some(), "the signal has timing of its own");
+        j
+    }
+
+    /// Leaves the signal of `j` for a roundabout and gives the step's message key and its whole sentence in English and in
+    /// French, with the engine's non-breaking spaces as ordinary ones.
+    fn left_for_a_roundabout(mut j: Junction) -> (&'static str, String, String) {
+        assert!(j.set_control(ROUNDABOUT), "{:?}", j.refusal());
+        let label = j.current().label.clone();
+        (label.key, plain(&en(&label)), plain(&fr(&label)))
+    }
+
+    #[test]
+    fn leaving_a_signal_with_bike_boxes_and_its_timing_says_both_went() {
+        let (key, en, fr) = left_for_a_roundabout(biked_and_timed(true, false));
+        assert_eq!(key, "jn-rev-control-boxes-timing");
+        assert_eq!(en, "Control: roundabout; bike boxes and signal timing removed");
+        assert_eq!(fr, "Signalisation : carrefour giratoire; sas cyclables et réglage des feux retirés");
+    }
+
+    #[test]
+    fn leaving_a_signal_with_protected_corners_and_its_timing_says_both_went() {
+        let (key, en, fr) = left_for_a_roundabout(biked_and_timed(false, true));
+        assert_eq!(key, "jn-rev-control-protected-timing");
+        assert_eq!(en, "Control: roundabout; protected corners and signal timing removed");
+        assert_eq!(fr, "Signalisation : carrefour giratoire; coins protégés et réglage des feux retirés");
+    }
+
+    #[test]
+    fn leaving_a_signal_with_bike_boxes_protected_corners_and_its_timing_says_all_went() {
+        let (key, en, fr) = left_for_a_roundabout(biked_and_timed(true, true));
+        assert_eq!(key, "jn-rev-control-all");
+        assert_eq!(en, "Control: roundabout; bike boxes, protected corners and signal timing removed");
+        assert_eq!(fr, "Signalisation : carrefour giratoire; sas cyclables, coins protégés et réglage des feux retirés");
+    }
+
+    #[test]
+    fn a_phase_for_a_pedestrian_street_is_refused_and_changes_nothing() {
+        let mut j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        assert_eq!(j.current().control, SIGNAL);
+        assert_eq!(j.refusal(), None);
+        let before = j.current().clone();
+        let steps = j.revisions().count();
+        assert!(!j.add_phase(arm_at(&j, 90)));
+        assert_eq!(j.refusal(), Some(Refusal::MeasureOnPedestrian));
+        assert!(j.current().signal_plan.is_none(), "no plan of the person's own is kept");
+        assert!(*j.current() == before, "the design is unchanged");
+        assert_eq!(j.revisions().count(), steps, "nothing is added to the history");
+    }
+
+    #[test]
+    fn a_bus_lane_between_streets_that_are_not_there_is_refused_as_not_fitting() {
+        let mut j = Junction::new(0);
+        assert!(j.set_control(ROUNDABOUT), "{:?}", j.refusal());
+        assert_eq!(j.refusal(), None);
+        let n = j.current().arms[0].uid;
+        let before = j.current().clone();
+        let steps = j.revisions().count();
+        assert!(!j.set_bus(Some((n, 9_999))));
+        assert_eq!(j.refusal(), Some(Refusal::DoesNotFit));
+        assert_eq!(j.current().bus, None);
+        assert!(*j.current() == before, "the design is unchanged");
+        assert_eq!(j.revisions().count(), steps, "nothing is added to the history");
+    }
+
+    /// Three streets 120° apart, each 19 lanes of 3.5 m coming in: too wide for any ring, yet drawn as a plain junction
+    /// once its corners are as small as they go. Every corner is `MIN_CORNER_MM` and no arm is shifted.
+    fn too_wide_for_a_ring() -> State {
+        let mut s = Junction::new(0).current().clone();
+        s.arms.truncate(3);
+        for (a, bearing) in s.arms.iter_mut().zip([0, 120, 240]) {
+            a.bearing = bearing;
+            a.offset_mm = 0;
+            a.corner_mm = MIN_CORNER_MM;
+            a.section = Some(street_of(&[("travel", 3_500); 19], 1));
+            a.edge = a.uid;
+        }
+        s.arms.sort_by_key(|a| a.bearing);
+        normalize(&mut s.arms, 0);
+        let mut ring = s.clone();
+        ring.control = ROUNDABOUT;
+        assert!(!valid(&ring, 0), "no ring is drawn round streets this wide, even with the smallest corners");
+        let mut plain = s.clone();
+        plain.control = PRIORITY;
+        assert!(valid(&plain, 0), "a plain junction of them is drawn");
+        s
+    }
+
+    /// The streets of `too_wide_for_a_ring` as a roundabout with a bus lane across, a cycle track, a wider ring, one
+    /// street shifted and corners of the default size: what the person had made of it before the streets grew.
+    fn roundabout_with_extras(streets: &State) -> State {
+        let mut now = streets.clone();
+        for a in &mut now.arms {
+            a.corner_mm = DEFAULT_CORNER_MM;
+        }
+        assert!(DEFAULT_CORNER_MM > MIN_CORNER_MM, "the corners have to be made smaller");
+        now.control = ROUNDABOUT;
+        now.bus = Some((now.arms[0].uid, now.arms[1].uid));
+        now.cycle = Some(CYCLE_MIN_MM);
+        now.ring_extra_mm = 1_000;
+        now.arms[0].offset_mm = 1_000;
+        now
+    }
+
+    #[test]
+    fn a_roundabout_that_cannot_be_drawn_opens_eased_to_a_priority_junction_without_its_extras() {
+        let streets = too_wide_for_a_ring();
+        let mut today = streets.clone();
+        today.control = SIGNAL;
+        let now = roundabout_with_extras(&streets);
+        let mut j = Junction::from_city(named("Test"), &today, &now, 0).expect("it opens");
+        let s = j.current();
+        assert_eq!(s.control, PRIORITY);
+        assert_eq!((s.bus, s.cycle, s.ring_extra_mm), (None, None, 0));
+        assert!(s.turbo.is_none());
+        assert!(s.arms.iter().all(|a| a.offset_mm == 0), "no street is shifted");
+        assert!(s.arms.iter().all(|a| a.corner_mm == MIN_CORNER_MM), "every corner is as small as it goes");
+        assert_eq!(j.revisions().map(en).collect::<Vec<_>>(), ["Earlier changes"]);
+        assert!(j.undo());
+        assert_eq!(j.current().control, SIGNAL);
+    }
+
+    #[test]
+    fn a_roundabout_that_cannot_be_drawn_and_eases_to_the_junction_as_laid_out_opens_on_it() {
+        let streets = too_wide_for_a_ring();
+        let mut today = streets.clone();
+        today.control = PRIORITY;
+        let now = roundabout_with_extras(&streets);
+        let j = Junction::from_city(named("Test"), &today, &now, 0).expect("it opens");
+        assert_eq!(j.revisions().count(), 0, "giving up the roundabout leaves the junction as it is laid out");
+        assert!(!j.can_undo());
+        let s = j.current();
+        assert_eq!(s.control, PRIORITY);
+        assert_eq!((s.bus, s.cycle, s.ring_extra_mm), (None, None, 0));
+        assert!(s.arms.iter().all(|a| a.offset_mm == 0));
+    }
+
     #[test]
     fn a_saved_protected_corner_that_no_longer_stands_is_dropped_on_load() {
         let mut state = junction_of(&BIKED).current().clone();
