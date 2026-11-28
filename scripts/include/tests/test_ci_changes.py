@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts" / "ci"))
@@ -695,11 +698,21 @@ class Deploy(unittest.TestCase):
         self.assertTrue(ci_changes.deploys(["web/app.js", "tests/e2e/tests/street.spec.ts"]))
 
     def test_a_base_not_behind_head_deploys(self):
-        head, parent = ci_changes.git("rev-parse", "HEAD").strip(), ci_changes.git("rev-parse", "HEAD~1").strip()
-        self.assertFalse(ci_changes.behind("0" * 40, head))
-        self.assertFalse(ci_changes.behind(head, parent))
-        self.assertFalse(ci_changes.behind("HEAD~1; rm -rf /", head))
-        self.assertTrue(ci_changes.behind(parent, head))
+        # A repository of its own: CI's checkouts are shallow, so this one's history cannot be counted on.
+        with tempfile.TemporaryDirectory() as tmp:
+            run = lambda *a: subprocess.run(["git", "-C", tmp, *a], check=True, capture_output=True, text=True).stdout.strip()
+            run("init", "-q")
+            for n in ("1", "2"):
+                (Path(tmp) / "f").write_text(n, encoding="utf-8")
+                run("add", "f")
+                run("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", n)
+            parent, head = run("rev-parse", "HEAD~1"), run("rev-parse", "HEAD")
+            with mock.patch.object(ci_changes, "ROOT", Path(tmp)):
+                self.assertTrue(ci_changes.behind(parent, head))
+                self.assertTrue(ci_changes.behind(head, head))
+                self.assertFalse(ci_changes.behind(head, parent))
+                self.assertFalse(ci_changes.behind("0" * 40, head))
+                self.assertFalse(ci_changes.behind("HEAD~1; rm -rf /", head))
 
     def test_every_tracked_file_is_classified(self):
         def known(f: str) -> bool:

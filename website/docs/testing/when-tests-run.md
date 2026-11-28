@@ -41,8 +41,9 @@ Its `Changes` job decides only whether the push deploys; no check waits for it. 
 deployed (`scripts/ci/last_deploy.py`: the newest earlier run whose `Deploy to Railway` succeeded) and diffs the push
 from it with `scripts/ci/ci_changes.py --event push`. The deploy runs only when a file the site is built from changed,
 by the list `DEPLOY_INPUTS` of `ci_changes.py`: the crates (but their tests and guards), `web/`, `deploy/`, `cities/`,
-the manifests, the justfile and the scripts the deploy runs. A merge of tests or CI configuration alone passes every
-check and skips the deploy. A site change whose own run failed is still in the next push's diff, and goes out with it.
+the manifests, the justfile and the scripts the deploy runs. A merge of CI configuration, or of tests in their own files
+(the specs, `tests.rs`, `crates/*/tests/`), passes every check and skips the deploy. The list goes by file: a test added
+to a `#[cfg(test)]` module inside a source file changes that file, and the merge deploys. A site change whose own run failed is still in the next push's diff, and goes out with it.
 When the last deploy cannot be found, the push deploys. Every file git tracks is in `DEPLOY_INPUTS` or in
 `NOT_SERVED`; `just test-scripts` fails on one in neither, so a new kind of file is put on one side by the pull
 request that adds it.
