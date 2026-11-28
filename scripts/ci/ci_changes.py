@@ -20,6 +20,8 @@ decided and, when GITHUB_OUTPUT is set, writes the job's outputs:
     integration, integration_specs   the same for the integration tier (the server and a Postgres)
     e2e        true when the E2E tier runs (`just e2e-archive`: the unpacked archive and the delivery specs)
     e2e_specs  its Playwright arguments
+    deploy     push only: true when a file the site is built from (DEPLOY_INPUTS) changed since --base, which
+               postsubmit.yml sets to the last deployed commit; also true when that base is not known or not behind HEAD
 
 Only a pull request is narrowed. postsubmit.yml, which checks main, runs every spec and does not call this. Anything
 doubtful runs every spec too: no files, a base that is not there, a file no rule names. A version bump alone
@@ -52,6 +54,62 @@ RUST_NEUTRAL = ("tests/e2e/tests/**", "website/**", "scripts/ci/**", "scripts/in
 # `just test-wasm` leaves these out: they are not built for the browser.
 NOT_WASM = ("cityloom_server", "citymodel_builder")
 CRATES = ROOT / "crates"
+# What `just deploy` and postsubmit.yml's deploy job build the site from (scripts/deploy.sh, scripts/build.sh, the tile
+# cache's key): a push to main that changes one of these since the last deploy deploys; any other does not.
+DEPLOY_INPUTS = (
+    "crates/**",  # every crate is served: the server links citymodel_builder, and the wasm is built from the rest
+    "web/**",
+    "deploy/**",
+    "cities/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "package.json",
+    "package-lock.json",
+    "justfile",
+    "scripts/build.sh",
+    "scripts/deploy.sh",
+    "scripts/target-dir.sh",
+    "scripts/retry.sh",
+    "scripts/check-no-fake.sh",
+    "scripts/precompress.mjs",
+    ".github/workflows/postsubmit.yml",  # the deploy job's own steps
+)
+# Inside a folder of DEPLOY_INPUTS, and not served: the tests, the guards, the notes.
+CARVED_OUT = ("**/tests.rs", "crates/*/tests/**", "crates/cityloom_editor/src/*_guard.rs", "**/*.md")
+# Everything else git tracks. scripts/include/tests/test_ci_changes.py fails on a file in neither list, so a new kind of
+# file is put on one side by the pull request that adds it.
+NOT_SERVED = (
+    "tests/**",
+    "website/**",
+    "docs/**",
+    "LICENSE*",
+    "*.md",
+    ".claude/**",
+    ".impeccable/**",
+    "dockerfiles/**",  # the toolchain images to build and test in; the runtime image is deploy/Dockerfile
+    ".github/actions/**",
+    ".github/ISSUE_TEMPLATE/**",
+    ".github/dependabot.yml",
+    ".github/issue-flow.json",
+    ".github/issue-labeler.yml",
+    ".github/labels.yml",
+    ".github/workflows/presubmit.yml",
+    ".github/workflows/docs.yml",
+    ".github/workflows/sonar.yml",
+    ".github/workflows/labels.yml",
+    ".github/workflows/issue-labels.yml",
+    "scripts/ci/**",
+    "scripts/include/**",
+    "scripts/e2e-archive.sh",
+    "scripts/check-version.sh",
+    "scripts/pin-server.sh",
+    "sonar-project.properties",
+    "rustfmt.toml",
+    ".prettierrc.json",
+    ".prettierignore",
+    ".gitignore",
+    ".env.example",
+)
 
 
 def glob(pattern: str, path: str) -> bool:
@@ -268,6 +326,27 @@ def changed_files(base: str, head: str) -> list[str] | None:
         return None
 
 
+def served(path: str) -> bool:
+    """Whether the deployed site is built from this file."""
+    return any(glob(p, path) for p in DEPLOY_INPUTS) and not any(glob(p, path) for p in CARVED_OUT)
+
+
+def deploys(files: list[str] | None) -> bool:
+    """Whether a push with these changed files deploys; None (the change is not known) deploys."""
+    return files is None or any(served(f) for f in files)
+
+
+def behind(base: str, head: str) -> bool:
+    """Whether base is an ancestor of head (or head itself), so that the diff between them is what head adds."""
+    if not (REVISION.fullmatch(base) and REVISION.fullmatch(head)):
+        return False
+    try:
+        git("merge-base", "--is-ancestor", base, head)
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
 def describe(rule: dict | None) -> str:
     if rule is None:
         return "no rule: all"
@@ -285,7 +364,12 @@ def main() -> int:
     rules = json.loads((ROOT / "scripts" / "ci" / "spec-map.json").read_text(encoding="utf-8"))
     tiers = json.loads((ROOT / "tests" / "e2e" / "tiers.json").read_text(encoding="utf-8"))
     every = sorted(p.name[: -len(".spec.ts")] for p in (ROOT / "tests" / "e2e" / "tests").glob("*.spec.ts"))
-    files = a.files or changed_files(a.base, a.head)
+    if a.files:
+        files = a.files
+    elif a.event == "push" and not behind(a.base, a.head):
+        files = None  # the last deploy is not behind this push (or not known): everything is new
+    else:
+        files = changed_files(a.base, a.head)
     if files is None:
         print("The change is not known: everything runs.")
         s = Selection(all=True, tiers=tiers)
@@ -312,6 +396,8 @@ def main() -> int:
         "e2e": str(s.e2e).lower(),
         "e2e_specs": s.spec_args("e2e"),
     }
+    if a.event == "push":
+        out["deploy"] = str(deploys(files)).lower()
     print(json.dumps(out))
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:

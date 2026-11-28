@@ -26,6 +26,7 @@ Dispatch the `deploy` agent in the background with every merge of the list, olde
 For each line of the agent's report:
 
 - `deployed, <run url>` (also `deployed with #<m>'s run`): post `**Factory · deployed** <run url>`, move the issue to `linear.states.done` (if it is not there already), remove the label `labels.feasible`, and remove the worktree and local branch (`git worktree remove <wt>`, `git branch -D <branch>`; the merge deleted the remote one), taking their turn on the main checkout's git (README, **Side by side**).
+- `nothing to deploy, <run url>` (its run passed every check and skipped `Deploy to Railway`: nothing the site is built from changed since the last deploy): record and close it exactly as for `deployed`, with the record `**Factory · deployed** <run url> (nothing to deploy)`. The merge loop's **The deploy is clear** then holds as for a deploy: the record exists and the run concluded `success`.
 - `FAILED`: add `labels.deployFailed`, post `**Factory · handed back** (deploy)` with the agent's line and the output it quoted, and move the issue back to `linear.states.working`. While the issue carries the label, the merge loop merges nothing (`factory-merge`, **The deploy is clear**), so the line waits for a person: once `main` is green again, they remove the label, and the next pass gives the merge to the agent again, after a cleared failure. Never re-run a job, retry the deploy or fix it here.
 - A merge the report leaves out, or a report not in the agent's shape: record nothing for it; the next pass gives it to the agent again.
 

@@ -4,6 +4,11 @@ name: Postsubmit
 # presubmit.yml may for a pull request), then the deploy. A manual run does the checks on the branch it is started on and
 # never deploys.
 #
+# The deploy runs only when a file the site is built from (DEPLOY_INPUTS in scripts/ci/ci_changes.py) changed since the
+# last deploy: the Changes job finds the commit main last deployed (scripts/ci/last_deploy.py) and diffs this push from
+# it, so a merge of tests or CI configuration alone deploys nothing, and a site change whose own run failed goes out with
+# the next push. When that commit cannot be found, the push deploys. The checks do not wait for it: they run in full.
+#
 # A change to documentation alone (the `docs` rule of scripts/ci/spec-map.json) does not start this workflow: it changes
 # nothing the site serves, and .github/workflows/docs.yml builds, checks and publishes the documentation. No check is
 # required on main, so a path filter is safe. scripts/include/tests/test_ci_changes.py fails when the list and that rule
@@ -39,6 +44,30 @@ env:
 
 # Actions are pinned to a commit; Dependabot proposes the updates.
 jobs:
+  # Whether this push deploys (its only reader is the deploy job).
+  changes:
+    name: Changes
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      deploy: ${{ steps.select.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: base
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "sha=$(scripts/ci/last_deploy.py)" >> "$GITHUB_OUTPUT"
+      - id: select
+        env:
+          BASE: ${{ steps.base.outputs.sha }}
+        run: scripts/ci/ci_changes.py --event push --base "$BASE"
+
   # The toolchain images the build and test jobs run in: their tag, and a build and push only when GHCR lacks them.
   images:
     name: Toolchain images
@@ -309,7 +338,7 @@ jobs:
   ci:
     name: All checks
     if: always()
-    needs: [images, format, test, wasm, scripts, build, ui, integration, e2e, server-release]
+    needs: [changes, images, format, test, wasm, scripts, build, ui, integration, e2e, server-release]
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
@@ -322,12 +351,12 @@ jobs:
             *failure*|*cancelled*) exit 1 ;;
           esac
 
-  # Only a green main goes live. Needs the RAILWAY_TOKEN secret (a project token for the cityloom project's
+  # Only a green main goes live, and only when the Changes job found a deploy input changed since the last deploy. Needs the RAILWAY_TOKEN secret (a project token for the cityloom project's
   # production environment) in the `production` environment.
   deploy:
     name: Deploy to Railway
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [ci]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.deploy == 'true'
+    needs: [changes, ci]
     runs-on: ubuntu-26.04
     timeout-minutes: 90
     environment: production
