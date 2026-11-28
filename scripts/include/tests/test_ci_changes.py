@@ -738,6 +738,95 @@ class Deploy(unittest.TestCase):
             with self.subTest(pattern):
                 self.assertTrue(ci_changes.served(pattern.replace("**", "x.rs")))
 
+    # A served Rust file whose only change is inside #[cfg(test)] items is not built into the site.
+    CODE = "pub fn add(a: u8, b: u8) -> u8 {\n    a + b\n}\n"
+    TESTS = "\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn adds() {\n        assert_eq!(add(1, 2), 3);\n    }\n}\n"
+    MORE = "\n    #[test]\n    fn adds_zero() {\n        assert_eq!(add(0, 0), 0);\n    }\n}\n"
+
+    def same(self, base: str, head: str) -> bool:
+        old, new = ci_changes.outside_tests(base), ci_changes.outside_tests(head)
+        self.assertIsNotNone(old)
+        self.assertIsNotNone(new)
+        return old == new
+
+    def test_a_test_added_to_the_tests_module_does_not_count(self):
+        base = self.CODE + self.TESTS
+        head = self.CODE + self.TESTS[: self.TESTS.rindex("}")] + self.MORE
+        self.assertTrue(self.same(base, head))
+
+    def test_a_new_tests_module_does_not_count(self):
+        self.assertTrue(self.same(self.CODE, self.CODE + self.TESTS))
+
+    def test_whitespace_and_comments_do_not_count(self):
+        head = "// Adds.\n/// Two numbers.\npub fn add(a: u8,\n b: u8) -> u8 { /* sum */ a + b }\n"
+        self.assertTrue(self.same(self.CODE, head))
+
+    def test_a_change_outside_the_tests_counts(self):
+        head = self.CODE.replace("a + b", "a.saturating_add(b)") + self.TESTS
+        self.assertFalse(self.same(self.CODE + self.TESTS, head))
+
+    def test_removing_the_cfg_deploys(self):
+        base = self.CODE + "#[cfg(test)]\nfn helper() -> u8 { 1 }\n"
+        self.assertFalse(self.same(base, base.replace("#[cfg(test)]\n", "")))
+
+    def test_each_kind_of_item_is_removed(self):
+        marked = (
+            "#[cfg(test)]\nuse std::fmt;\n",
+            "#[cfg(test)]\nconst N: usize = 3;\n",
+            "#[cfg(test)]\nconst P: Point = Point { x: 1 };\n",
+            "#[cfg(test)]\nfn bytes() -> [u8; 3] { [1, 2, 3] }\n",
+            "#[cfg(test)]\nimpl Point { fn origin() -> Self { Point { x: 0 } } }\n",
+            "#[cfg(test)]\n#[derive(Debug)]\nstruct S { a: u8 }\n",
+            "#[cfg(test)]\nmod fixtures;\n",
+            "#[cfg(test)]\npub fn split(&mut self, at: Option<i32>) -> Result<(), Refusal> { Ok(()) }\n",
+            "#[cfg(test)]\nfn pairs<A, B>(m: HashMap<A, Vec<B>>) where A: Ord, B: Clone {}\n",
+            "#[ cfg ( test ) ]\nmod spaced {}\n",
+        )
+        for item in marked:
+            with self.subTest(item):
+                self.assertTrue(self.same(self.CODE + "fn last() {}\n", self.CODE + item + "fn last() {}\n"))
+
+    def test_other_conditions_are_code(self):
+        for attr in ("#[cfg(not(test))]", "#[cfg(any(test, feature = \"x\"))]", "#[cfg(all(test, unix))]", "#![cfg(test)]"):
+            with self.subTest(attr):
+                self.assertFalse(self.same(self.CODE, self.CODE + attr + "\nfn f() {}\n"))
+
+    def test_chars_and_lifetimes_do_not_unbalance(self):
+        tricky = (
+            "\n#[cfg(test)]\nmod tests {\n"
+            "    fn a<'a>(s: &'a str) -> &'static str { let _ = ('{', '\\'', '}', b'{', '\\u{7b}'); \"}\" }\n"
+            "    const R: &str = r#\"}\"# ;\n"
+            "    const B: &[u8] = br\"{\";\n"
+            "    /* nested /* } */ still a comment { */\n"
+            "    // }\n"
+            "}\n"
+        )
+        self.assertTrue(self.same(self.CODE + "fn last() {}\n", self.CODE + tricky + "fn last() {}\n"))
+        self.assertNotIn("last", ci_changes.outside_tests(self.CODE + tricky)[:-1])
+
+    def test_strings_are_code(self):
+        self.assertFalse(self.same('const S: &str = "a b";\n', 'const S: &str = "a  b";\n'))
+        self.assertFalse(self.same('const S: &str = "// x";\n', 'const S: &str = "// y";\n'))
+
+    def test_what_cannot_be_read_is_none(self):
+        for text in (
+            'const S: &str = "open;\n',
+            "fn f() {} /* open\n",
+            "fn f() { (] }\n",
+            "fn f() {} }\n",
+            "fn f() {\n",
+            "struct S {\n    #[cfg(test)]\n    a: u8,\n}\n",
+            "fn f(#[cfg(test)] a: u8) {}\n",
+            "struct S {\n    #[cfg(test)]\n    a: Vec<u8>,\n    b: u8,\n}\n",
+            # An arm is not taken apart: past its `,` (hidden by the `<`) is the next arm's real code.
+            "fn f(x: u8) -> u8 { match x { #[cfg(test)] 0 if x < 1 => 1, _ => { real() } } }\n",
+            "#[cfg(test)]\nfn f() -> u8 { 1 }\n}\n",
+            "#[cfg(test)]\nfn f()",
+            "#[cfg(test)]\n",
+        ):
+            with self.subTest(text):
+                self.assertIsNone(ci_changes.outside_tests(text))
+
 
 class Revisions(unittest.TestCase):
     def test_only_a_commit_id_or_head_reaches_git(self):
