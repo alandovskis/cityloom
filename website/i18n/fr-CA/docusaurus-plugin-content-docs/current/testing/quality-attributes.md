@@ -11,9 +11,9 @@ Cette page dit ce qui vérifie l’accessibilité, la traduction et la sécurit�
 
 La cible est WCAG 2.2 AA.
 
-- `e2e/tests/a11y.spec.ts` exécute axe (`@axe-core/playwright`) avec les étiquettes `wcag2a`, `wcag2aa`, `wcag21a`,
+- `tests/e2e/tests/a11y.spec.ts` exécute axe (`@axe-core/playwright`) avec les étiquettes `wcag2a`, `wcag2aa`, `wcag21a`,
   `wcag21aa` et `wcag22aa`. `compare.spec.ts` exécute aussi axe.
-- `e2e/tests/junction-a11y.spec.ts` mesure les cibles de la jonction à 1440, 1050, 600 et 280 px de large.
+- `tests/e2e/tests/junction-a11y.spec.ts` mesure les cibles de la jonction à 1440, 1050, 600 et 280 px de large.
 - `shared/contrast.rs` mesure les jetons de couleur du CSS (voir [Les gardes](levels.md#les-gardes)).
 
 ## Traduction
@@ -23,7 +23,7 @@ La cible est WCAG 2.2 AA.
   `project`, `restriction`, `share`, `shell`, `street` et `sync`.
 - `i18n_guard` trouve la formulation restée dans le code (voir [Les gardes](levels.md#les-gardes)).
 - `shared::i18n::typography` applique au fr-CA les espacements de l’OQLF, et est testée à côté.
-- `e2e/tests/language.spec.ts` fait passer une page au fr-CA depuis le menu du compte.
+- `tests/e2e/tests/language.spec.ts` fait passer une page au fr-CA depuis le menu du compte.
 
 ## Sécurité
 

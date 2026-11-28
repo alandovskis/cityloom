@@ -135,7 +135,7 @@ mod kept {
 
     use super::common::{Follow, document, edit_everything, followed, shifted_from, store_with};
 
-    const TILE: &[u8] = include_bytes!("../../../../e2e/fixtures/plateau.osm.pbf");
+    const TILE: &[u8] = include_bytes!("../../../../tests/e2e/fixtures/plateau.osm.pbf");
 
     fn store(storage: &Rc<MemoryStorage>, area: Area) -> CityStore {
         let b = area.bounds();

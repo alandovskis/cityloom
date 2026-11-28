@@ -16,7 +16,7 @@ Read the repository's `CLAUDE.md` and the folder `CLAUDE.md` of each area the is
 
 First, the **flow** (`.claude/factory/README.md`, **Three flows**):
 
-- **docs** when the issue asks only for documentation: pages of the documentation site (`website/`, English and fr-CA), `docs/`, a `CLAUDE.md` or a README; every file it needs changed is documentation as `scripts/ci/spec-map.json`'s `docs` rule counts it, and none is a check or the factory's own (`.claude/`, `.github/`, `scripts/`, `e2e/tests/`).
+- **docs** when the issue asks only for documentation: pages of the documentation site (`website/`, English and fr-CA), `docs/`, a `CLAUDE.md` or a README; every file it needs changed is documentation as `scripts/ci/spec-map.json`'s `docs` rule counts it, and none is a check or the factory's own (`.claude/`, `.github/`, `scripts/`, `tests/e2e/tests/`).
 - **tests** when the issue asks only for new tests of code that already works: no change to what the product does, and none to what an existing test asserts (README, **Three flows**). Such a test cannot fail first; the tests gate proves it by faulting the code it tests instead.
 - **code** otherwise, including an issue that asks for documentation and a change to the product, or to the site's configuration, code or dependencies (`docusaurus.config.ts`, `package.json`, `website/src/`: `gate.py`'s `SITE_CONFIGURATION`), and an issue that asks for tests and for a change to the product, or to an existing test. Placing a page in `website/sidebars.ts` is part of the pages.
 
@@ -24,8 +24,8 @@ Then decide one of:
 
 - **feasible**, for the **code** flow: all of these hold.
   - The issue says what must be true when it is done, clearly enough that two people would write the same tests for it.
-  - Its behaviour can be proved by automated tests the repository already knows how to run: native model or view-model tests, component tests, server tests, or a Playwright spec in one tier of `e2e/tiers.json`. The factory writes the tests before the code, so a behaviour no test can see is not feasible.
-  - It fits one pull request and needs no new dependency, secret, account, service or data the repository does not have (OSM tiles come from `just prepare`; the browser tests use `e2e/fixtures`).
+  - Its behaviour can be proved by automated tests the repository already knows how to run: native model or view-model tests, component tests, server tests, or a Playwright spec in one tier of `tests/e2e/tiers.json`. The factory writes the tests before the code, so a behaviour no test can see is not feasible.
+  - It fits one pull request and needs no new dependency, secret, account, service or data the repository does not have (OSM tiles come from `just prepare`; the browser tests use `tests/e2e/fixtures`).
   - It needs no decision only a person can make: a product or design call, a wording a person must choose, a trade-off the issue leaves open.
 - **feasible**, for the **docs** flow: all of these hold.
   - The issue says which pages to write or change and what they must say, clearly enough that two writers would cover the same points.

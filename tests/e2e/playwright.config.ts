@@ -9,7 +9,7 @@ const port = process.env.E2E_PORT ?? 8137;
 
 // The server `just e2e` built and pinned (scripts/pin-server.sh): a copy, so a target directory shared with other checkouts
 // cannot swap it during the run. Running Playwright by hand after a `cargo build` needs `./scripts/pin-server.sh` first.
-const server = fileURLToPath(new URL("../target/e2e/cityloom_server", import.meta.url));
+const server = fileURLToPath(new URL("../../target/e2e/cityloom_server", import.meta.url));
 if (!existsSync(server)) {
   throw new Error(
     `${server} is missing: run 'just e2e' (it builds the server first and pins a copy of it for this checkout)`,
@@ -18,7 +18,7 @@ if (!existsSync(server)) {
 
 // `just e2e-archive` (E2E_ARCHIVE=1): the server unpacks the archive that script packed and serves the road data from it.
 const fromArchive = !!process.env.E2E_ARCHIVE;
-const archiveRoot = fileURLToPath(new URL("../target/e2e-archive/", import.meta.url));
+const archiveRoot = fileURLToPath(new URL("../../target/e2e-archive/", import.meta.url));
 
 // The tiers (tiers.json is the one place a spec is given its tier): a Playwright project each, so `--project=ui`,
 // `--project=integration` and `--project=e2e` run one alone (`just e2e-ui`, `just e2e-integration`, `just e2e-archive`).
@@ -34,7 +34,7 @@ const misplaced = specs.filter((s) => names.filter((n) => tiers[n].includes(s)).
 const missing = names.flatMap((n) => tiers[n].filter((s) => !specs.includes(s)).map((s) => `${n}: ${s}`));
 if (misplaced.length || missing.length) {
   throw new Error(
-    `e2e/tiers.json: every spec is in exactly one tier. In none or in two: ${misplaced.join(", ") || "-"}. Not a spec: ${missing.join(", ") || "-"}.`,
+    `tests/e2e/tiers.json: every spec is in exactly one tier. In none or in two: ${misplaced.join(", ") || "-"}. Not a spec: ${missing.join(", ") || "-"}.`,
   );
 }
 const match = (names: string[]) => new RegExp(`/(${names.join("|")})\\.spec\\.ts$`);
@@ -63,7 +63,7 @@ export default defineConfig({
   webServer: {
     command: server,
     env: {
-      WEB_ROOT: "../web",
+      WEB_ROOT: "../../web",
       E2E_PORT: String(port),
       // The keys are fixed test values, not secrets. DATABASE_URL is not set here: the server takes it from the
       // caller's environment, and the account side stays off without it (only the integration tier fails).

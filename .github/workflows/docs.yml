@@ -4,7 +4,7 @@ name: Documentation
 # Pages (https://alandovskis.github.io/cityloom/) from main. presubmit.yml and postsubmit.yml do not start for a change to
 # documentation alone, and the `CI` check does not cover the build: a broken build shows only in this workflow's Documentation check, on the
 # pull requests that change website/. The build reads nothing outside website/ (the same command as `just docs-build`,
-# without just); the formatting check uses e2e/'s Prettier and the root's rules, whose own changes the Format job of presubmit.yml and postsubmit.yml
+# without just); the formatting check uses tests/e2e/'s Prettier and the root's rules, whose own changes the Format job of presubmit.yml and postsubmit.yml
 # checks against website/ too. No check is required on main, so a path filter is safe.
 on:
   push:
@@ -45,12 +45,12 @@ jobs:
           cache: npm
           cache-dependency-path: |
             website/package-lock.json
-            e2e/package-lock.json
-      # The Prettier check of `just format-check`, for website/ (the same Prettier version, from e2e/).
+            tests/e2e/package-lock.json
+      # The Prettier check of `just format-check`, for website/ (the same Prettier version, from tests/e2e/).
       - run: npm ci
-        working-directory: e2e
-      - run: npx prettier --ignore-path ../.prettierignore --check ../website
-        working-directory: e2e
+        working-directory: tests/e2e
+      - run: npx prettier --ignore-path ../../.prettierignore --check ../../website
+        working-directory: tests/e2e
       - run: npm ci
         working-directory: website
       # Builds English and fr-CA, and fails on a broken link (what `just docs-build` runs).

@@ -18,12 +18,12 @@ The head must be the one the latest `**Factory · review <k>: pass**` record nam
 **The tests flow** (README, **Three flows**) has no red report and nothing new to see in the app: what it proves is that each new test passes and can fail. Its steps are:
 
 1. **The gate**: the `**Factory · tests**` record's full report for the head, as a text file: each new test, the faults it caught, and the faults no new test caught.
-2. **The tests at the head**, each new test's own output: for a Rust test, `cargo test <its name> -- --exact` in `<wt>`, as a text file; for a browser test, `E2E_PORT=<port> npx playwright test tests/<spec>.spec.ts:<line> --trace on` from `<wt>/e2e`, keeping its output and the screenshots its trace holds (`npx playwright show-trace` is not needed: unzip the trace and keep its screenshots), as files.
+2. **The tests at the head**, each new test's own output: for a Rust test, `cargo test <its name> -- --exact` in `<wt>`, as a text file; for a browser test, `E2E_PORT=<port> npx playwright test tests/<spec>.spec.ts:<line> --trace on` from `<wt>/tests/e2e`, keeping its output and the screenshots its trace holds (`npx playwright show-trace` is not needed: unzip the trace and keep its screenshots), as files.
 
 **The docs flow** has no red and no green report. Its steps are:
 
 1. **The gate**: the `**Factory · docs**` record's gate report for the head, as a text file: the pages changed, nothing else, and the site built.
-2. **The pages**, as a reader sees them: in `<wt>`, `just docs-build`, then serve the build on the issue's port, since other issues may be serving theirs (`cd website && npx docusaurus serve --no-open --port <port>`), and for each page of the site the branch adds or changes, a full-page screenshot in English and in fr-CA (`cd e2e && npx playwright screenshot --full-page http://localhost:<port>/cityloom/<page> <file>`, and `.../cityloom/fr-CA/<page>`), one capture per page and language; stop the server after. A changed file outside the site (`docs/`, a `CLAUDE.md`, a README) is evidenced by its text at the head, as a file.
+2. **The pages**, as a reader sees them: in `<wt>`, `just docs-build`, then serve the build on the issue's port, since other issues may be serving theirs (`cd website && npx docusaurus serve --no-open --port <port>`), and for each page of the site the branch adds or changes, a full-page screenshot in English and in fr-CA (`cd tests/e2e && npx playwright screenshot --full-page http://localhost:<port>/cityloom/<page> <file>`, and `.../cityloom/fr-CA/<page>`), one capture per page and language; stop the server after. A changed file outside the site (`docs/`, a `CLAUDE.md`, a README) is evidenced by its text at the head, as a file.
 
 ## 2. Check
 

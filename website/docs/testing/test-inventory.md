@@ -15,12 +15,12 @@ There are 5,385 tests: 4,552 Rust tests, 607 Playwright tests and 226 script tes
 
 ```sh
 cargo test --workspace --features cityloom_server/test-provider -- --list   # Rust: 4,552
-cd e2e && npx playwright test --list                                        # Playwright: 607
+cd tests/e2e && npx playwright test --list                                        # Playwright: 607
 python3 -m unittest discover -s scripts/include/tests                       # scripts: 226 (it runs them)
 ```
 
-The Rust list needs no database. The Playwright list needs `npm ci` in `e2e/` and the server that
-`scripts/pin-server.sh` copies to `target/e2e/cityloom_server`: `e2e/playwright.config.ts` throws without that file.
+The Rust list needs no database. The Playwright list needs `npm ci` in `tests/e2e/` and the server that
+`scripts/pin-server.sh` copies to `target/e2e/cityloom_server`: `tests/e2e/playwright.config.ts` throws without that file.
 
 The paths are from the repository's root, or relative to `crates/cityloom_editor/src/` where the text names the editor.
 
@@ -33,9 +33,9 @@ How the tests of each feature spread over the levels is in the [Coverage matrix]
 - **Rust**: one line of the list that ends in `: test`. The two `#[ignore]` tests of
   `crates/cityloom_editor/src/street/view/iso/mod.rs` (`markup_size` and `preview`) are in the list, so they are
   counted. No doc-test is in it.
-- **Playwright**: one line of the list, that is one test of one project of `e2e/playwright.config.ts`. A test declared in
+- **Playwright**: one line of the list, that is one test of one project of `tests/e2e/playwright.config.ts`. A test declared in
   a loop counts once for each turn. With `E2E_ARCHIVE=1`, the E2E project lists the specs of `archive_also` in
-  `e2e/tiers.json` too: `map` (38 tests) and `street` (71 tests). These 109 are the UI tier's tests run again, and
+  `tests/e2e/tiers.json` too: `map` (38 tests) and `street` (71 tests). These 109 are the UI tier's tests run again, and
   are not counted again.
 - **Script**: one test method of `scripts/include/tests/test_*.py`.
 
@@ -63,7 +63,7 @@ A Rust test's level comes from where its file is. The first rule that matches de
 7. **Model**: every other unit test of the editor. It includes the pure SVG renderers of `view/` and `shared/` (such as
    `street/view/iso/`, `street/view/drawing.rs` and `shared/iso/`), and the other files of `shared/`.
 
-A Playwright test's level is the tier of its spec in `e2e/tiers.json`: UI, integration or E2E. A script test's level is
+A Playwright test's level is the tier of its spec in `tests/e2e/tiers.json`: UI, integration or E2E. A script test's level is
 Script.
 
 ### The features of a test
@@ -89,9 +89,9 @@ The 45 features are those of `scripts/ci/features.json`.
 | `citymodel_builder` and `cityloom_model` | `cargo test` | `crates/citymodel_builder/`, `crates/cityloom_model/`                                                                                      |       348 |
 | Report and PDF                           | `cargo test` | `crates/cityloom_report/`, `crates/cityloom_report_pdf/`                                                                                   |        24 |
 | Script                                   | `unittest`   | `scripts/include/tests/`                                                                                                                   |       226 |
-| UI tier                                  | Playwright   | The specs of `ui` in `e2e/tiers.json`                                                                                                      |       552 |
-| Integration tier                         | Playwright   | The specs of `integration` in `e2e/tiers.json`                                                                                             |        34 |
-| E2E tier                                 | Playwright   | The specs of `e2e` in `e2e/tiers.json`                                                                                                     |        21 |
+| UI tier                                  | Playwright   | The specs of `ui` in `tests/e2e/tiers.json`                                                                                                |       552 |
+| Integration tier                         | Playwright   | The specs of `integration` in `tests/e2e/tiers.json`                                                                                       |        34 |
+| E2E tier                                 | Playwright   | The specs of `e2e` in `tests/e2e/tiers.json`                                                                                               |        21 |
 | **Total**                                |              |                                                                                                                                            | **5,385** |
 
 ## By crate and by tier
@@ -148,7 +148,7 @@ The levels of each crate:
 
 ### Playwright tests by tier
 
-One row per Playwright project, with its specs (`e2e/tests/<name>.spec.ts`) and the tests of each.
+One row per Playwright project, with its specs (`tests/e2e/tests/<name>.spec.ts`) and the tests of each.
 
 | Project       |  Specs | Tests of each spec                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |   Tests |
 | ------------- | -----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------: |
@@ -224,14 +224,14 @@ The sums are above the distinct mapped tests because 9 Rust files and 8 specs be
 | `crates/cityloom_model/src/catalogue.rs`                   |     2 | `street.pieces`, `data.importer`                                                                                                                                                                                                       |
 | `crates/cityloom_model/src/corridor.rs`                    |     4 | `map.network-checks`, `data.importer`                                                                                                                                                                                                  |
 | `crates/cityloom_model/src/street/speed.rs`                |     1 | `street.pieces`, `street.speed`                                                                                                                                                                                                        |
-| `e2e/tests/a11y.spec.ts`                                   |    21 | `street.stretches`, `shell.accessibility`                                                                                                                                                                                              |
-| `e2e/tests/editors.spec.ts`                                |    26 | `street.pieces`, `shell.settings`                                                                                                                                                                                                      |
-| `e2e/tests/focus-touch.spec.ts`                            |    10 | `junction.layout`, `shell.accessibility`                                                                                                                                                                                               |
-| `e2e/tests/junction.spec.ts`                               |    81 | `junction.layout`, `junction.roundabout`, `junction.signal.phases`, `junction.signal.plans`, `junction.signal.calls`, `junction.signal.actuation`, `junction.signal.bicycles`, `junction.signal.transit`, `junction.signal.preemption` |
-| `e2e/tests/map.spec.ts`                                    |    38 | `map.city`, `map.goals`                                                                                                                                                                                                                |
-| `e2e/tests/read-only.spec.ts`                              |     5 | `junction.signal.plans`, `junction.signal.calls`, `junction.signal.actuation`, `junction.signal.bicycles`, `junction.signal.transit`, `junction.signal.preemption`, `projects.read-only`                                               |
-| `e2e/tests/street.spec.ts`                                 |    71 | `street.pieces`, `street.stretches`, `street.checks`                                                                                                                                                                                   |
-| `e2e/tests/world.spec.ts`                                  |     4 | `city.area`, `city.edits`                                                                                                                                                                                                              |
+| `tests/e2e/tests/a11y.spec.ts`                             |    21 | `street.stretches`, `shell.accessibility`                                                                                                                                                                                              |
+| `tests/e2e/tests/editors.spec.ts`                          |    26 | `street.pieces`, `shell.settings`                                                                                                                                                                                                      |
+| `tests/e2e/tests/focus-touch.spec.ts`                      |    10 | `junction.layout`, `shell.accessibility`                                                                                                                                                                                               |
+| `tests/e2e/tests/junction.spec.ts`                         |    81 | `junction.layout`, `junction.roundabout`, `junction.signal.phases`, `junction.signal.plans`, `junction.signal.calls`, `junction.signal.actuation`, `junction.signal.bicycles`, `junction.signal.transit`, `junction.signal.preemption` |
+| `tests/e2e/tests/map.spec.ts`                              |    38 | `map.city`, `map.goals`                                                                                                                                                                                                                |
+| `tests/e2e/tests/read-only.spec.ts`                        |     5 | `junction.signal.plans`, `junction.signal.calls`, `junction.signal.actuation`, `junction.signal.bicycles`, `junction.signal.transit`, `junction.signal.preemption`, `projects.read-only`                                               |
+| `tests/e2e/tests/street.spec.ts`                           |    71 | `street.pieces`, `street.stretches`, `street.checks`                                                                                                                                                                                   |
+| `tests/e2e/tests/world.spec.ts`                            |     4 | `city.area`, `city.edits`                                                                                                                                                                                                              |
 
 ### `street.pieces`
 
@@ -255,8 +255,8 @@ A street's cross-section is laid out from pieces that are added, removed, resize
 | `crates/cityloom_model/src/street/from_road.rs`       | `citymodel_builder` and `cityloom_model` |    10 |
 | `crates/cityloom_model/src/street/mod.rs`             | `citymodel_builder` and `cityloom_model` |     6 |
 | `crates/cityloom_model/src/street/speed.rs`           | `citymodel_builder` and `cityloom_model` |     1 |
-| `e2e/tests/street.spec.ts`                            | UI tier                                  |    71 |
-| `e2e/tests/editors.spec.ts`                           | UI tier                                  |    26 |
+| `tests/e2e/tests/street.spec.ts`                      | UI tier                                  |    71 |
+| `tests/e2e/tests/editors.spec.ts`                     | UI tier                                  |    26 |
 
 ### `street.drawing`
 
@@ -292,7 +292,7 @@ A street is drawn in 2.5D, and a piece is chosen by pressing it on the drawing.
 | `crates/cityloom_editor/src/street/view/iso/surface.rs`        | Model   |     4 |
 | `crates/cityloom_editor/src/street/view/iso/symbols.rs`        | Model   |     7 |
 | `crates/cityloom_editor/src/street/view/iso/taper.rs`          | Model   |     3 |
-| `e2e/tests/street-iso.spec.ts`                                 | UI tier |    14 |
+| `tests/e2e/tests/street-iso.spec.ts`                           | UI tier |    14 |
 
 ### `street.stretches`
 
@@ -311,8 +311,8 @@ A street is split into stretches, each with its own layout, whose boundaries are
 | `crates/cityloom_editor/src/street/view/plan/mod.rs`    | Model      |    14 |
 | `crates/cityloom_editor/src/street/view/plan/scale.rs`  | Model      |     2 |
 | `crates/cityloom_editor/src/street/vm/plan.rs`          | View-model |    23 |
-| `e2e/tests/street.spec.ts`                              | UI tier    |    71 |
-| `e2e/tests/a11y.spec.ts`                                | UI tier    |    21 |
+| `tests/e2e/tests/street.spec.ts`                        | UI tier    |    71 |
+| `tests/e2e/tests/a11y.spec.ts`                          | UI tier    |    21 |
 
 ### `street.speed`
 
@@ -325,7 +325,7 @@ A street and each of its stretches have a speed limit, imported from OpenStreetM
 | ------------------------------------------------------- | ---------------------------------------- | ----: |
 | `crates/cityloom_editor/src/street/model/zone_speed.rs` | Model                                    |    14 |
 | `crates/cityloom_model/src/street/speed.rs`             | `citymodel_builder` and `cityloom_model` |     1 |
-| `e2e/tests/speed.spec.ts`                               | UI tier                                  |    10 |
+| `tests/e2e/tests/speed.spec.ts`                         | UI tier                                  |    10 |
 
 ### `street.curbside`
 
@@ -341,7 +341,7 @@ Curbside uses (parking, loading, trees, patios, bike parking, platforms) are pla
 | `crates/cityloom_editor/src/street/model/curb_shown.rs` | Model   |    12 |
 | `crates/cityloom_editor/src/street/model/map_uses.rs`   | Model   |    12 |
 | `crates/cityloom_editor/src/street/view/curb_strip.rs`  | Model   |     9 |
-| `e2e/tests/curb.spec.ts`                                | UI tier |     5 |
+| `tests/e2e/tests/curb.spec.ts`                          | UI tier |     5 |
 
 ### `street.stops`
 
@@ -354,7 +354,7 @@ Bus stops are added along a street, at the curb, on a bulb or on an island, with
 | ----------------------------------------------------- | ------- | ----: |
 | `crates/cityloom_editor/src/street/model/stop.rs`     | Model   |    37 |
 | `crates/cityloom_editor/src/street/model/stop_end.rs` | Model   |    15 |
-| `e2e/tests/stops.spec.ts`                             | UI tier |     6 |
+| `tests/e2e/tests/stops.spec.ts`                       | UI tier |     6 |
 
 ### `street.calming`
 
@@ -367,7 +367,7 @@ Raised elements calm traffic: raised tables, raised crossings, chicanes and moda
 | ---------------------------------------------------------- | ------- | ----: |
 | `crates/cityloom_editor/src/street/model/calming.rs`       | Model   |    52 |
 | `crates/cityloom_editor/src/street/model/calming_shown.rs` | Model   |     6 |
-| `e2e/tests/calming.spec.ts`                                | UI tier |    10 |
+| `tests/e2e/tests/calming.spec.ts`                          | UI tier |    10 |
 
 ### `street.green`
 
@@ -381,7 +381,7 @@ Street trees and green infrastructure (tree pits, planting beds, rain gardens, b
 | `crates/cityloom_editor/src/street/model/green.rs`      | Model   |    59 |
 | `crates/cityloom_editor/src/street/view/green_strip.rs` | Model   |     3 |
 | `crates/cityloom_editor/src/street/view/green_tools.rs` | Model   |     2 |
-| `e2e/tests/green.spec.ts`                               | UI tier |     7 |
+| `tests/e2e/tests/green.spec.ts`                         | UI tier |     7 |
 
 ### `street.checks`
 
@@ -396,8 +396,8 @@ A street's checks say whether its pieces fit and meet the standards, and the Imp
 | `crates/cityloom_editor/src/street/model/profile.rs`     | Model      |     7 |
 | `crates/cityloom_editor/src/street/model/unavailable.rs` | Model      |     6 |
 | `crates/cityloom_editor/src/street/vm/impact.rs`         | View-model |    15 |
-| `e2e/tests/impact.spec.ts`                               | UI tier    |    11 |
-| `e2e/tests/street.spec.ts`                               | UI tier    |    71 |
+| `tests/e2e/tests/impact.spec.ts`                         | UI tier    |    11 |
+| `tests/e2e/tests/street.spec.ts`                         | UI tier    |    71 |
 
 ### `street.templates`
 
@@ -411,7 +411,7 @@ A street is transformed by a template, such as a transit street or a school stre
 | `crates/cityloom_editor/src/street/model/school.rs`    | Model      |    17 |
 | `crates/cityloom_editor/src/street/model/templates.rs` | Model      |    10 |
 | `crates/cityloom_editor/src/street/vm/transform.rs`    | View-model |    23 |
-| `e2e/tests/templates.spec.ts`                          | UI tier    |     5 |
+| `tests/e2e/tests/templates.spec.ts`                    | UI tier    |     5 |
 
 ### `street.standards`
 
@@ -426,7 +426,7 @@ A standards profile replaces the built-in thresholds that a street's checks read
 | `crates/cityloom_editor/src/standards/store.rs` | Model     |    12 |
 | `crates/cityloom_editor/src/standards/tests.rs` | Component |    13 |
 | `crates/cityloom_editor/src/standards/view.rs`  | Model     |     1 |
-| `e2e/tests/standards.spec.ts`                   | UI tier   |     7 |
+| `tests/e2e/tests/standards.spec.ts`             | UI tier   |     7 |
 
 ### `junction.layout`
 
@@ -459,9 +459,9 @@ A junction's arms, lanes, turns, crossings and control are drawn and edited, and
 | `crates/cityloom_editor/src/junction/vm/keys.rs`           | View-model |    11 |
 | `crates/cityloom_editor/src/junction/vm/mod.rs`            | View-model |    56 |
 | `crates/cityloom_editor/src/junction/vm/text.rs`           | View-model |    15 |
-| `e2e/tests/junction.spec.ts`                               | UI tier    |    81 |
-| `e2e/tests/junction-a11y.spec.ts`                          | UI tier    |    21 |
-| `e2e/tests/focus-touch.spec.ts`                            | UI tier    |    10 |
+| `tests/e2e/tests/junction.spec.ts`                         | UI tier    |    81 |
+| `tests/e2e/tests/junction-a11y.spec.ts`                    | UI tier    |    21 |
+| `tests/e2e/tests/focus-touch.spec.ts`                      | UI tier    |    10 |
 
 ### `junction.roundabout`
 
@@ -475,7 +475,7 @@ A junction is made a roundabout or a turbo roundabout.
 | `crates/cityloom_editor/src/junction/model/turbo.rs`        | Model   |    22 |
 | `crates/cityloom_editor/src/junction/model/turbo_ring.rs`   | Model   |     2 |
 | `crates/cityloom_editor/src/junction/model/turbo_spiral.rs` | Model   |    16 |
-| `e2e/tests/junction.spec.ts`                                | UI tier |    81 |
+| `tests/e2e/tests/junction.spec.ts`                          | UI tier |    81 |
 
 ### `junction.signal.phases`
 
@@ -490,7 +490,7 @@ A signalled junction's phases are chosen from ready-made patterns or set by hand
 | `crates/cityloom_editor/src/junction/view/phase_svg.rs`    | Model   |     9 |
 | `crates/cityloom_editor/src/junction/view/signal_folds.rs` | Model   |     8 |
 | `crates/cityloom_editor/src/junction/view/turns.rs`        | Model   |     1 |
-| `e2e/tests/junction.spec.ts`                               | UI tier |    81 |
+| `tests/e2e/tests/junction.spec.ts`                         | UI tier |    81 |
 
 ### `junction.signal.plans`
 
@@ -502,8 +502,8 @@ A signal follows time-of-day plans on a weekly schedule.
 | Test file or spec                                    | Level   | Tests |
 | ---------------------------------------------------- | ------- | ----: |
 | `crates/cityloom_editor/src/junction/model/plans.rs` | Model   |    14 |
-| `e2e/tests/junction.spec.ts`                         | UI tier |    81 |
-| `e2e/tests/read-only.spec.ts`                        | UI tier |     5 |
+| `tests/e2e/tests/junction.spec.ts`                   | UI tier |    81 |
+| `tests/e2e/tests/read-only.spec.ts`                  | UI tier |     5 |
 
 ### `junction.signal.calls`
 
@@ -515,8 +515,8 @@ A signal serves pedestrians on call, by push button or by passive detection.
 | Test file or spec                                    | Level   | Tests |
 | ---------------------------------------------------- | ------- | ----: |
 | `crates/cityloom_editor/src/junction/model/calls.rs` | Model   |    33 |
-| `e2e/tests/junction.spec.ts`                         | UI tier |    81 |
-| `e2e/tests/read-only.spec.ts`                        | UI tier |     5 |
+| `tests/e2e/tests/junction.spec.ts`                   | UI tier |    81 |
+| `tests/e2e/tests/read-only.spec.ts`                  | UI tier |     5 |
 
 ### `junction.signal.actuation`
 
@@ -528,8 +528,8 @@ A signal's green responds to vehicle demand (actuation).
 | Test file or spec                                        | Level   | Tests |
 | -------------------------------------------------------- | ------- | ----: |
 | `crates/cityloom_editor/src/junction/model/actuation.rs` | Model   |    16 |
-| `e2e/tests/junction.spec.ts`                             | UI tier |    81 |
-| `e2e/tests/read-only.spec.ts`                            | UI tier |     5 |
+| `tests/e2e/tests/junction.spec.ts`                       | UI tier |    81 |
+| `tests/e2e/tests/read-only.spec.ts`                      | UI tier |     5 |
 
 ### `junction.signal.bicycles`
 
@@ -541,8 +541,8 @@ A signal detects bicycles and gives them their green.
 | Test file or spec                                       | Level   | Tests |
 | ------------------------------------------------------- | ------- | ----: |
 | `crates/cityloom_editor/src/junction/model/bicycles.rs` | Model   |    14 |
-| `e2e/tests/junction.spec.ts`                            | UI tier |    81 |
-| `e2e/tests/read-only.spec.ts`                           | UI tier |     5 |
+| `tests/e2e/tests/junction.spec.ts`                      | UI tier |    81 |
+| `tests/e2e/tests/read-only.spec.ts`                     | UI tier |     5 |
 
 ### `junction.signal.transit`
 
@@ -554,8 +554,8 @@ A signal gives transit priority by early green or green extension.
 | Test file or spec                                      | Level   | Tests |
 | ------------------------------------------------------ | ------- | ----: |
 | `crates/cityloom_editor/src/junction/model/transit.rs` | Model   |    16 |
-| `e2e/tests/junction.spec.ts`                           | UI tier |    81 |
-| `e2e/tests/read-only.spec.ts`                          | UI tier |     5 |
+| `tests/e2e/tests/junction.spec.ts`                     | UI tier |    81 |
+| `tests/e2e/tests/read-only.spec.ts`                    | UI tier |     5 |
 
 ### `junction.signal.preemption`
 
@@ -567,8 +567,8 @@ A junction's signal pre-empts for emergency calls.
 | Test file or spec                                         | Level   | Tests |
 | --------------------------------------------------------- | ------- | ----: |
 | `crates/cityloom_editor/src/junction/model/preemption.rs` | Model   |    19 |
-| `e2e/tests/junction.spec.ts`                              | UI tier |    81 |
-| `e2e/tests/read-only.spec.ts`                             | UI tier |     5 |
+| `tests/e2e/tests/junction.spec.ts`                        | UI tier |    81 |
+| `tests/e2e/tests/read-only.spec.ts`                       | UI tier |     5 |
 
 ### `design.scenarios`
 
@@ -580,7 +580,7 @@ A street or a junction has named scenarios beside its baseline, made, renamed, d
 | Test file or spec                             | Level   | Tests |
 | --------------------------------------------- | ------- | ----: |
 | `crates/cityloom_editor/src/city/scenario.rs` | Model   |    10 |
-| `e2e/tests/scenarios.spec.ts`                 | UI tier |     9 |
+| `tests/e2e/tests/scenarios.spec.ts`           | UI tier |     9 |
 
 ### `design.compare`
 
@@ -597,7 +597,7 @@ Two designs of one street or junction are compared side by side, with what diffe
 | `crates/cityloom_editor/src/shared/compare_view.rs`    | Model      |    11 |
 | `crates/cityloom_editor/src/street/model/compare.rs`   | Model      |    13 |
 | `crates/cityloom_editor/src/street/vm/compare.rs`      | View-model |    10 |
-| `e2e/tests/compare.spec.ts`                            | UI tier    |     8 |
+| `tests/e2e/tests/compare.spec.ts`                      | UI tier    |     8 |
 
 ### `map.city`
 
@@ -614,8 +614,8 @@ The city map shows the project's area with its streets and junctions, and opens 
 | `crates/cityloom_editor/src/map/vm/overlay.rs`     | View-model |    50 |
 | `crates/cityloom_editor/src/map/vm/selection.rs`   | View-model |     4 |
 | `crates/cityloom_editor/src/map/vm/style.rs`       | View-model |    21 |
-| `e2e/tests/map.spec.ts`                            | UI tier    |    38 |
-| `e2e/tests/webgl.spec.ts`                          | UI tier    |     1 |
+| `tests/e2e/tests/map.spec.ts`                      | UI tier    |    38 |
+| `tests/e2e/tests/webgl.spec.ts`                    | UI tier    |     1 |
 
 ### `map.search`
 
@@ -627,7 +627,7 @@ Places of the map are found by name from the search box.
 | Test file or spec                             | Level   | Tests |
 | --------------------------------------------- | ------- | ----: |
 | `crates/cityloom_editor/src/shared/search.rs` | Model   |     2 |
-| `e2e/tests/search.spec.ts`                    | UI tier |    13 |
+| `tests/e2e/tests/search.spec.ts`              | UI tier |    13 |
 
 ### `map.goals`
 
@@ -640,7 +640,7 @@ A planning goal chosen on the map is followed on the street and junction pages.
 | ------------------------------------------------- | ------- | ----: |
 | `crates/cityloom_editor/src/shared/goals.rs`      | Model   |     8 |
 | `crates/cityloom_editor/src/shared/goals_view.rs` | Model   |     5 |
-| `e2e/tests/map.spec.ts`                           | UI tier |    38 |
+| `tests/e2e/tests/map.spec.ts`                     | UI tier |    38 |
 
 ### `map.network-checks`
 
@@ -654,7 +654,7 @@ The network checks find dead ends, missing crossings, broken cycling links and t
 | `crates/cityloom_editor/src/map/model/corridor.rs` | Model                                    |     7 |
 | `crates/cityloom_editor/src/map/model/network.rs`  | Model                                    |    23 |
 | `crates/cityloom_model/src/corridor.rs`            | `citymodel_builder` and `cityloom_model` |     4 |
-| `e2e/tests/network.spec.ts`                        | UI tier                                  |     8 |
+| `tests/e2e/tests/network.spec.ts`                  | UI tier                                  |     8 |
 
 ### `map.area-rules`
 
@@ -670,7 +670,7 @@ Rules are declared over an area drawn on the map (car-free, bus and bike only, s
 | `crates/cityloom_editor/src/restriction/mod.rs`   | Model      |     1 |
 | `crates/cityloom_editor/src/restriction/model.rs` | Model      |    26 |
 | `crates/cityloom_editor/src/restriction/store.rs` | Model      |    23 |
-| `e2e/tests/restrictions.spec.ts`                  | UI tier    |    18 |
+| `tests/e2e/tests/restrictions.spec.ts`            | UI tier    |    18 |
 
 ### `map.report`
 
@@ -684,7 +684,7 @@ The design review report is downloaded as a PDF, in the page's language.
 | `crates/cityloom_editor/src/map/vm/report.rs`        | View-model     |     5 |
 | `crates/cityloom_editor/src/map/vm/report_review.rs` | View-model     |     7 |
 | `crates/cityloom_report/src/lib.rs`                  | Report and PDF |     1 |
-| `e2e/tests/report.spec.ts`                           | UI tier        |     7 |
+| `tests/e2e/tests/report.spec.ts`                     | UI tier        |     7 |
 
 ### `city.area`
 
@@ -704,7 +704,7 @@ A project's area is fetched from its tiles, cut out and made into a city of stre
 | `crates/cityloom_editor/src/place/loader.rs`            | Model   |    13 |
 | `crates/cityloom_editor/src/place/mod.rs`               | Model   |     6 |
 | `crates/cityloom_editor/src/place/tiles.rs`             | Model   |     7 |
-| `e2e/tests/world.spec.ts`                               | UI tier |     4 |
+| `tests/e2e/tests/world.spec.ts`                         | UI tier |     4 |
 
 ### `city.edits`
 
@@ -721,8 +721,8 @@ A street's or junction's edits are kept in the browser under its OpenStreetMap i
 | `crates/cityloom_editor/src/city/store.rs`    | Model   |    61 |
 | `crates/cityloom_editor/src/shared/scoped.rs` | Model   |     7 |
 | `crates/cityloom_editor/src/shared/store.rs`  | Model   |     1 |
-| `e2e/tests/edits.spec.ts`                     | UI tier |     6 |
-| `e2e/tests/world.spec.ts`                     | UI tier |     4 |
+| `tests/e2e/tests/edits.spec.ts`               | UI tier |     6 |
+| `tests/e2e/tests/world.spec.ts`               | UI tier |     4 |
 
 ### `data.importer`
 
@@ -767,7 +767,7 @@ The network is cut into tiles and packed into the city archive, which the server
 | `crates/citymodel_builder/src/progress/frame.rs` | `citymodel_builder` and `cityloom_model` |    25 |
 | `crates/citymodel_builder/src/progress/mod.rs`   | `citymodel_builder` and `cityloom_model` |     3 |
 | `crates/citymodel_builder/src/progress/view.rs`  | `citymodel_builder` and `cityloom_model` |     2 |
-| `e2e/tests/archive.spec.ts`                      | E2E tier                                 |     3 |
+| `tests/e2e/tests/archive.spec.ts`                | E2E tier                                 |     3 |
 
 ### `projects.list`
 
@@ -781,8 +781,8 @@ The home page lists the person's projects; a project is made in a metropolitan a
 | `crates/cityloom_editor/src/project/copies.rs`    | Model     |    13 |
 | `crates/cityloom_editor/src/project/tests.rs`     | Component |   117 |
 | `crates/cityloom_editor/src/shared/project_id.rs` | Model     |     9 |
-| `e2e/tests/home.spec.ts`                          | UI tier   |     5 |
-| `e2e/tests/projects.spec.ts`                      | UI tier   |    12 |
+| `tests/e2e/tests/home.spec.ts`                    | UI tier   |     5 |
+| `tests/e2e/tests/projects.spec.ts`                | UI tier   |    12 |
 
 ### `projects.timeline`
 
@@ -797,7 +797,7 @@ A project's milestones keep its work at a moment, and are compared with the work
 | `crates/cityloom_editor/src/timeline/store.rs` | Model     |     9 |
 | `crates/cityloom_editor/src/timeline/tests.rs` | Component |    20 |
 | `crates/cityloom_editor/src/timeline/work.rs`  | Model     |    12 |
-| `e2e/tests/timeline.spec.ts`                   | UI tier   |     7 |
+| `tests/e2e/tests/timeline.spec.ts`             | UI tier   |     7 |
 
 ### `projects.design-archive`
 
@@ -809,7 +809,7 @@ A project's design is exported as one file and imported on another device.
 | Test file or spec                             | Level     | Tests |
 | --------------------------------------------- | --------- | ----: |
 | `crates/cityloom_editor/src/archive/tests.rs` | Component |    29 |
-| `e2e/tests/design-archive.spec.ts`            | UI tier   |     4 |
+| `tests/e2e/tests/design-archive.spec.ts`      | UI tier   |     4 |
 
 ### `projects.share`
 
@@ -824,7 +824,7 @@ A project is shared by a link that opens it read-only, and a shared design is co
 | `crates/cityloom_editor/src/share/store.rs`    | Model            |     2 |
 | `crates/cityloom_editor/src/share/tests.rs`    | Component        |    37 |
 | `crates/cityloom_server/src/share.rs`          | Server           |     8 |
-| `e2e/tests/share.spec.ts`                      | Integration tier |     9 |
+| `tests/e2e/tests/share.spec.ts`                | Integration tier |     9 |
 
 ### `projects.read-only`
 
@@ -836,7 +836,7 @@ A design opened read-only can be looked at and chosen in, and no control changes
 | Test file or spec                             | Level   | Tests |
 | --------------------------------------------- | ------- | ----: |
 | `crates/cityloom_editor/src/shared/locked.rs` | Model   |     1 |
-| `e2e/tests/read-only.spec.ts`                 | UI tier |     5 |
+| `tests/e2e/tests/read-only.spec.ts`           | UI tier |     5 |
 
 ### `account.sign-in`
 
@@ -858,8 +858,8 @@ A person signs in with a provider, links or unlinks sign-ins, chooses where the 
 | `crates/cityloom_server/src/providers/apple.rs`     | Server           |     4 |
 | `crates/cityloom_server/src/providers/microsoft.rs` | Server           |     3 |
 | `crates/cityloom_server/src/session.rs`             | Server           |     8 |
-| `e2e/tests/account.spec.ts`                         | UI tier          |     7 |
-| `e2e/tests/account-server.spec.ts`                  | Integration tier |    12 |
+| `tests/e2e/tests/account.spec.ts`                   | UI tier          |     7 |
+| `tests/e2e/tests/account-server.spec.ts`            | Integration tier |    12 |
 
 ### `account.sync`
 
@@ -875,7 +875,7 @@ A signed-in person's work is kept on the server and merged between devices, also
 | `crates/cityloom_editor/src/sync/model.rs` | Model            |    22 |
 | `crates/cityloom_editor/src/sync/tests.rs` | Component        |    54 |
 | `crates/cityloom_server/src/work.rs`       | Server           |     9 |
-| `e2e/tests/sync.spec.ts`                   | Integration tier |    13 |
+| `tests/e2e/tests/sync.spec.ts`             | Integration tier |    13 |
 
 ### `shell.settings`
 
@@ -894,9 +894,9 @@ Every page has the top bar, the settings menu (theme, units, region, keyboard sh
 | `crates/cityloom_editor/src/shell/share.rs`     | Model      |     1 |
 | `crates/cityloom_editor/src/shell/tests.rs`     | Component  |    44 |
 | `crates/cityloom_editor/src/shell/vm.rs`        | View-model |    30 |
-| `e2e/tests/shell.spec.ts`                       | UI tier    |    47 |
-| `e2e/tests/editors.spec.ts`                     | UI tier    |    26 |
-| `e2e/tests/footer.spec.ts`                      | UI tier    |    11 |
+| `tests/e2e/tests/shell.spec.ts`                 | UI tier    |    47 |
+| `tests/e2e/tests/editors.spec.ts`               | UI tier    |    26 |
+| `tests/e2e/tests/footer.spec.ts`                | UI tier    |    11 |
 
 ### `shell.language`
 
@@ -909,7 +909,7 @@ Every app page can be read in English or in Canadian French, and the choice is k
 | ------------------------------------------- | ------- | ----: |
 | `crates/cityloom_editor/src/shared/i18n.rs` | Model   |    18 |
 | `crates/cityloom_editor/src/shared/said.rs` | Model   |     5 |
-| `e2e/tests/language.spec.ts`                | UI tier |    21 |
+| `tests/e2e/tests/language.spec.ts`          | UI tier |    21 |
 
 ### `shell.accessibility`
 
@@ -921,8 +921,8 @@ Every page is usable by keyboard and screen reader, at any zoom and width, and i
 | Test file or spec                               | Level   | Tests |
 | ----------------------------------------------- | ------- | ----: |
 | `crates/cityloom_editor/src/shared/contrast.rs` | Guard   |    28 |
-| `e2e/tests/a11y.spec.ts`                        | UI tier |    21 |
-| `e2e/tests/focus-touch.spec.ts`                 | UI tier |    10 |
+| `tests/e2e/tests/a11y.spec.ts`                  | UI tier |    21 |
+| `tests/e2e/tests/focus-touch.spec.ts`           | UI tier |    10 |
 
 ### `pages.about`
 
@@ -934,7 +934,7 @@ The About page says what CityLoom is for, over the city of the project opened la
 | Test file or spec                            | Level   | Tests |
 | -------------------------------------------- | ------- | ----: |
 | `crates/cityloom_editor/src/map/view/svg.rs` | Model   |    14 |
-| `e2e/tests/about.spec.ts`                    | UI tier |    16 |
+| `tests/e2e/tests/about.spec.ts`              | UI tier |    16 |
 
 ### `pages.credits`
 
@@ -954,8 +954,8 @@ The server delivers the site and the city's data quickly: versioned addresses, c
 | -------------------------------------- | -------- | ----: |
 | `crates/cityloom_server/src/app.rs`    | Server   |     5 |
 | `crates/cityloom_server/src/config.rs` | Server   |    17 |
-| `e2e/tests/delivery.spec.ts`           | E2E tier |    14 |
-| `e2e/tests/serve.spec.ts`              | E2E tier |     4 |
+| `tests/e2e/tests/delivery.spec.ts`     | E2E tier |    14 |
+| `tests/e2e/tests/serve.spec.ts`        | E2E tier |     4 |
 
 ## Unmapped
 
@@ -1030,7 +1030,7 @@ on this page: 3,666 mapped and 886 unmapped Rust tests make the 4,552, the 607 P
 
 ### Unmapped Playwright tests
 
-None: every spec of `e2e/tiers.json` is in a feature, and `scripts/include/tests/test_features.py` fails otherwise.
+None: every spec of `tests/e2e/tiers.json` is in a feature, and `scripts/include/tests/test_features.py` fails otherwise.
 
 ### Unmapped script tests
 

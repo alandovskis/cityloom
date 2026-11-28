@@ -31,7 +31,7 @@ Writes and posts the plan for one feasible CityLoom issue, then makes the issue'
    git worktree add "<worktrees>/clm-<n>" -b "<gitBranchName>" origin/<github.base>
    ```
 
-   Then set it up once, as any new checkout: `just setup` in it (`npm ci` at its root and in `e2e/`, `wasm-bindgen` into its `.tools`, Playwright's Chromium); for the docs flow, `npm ci` in `e2e/` (the Prettier the check uses) and `just setup-docs` instead. The tests flow sets it up as the code flow does. Without it the gates refuse to run (`could not run a tool`).
+   Then set it up once, as any new checkout: `just setup` in it (`npm ci` at its root and in `tests/e2e/`, `wasm-bindgen` into its `.tools`, Playwright's Chromium); for the docs flow, `npm ci` in `tests/e2e/` (the Prettier the check uses) and `just setup-docs` instead. The tests flow sets it up as the code flow does. Without it the gates refuse to run (`could not run a tool`).
 
    `<worktrees>` is `config.worktrees` against the main checkout's folder (`<parent>/main` gives `<parent>/worktrees`); `<gitBranchName>` is Linear's for the issue. A branch of that name already on `origin` or in another worktree: hand back, naming it (someone else's work). Nothing is pushed: the branch goes to `origin` once green.
 
