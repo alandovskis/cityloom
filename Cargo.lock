@@ -678,7 +678,7 @@ dependencies = [
 
 [[package]]
 name = "cityloom_editor"
-version = "0.116.10"
+version = "0.116.11"
 dependencies = [
  "any_spawner",
  "cityloom_model",
