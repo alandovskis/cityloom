@@ -1,0 +1,30 @@
+$ echo prefix=cityloom-main-4046072687; docker run --rm --user 501:20 cityloom-rust sh -c 'which just wasm-bindgen cargo node npm npx kill; ls -l /usr/bin/kill; echo CARGO_HOME=$CARGO_HOME CARGO_TARGET_DIR=$CARGO_TARGET_DIR; just --version; wasm-bindgen --version; rustc --version; rustup target list --installed; node -v; npm -v; npm config get cache'; docker run --rm --user 501:20 cityloom-e2e sh -c 'npm config get cache; echo PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH; ls $PLAYWRIGHT_BROWSERS_PATH'; docker run --rm --user 501:20 cityloom-js sh -c 'node -v; npm config get cache'; docker run --rm --user 501:20 cityloom-docs sh -c 'node -v; python3 --version; npm config get cache'
+prefix=cityloom-main-4046072687
+/usr/local/bin/just
+/usr/local/bin/wasm-bindgen
+/usr/local/cargo/bin/cargo
+/usr/local/bin/node
+/usr/local/bin/npm
+/usr/local/bin/npx
+/usr/bin/kill
+-rwxr-xr-x 1 root root 67824 Jul 30  2025 /usr/bin/kill
+CARGO_HOME=/cargo CARGO_TARGET_DIR=/target
+just 1.59.0
+wasm-bindgen 0.2.130
+rustc 1.100.0 (0ef1bc386 2026-11-09)
+aarch64-unknown-linux-gnu
+wasm32-unknown-unknown
+v26.13.1
+11.20.0
+/tmp/npm-cache
+/tmp/npm-cache
+PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+chromium-1255
+chromium_headless_shell-1255
+ffmpeg-1013
+v26.13.1
+/tmp/npm-cache
+v26.13.1
+Python 3.13.5
+/tmp/npm-cache
+[exit 0]

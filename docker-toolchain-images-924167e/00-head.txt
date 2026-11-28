@@ -1,0 +1,9 @@
+07 captured at: 1f949432bdf0980ddce483e45972531d4623bd92
+11 captured at: 924167e346b9fa625dc6387a8b0f2af150d1ba67
+01-06, 09, 10 captured at: 5c83020c4d2705cc6a57373bde9beeac9b580247
+$ git diff --stat 5c83020c HEAD   (all that changed since 01-06, 09, 10)
+ dockerfiles/README.md | 11 +++++++----
+ 1 file changed, 7 insertions(+), 4 deletions(-)
+$ git diff --stat 1f949432 HEAD   (all that changed since 07)
+ dockerfiles/README.md | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)

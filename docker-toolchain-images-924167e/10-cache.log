@@ -1,0 +1,8 @@
+$ (crates/cityloom_editor/Cargo.toml version set to version = "0.116.999") docker buildx bake -f dockerfiles/docker-bake.hcl rust e2e
+#12 [rust stage-2  5/10] RUN cargo install wasm-bindgen-cli --version "$(cat /tmp/wasm-bindgen-version)" --locked --root /usr/local     && cargo install just --locked --root /usr/local     && rm -rf /tmp/wasm-bindgen-version /usr/local/.crates.toml /usr/local/.crates2.json         "/usr/local/cargo/registry" "/usr/local/cargo/git" "/usr/local/cargo"/.package-cache* "/usr/local/cargo"/.global-cache
+#12 CACHED
+#22 [e2e stage-1 2/4] RUN npx -y "playwright@$(cat /tmp/playwright-version)" install --with-deps chromium     && rm -rf /tmp/playwright-version /tmp/npm-cache /var/lib/apt/lists/*     && chmod -R a+rX "/ms-playwright"
+#22 CACHED
+#12 [e2e stage-2  5/10] RUN cargo install wasm-bindgen-cli --version "$(cat /tmp/wasm-bindgen-version)" --locked --root /usr/local     && cargo install just --locked --root /usr/local     && rm -rf /tmp/wasm-bindgen-version /usr/local/.crates.toml /usr/local/.crates2.json         "/usr/local/cargo/registry" "/usr/local/cargo/git" "/usr/local/cargo"/.package-cache* "/usr/local/cargo"/.global-cache
+#12 CACHED
+(version restored: 0 files changed)

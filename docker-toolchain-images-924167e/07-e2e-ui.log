@@ -1,0 +1,35 @@
+host target/e2e/cityloom_server before: e148665f818094e3f1a3b4d907e8e11f9a209778d995327b7c798aa2cf7ff24c  target/e2e/cityloom_server
+host web/pkg/cityloom_editor_bg.wasm before: 32861f46f151cb9e53a9822c29ca1f84c796f235528cb9413e36f8df08db3f8a  web/pkg/cityloom_editor_bg.wasm
+$ docker run --rm --user 501:20 -v "$PWD":/src -v cityloom-main-4046072687-node-modules:/src/node_modules -v cityloom-main-4046072687-e2e-node-modules:/src/e2e/node_modules -v cityloom-main-4046072687-tools:/src/.tools -v cityloom-main-4046072687-target:/target -v cityloom-main-4046072687-checkout-target:/src/target --mount type=tmpfs,dst=/src/web/data -v cityloom-cargo:/cargo cityloom-e2e sh -c 'cd e2e && npm ci && cd .. && just e2e-ui'
+
+added 9 packages, and audited 10 packages in 1s
+
+3 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+./scripts/build.sh
+    Finished `release` profile [optimized] target(s) in 0.30s
+web/pkg/cityloom_editor.js: 95890 B, br 12954 B, gzip 15435 B
+web/pkg/cityloom_editor_bg.wasm: 8747984 B, br 1471384 B, gzip 2274915 B
+web/pkg/cityloom_report_pdf.js: 8144 B, br 2062 B, gzip 2315 B
+web/pkg/cityloom_report_pdf_bg.wasm: 2369547 B, br 562810 B, gzip 780259 B
+web/vendor/maplibre-gl-shared.mjs: 0 B, br 1 B, gzip 20 B
+web/vendor/maplibre-gl-worker.mjs: 550754 B, br 130006 B, gzip 158020 B
+web/vendor/maplibre-gl.css: 71596 B, br 8326 B, gzip 10161 B
+web/vendor/maplibre-gl.mjs: 1106041 B, br 245431 B, gzip 299604 B
+14 compressed copies
+cargo build -p cityloom_server --features test-provider
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.40s
+./scripts/pin-server.sh
+cd e2e && npx playwright test --project=ui 
+
+Running 570 tests using 4 workers
+
+  -   89 [ui] › tests/editors.spec.ts:67:5 › the junction editor's panel and tray › the title and the tools stay in view while the plan below the drawing is scrolled
+
+  1 skipped
+  569 passed (10.8m)
+[just e2e-ui exit 0]
+host target/e2e/cityloom_server after:  e148665f818094e3f1a3b4d907e8e11f9a209778d995327b7c798aa2cf7ff24c  target/e2e/cityloom_server
+host web/pkg/cityloom_editor_bg.wasm after:  32861f46f151cb9e53a9822c29ca1f84c796f235528cb9413e36f8df08db3f8a  web/pkg/cityloom_editor_bg.wasm (just build rewrites web/pkg, the build's output, by design)

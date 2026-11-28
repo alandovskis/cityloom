@@ -1,0 +1,106 @@
+$ docker buildx bake -f dockerfiles/docker-bake.hcl --progress=plain 2>&1 | grep -E "^#[0-9]+ (\[|naming|DONE|CACHED|ERROR)" 
+#1 [internal] load local bake definitions
+#1 DONE 0.0s
+#2 [e2e internal] load build definition from e2e.Dockerfile
+#2 DONE 0.0s
+#3 [docs internal] load build definition from docs.Dockerfile
+#3 DONE 0.0s
+#4 [rust internal] load build definition from rust.Dockerfile
+#4 DONE 0.0s
+#5 [js internal] load build definition from js.Dockerfile
+#5 DONE 0.0s
+#6 [rust internal] load metadata for docker.io/library/rust:1-slim
+#6 DONE 0.0s
+#7 [js internal] load metadata for docker.io/library/node:lts-slim
+#7 DONE 0.0s
+#8 [docs internal] load .dockerignore
+#8 DONE 0.0s
+#9 [js 2/3] RUN mkdir -p /src/node_modules && chmod 1777 /src/node_modules
+#9 CACHED
+#10 [docs 3/4] RUN mkdir -p /src/website/node_modules && chmod 1777 /src/website/node_modules
+#10 CACHED
+#11 [docs 2/4] RUN apt-get update     && apt-get install -y --no-install-recommends python3     && rm -rf /var/lib/apt/lists/*
+#11 CACHED
+#12 [js 3/3] WORKDIR /src
+#12 CACHED
+#13 [docs 4/4] WORKDIR /src
+#13 CACHED
+#14 [rust stage-2  1/10] FROM docker.io/library/rust:1-slim
+#14 DONE 0.0s
+#15 [docs] exporting to image
+#15 naming to docker.io/library/cityloom-docs done
+#15 DONE 0.0s
+#16 [js] exporting to image
+#16 naming to docker.io/library/cityloom-js done
+#16 DONE 0.0s
+#17 [rust internal] load build context
+#17 DONE 0.0s
+#18 [rust 1/3] FROM docker.io/library/node:lts-slim
+#18 CACHED
+#19 [rust pin 1/2] COPY crates/cityloom_editor/Cargo.toml /Cargo.toml
+#19 DONE 0.1s
+#20 [rust pin 2/2] RUN sed -n 's/^wasm-bindgen = "\(.*\)"/\1/p' /Cargo.toml > /wasm-bindgen-version     && [ -s /wasm-bindgen-version ]     || { echo "no 'wasm-bindgen = \"<version>\"' line in crates/cityloom_editor/Cargo.toml: the image cannot pin wasm-bindgen-cli" >&2; exit 1; }
+#20 DONE 0.1s
+#21 [rust stage-2  9/10] RUN mkdir -p "/cargo" "/target" /src/target /src/node_modules /src/.tools     && chmod 1777 "/cargo" "/target" /src/target /src/node_modules /src/.tools
+#21 CACHED
+#22 [rust stage-2  3/10] RUN rustup target add wasm32-unknown-unknown     && rustup component add rustfmt clippy
+#22 CACHED
+#23 [rust stage-2  6/10] COPY --from=node /usr/local/bin/node /usr/local/bin/node
+#23 CACHED
+#24 [rust stage-2  2/10] RUN apt-get update     && apt-get install -y --no-install-recommends procps     && rm -rf /var/lib/apt/lists/*
+#24 CACHED
+#25 [rust stage-2  4/10] COPY --from=pin /wasm-bindgen-version /tmp/wasm-bindgen-version
+#25 CACHED
+#26 [rust stage-2  5/10] RUN cargo install wasm-bindgen-cli --version "$(cat /tmp/wasm-bindgen-version)" --locked --root /usr/local     && cargo install just --locked --root /usr/local     && rm -rf /tmp/wasm-bindgen-version /usr/local/.crates.toml /usr/local/.crates2.json         "/usr/local/cargo/registry" "/usr/local/cargo/git" "/usr/local/cargo"/.package-cache* "/usr/local/cargo"/.global-cache
+#26 CACHED
+#27 [rust stage-2  7/10] COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+#27 CACHED
+#28 [rust stage-2  8/10] RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+#28 CACHED
+#29 [rust stage-2 10/10] WORKDIR /src
+#29 CACHED
+#14 [e2e stage-2  1/10] FROM docker.io/library/rust:1-slim
+#14 DONE 0.0s
+#17 [e2e internal] load build context
+#17 DONE 0.0s
+#18 [e2e 1/3] FROM docker.io/library/node:lts-slim
+#18 CACHED
+#19 [e2e pin 1/2] COPY crates/cityloom_editor/Cargo.toml /Cargo.toml
+#19 DONE 0.1s
+#20 [e2e pin 2/2] RUN sed -n 's/^wasm-bindgen = "\(.*\)"/\1/p' /Cargo.toml > /wasm-bindgen-version     && [ -s /wasm-bindgen-version ]     || { echo "no 'wasm-bindgen = \"<version>\"' line in crates/cityloom_editor/Cargo.toml: the image cannot pin wasm-bindgen-cli" >&2; exit 1; }
+#20 DONE 0.2s
+#30 [e2e internal] load build context
+#30 DONE 0.0s
+#31 [e2e stage-1 2/4] RUN npx -y "playwright@$(cat /tmp/playwright-version)" install --with-deps chromium     && rm -rf /tmp/playwright-version /tmp/npm-cache /var/lib/apt/lists/*     && chmod -R a+rX "/ms-playwright"
+#31 CACHED
+#32 [e2e pin 2/3] RUN node -e '       const entry = require("/package-lock.json").packages?.["node_modules/@playwright/test"];       if (!entry?.version) { console.error("no @playwright/test version in e2e/package-lock.json: the image cannot pin Chromium"); process.exit(1); }       require("fs").writeFileSync("/playwright-version", entry.version);'
+#32 CACHED
+#33 [e2e stage-1 1/4] COPY --from=pin /playwright-version /tmp/playwright-version
+#33 CACHED
+#34 [e2e pin 1/3] COPY e2e/package-lock.json /package-lock.json
+#34 CACHED
+#35 [e2e stage-1 3/4] RUN mkdir -p /src/e2e/node_modules && chmod 1777 /src/e2e/node_modules
+#35 CACHED
+#36 [e2e] exporting to image
+#36 naming to docker.io/library/cityloom-e2e done
+#36 DONE 0.0s
+#27 [e2e stage-2  7/10] COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+#27 CACHED
+#24 [e2e stage-2  2/10] RUN apt-get update     && apt-get install -y --no-install-recommends procps     && rm -rf /var/lib/apt/lists/*
+#24 CACHED
+#21 [e2e stage-2  9/10] RUN mkdir -p "/cargo" "/target" /src/target /src/node_modules /src/.tools     && chmod 1777 "/cargo" "/target" /src/target /src/node_modules /src/.tools
+#21 CACHED
+#23 [e2e stage-2  6/10] COPY --from=node /usr/local/bin/node /usr/local/bin/node
+#23 CACHED
+#25 [e2e stage-2  4/10] COPY --from=pin /wasm-bindgen-version /tmp/wasm-bindgen-version
+#25 CACHED
+#22 [e2e stage-2  3/10] RUN rustup target add wasm32-unknown-unknown     && rustup component add rustfmt clippy
+#22 CACHED
+#28 [e2e stage-2  8/10] RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+#28 CACHED
+#26 [e2e stage-2  5/10] RUN cargo install wasm-bindgen-cli --version "$(cat /tmp/wasm-bindgen-version)" --locked --root /usr/local     && cargo install just --locked --root /usr/local     && rm -rf /tmp/wasm-bindgen-version /usr/local/.crates.toml /usr/local/.crates2.json         "/usr/local/cargo/registry" "/usr/local/cargo/git" "/usr/local/cargo"/.package-cache* "/usr/local/cargo"/.global-cache
+#26 CACHED
+#37 [rust] exporting to image
+#37 naming to docker.io/library/cityloom-rust done
+#37 DONE 0.0s
+[exit 0]

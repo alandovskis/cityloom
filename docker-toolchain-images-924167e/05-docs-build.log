@@ -1,0 +1,28 @@
+$ docker run --rm --user 501:20 -v "$PWD":/src -v cityloom-main-4046072687-website-node-modules:/src/website/node_modules -w /src/website cityloom-docs sh -c 'npm ci && npm run build' 2>&1 | grep -vE 'npm notice'
+
+added 1417 packages, and audited 1418 packages in 8s
+
+430 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+npm warn install-scripts 2 packages have install scripts not yet covered by allowScripts:
+npm warn install-scripts   @swc/core@1.16.18 (postinstall: node postinstall.js)
+npm warn install-scripts   core-js@3.50.0 (postinstall: node -e "try{require('./postinstall')}catch(e){}")
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+
+> cityloom-website@0.0.0 build
+> docusaurus build
+
+[INFO] Website will be built for all these locales: 
+- en
+- fr-CA
+[INFO] [en] Creating an optimized production build...
+(node:48) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[SUCCESS] Generated static files in "build".
+[INFO] [fr-CA] Creating an optimized production build...
+[SUCCESS] Generated static files in "build/fr-CA".
+[INFO] Use `npm run serve` command to test your build locally.
+[exit 0]

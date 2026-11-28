@@ -1,0 +1,20 @@
+$ two concurrent: docker run --rm --user 501:20 -v "$PWD":/src:ro -v cityloom-cargo:/cargo cityloom-rust cargo fetch --locked
+(cityloom-cargo removed first, so both containers download)
+--- container 1: 677 crates downloaded, exit lines:
+   1     Blocking waiting for file lock on package cache
+   1   Downloaded serde_path_to_error v0.1.20
+   1   Downloaded thiserror v1.0.69
+   1   Downloaded thiserror v2.0.21
+   1   Downloaded thiserror-impl v1.0.69
+   1   Downloaded thiserror-impl v2.0.21
+   1   Downloaded throw_error v0.3.1
+--- container 2: 0 crates downloaded, exit lines:
+   2     Blocking waiting for file lock on package cache
+--- the shared volume:
+.
+..
+.global-cache
+.package-cache
+.package-cache-mutate
+git
+registry

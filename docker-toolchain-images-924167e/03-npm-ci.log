@@ -1,0 +1,14 @@
+$ docker run --rm --user 501:20 -v "$PWD":/src -v cityloom-main-4046072687-node-modules:/src/node_modules cityloom-js npm ci
+
+added 26 packages, and audited 27 packages in 1s
+
+2 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+npm notice
+npm notice New major version of npm available! 11.20.0 -> 12.2.3
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.3
+npm notice To update run: npm install -g npm@12.2.3
+npm notice
+[exit 0]

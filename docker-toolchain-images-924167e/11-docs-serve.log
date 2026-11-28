@@ -1,0 +1,16 @@
+$ docker run -d --name cityloom-docs-serve --user 501:20 -p 127.0.0.1:3000:3000 -v "$PWD":/src -v cityloom-main-4046072687-website-node-modules:/src/website/node_modules -w /src/website cityloom-docs npm run start -- --host 0.0.0.0 
+[SUCCESS] Docusaurus website is running at: http://localhost:3000/cityloom/
+client (Rspack 1.7.12) compiled successfully
+--- published ports: 3000/tcp -> 127.0.0.1:3000
+--- GET http://127.0.0.1:3000/cityloom/ -> 200 lang="en" <title>CityLoom</title>
+--- GET http://<LAN address>:3000/cityloom/ -> 000 (000: refused, as the loopback-only publish intends)
+[stopped]
+
+$ docker run -d --name cityloom-docs-serve --user 501:20 -p 127.0.0.1:3000:3000 -v "$PWD":/src -v cityloom-main-4046072687-website-node-modules:/src/website/node_modules -w /src/website cityloom-docs npm run start -- --host 0.0.0.0 --locale fr-CA
+[SUCCESS] Docusaurus website is running at: http://localhost:3000/cityloom/fr-CA/
+client (Rspack 1.7.12) compiled successfully
+--- published ports: 3000/tcp -> 127.0.0.1:3000
+--- GET http://127.0.0.1:3000/cityloom/fr-CA/ -> 200 lang="fr-CA" <title>CityLoom</title>
+--- GET http://<LAN address>:3000/cityloom/fr-CA/ -> 000 (000: refused, as the loopback-only publish intends)
+[stopped]
+
