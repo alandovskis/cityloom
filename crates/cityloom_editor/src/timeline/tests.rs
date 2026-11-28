@@ -1,11 +1,13 @@
 use std::rc::Rc;
 
-use serde_json::json;
+use serde_json::{Value, json};
 
+use super::store::MilestoneStore;
 use super::vm::{Context, Focus, TimelineVm};
 use crate::city::edits::{EDITS_KEY, IMPORT_STAMP_VERSION, STALE_BEFORE_IMPORT};
+use crate::restriction::store::RESTRICTIONS_KEY;
 use crate::shared::i18n::Locale;
-use crate::shared::ports::{MemoryStorage, RecordingAnnouncer, Storage, test_ports};
+use crate::shared::ports::{AccountCall, AccountError, AccountReply, FakeAccount, Me, MemoryStorage, RecordingAnnouncer, Storage, test_ports, test_ports_full};
 
 fn page(locale: Locale) -> (Rc<TimelineVm>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
     let (ports, announcer, storage) = test_ports();
@@ -349,11 +351,6 @@ fn a_stale_milestone_has_its_own_refusal_in_both_languages() {
         assert!(!crate::i18n_for(locale).tr_now("timeline-refused-stale", &Default::default()).is_empty());
     }
 }
-
-use crate::restriction::store::RESTRICTIONS_KEY;
-use crate::shared::ports::{AccountCall, AccountError, AccountReply, FakeAccount, Me, test_ports_full};
-use crate::timeline::store::MilestoneStore;
-use serde_json::Value;
 
 /// A timeline page whose account can be answered.
 fn signed_page() -> (Rc<TimelineVm>, Rc<FakeAccount>, Rc<MemoryStorage>) {
