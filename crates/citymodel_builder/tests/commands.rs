@@ -157,7 +157,7 @@ fn an_empty_folder_says_it_has_no_network_tiles() {
 #[test]
 fn fixture_writes_one_tile_of_the_whole_input_in_its_own_frame() {
     let dir = tempfile::tempdir().unwrap();
-    let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../e2e/fixtures/plateau.osm.pbf");
+    let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/e2e/fixtures/plateau.osm.pbf");
     let out = dir.path().join("plateau.json");
     commands::fixture(&input, &out).unwrap();
     let bytes = fs::read(&out).unwrap();

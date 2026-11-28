@@ -53,12 +53,12 @@ jobs:
         with:
           node-version: lts/*
           cache: npm
-          cache-dependency-path: e2e/package-lock.json
+          cache-dependency-path: tests/e2e/package-lock.json
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
         with:
           just-version: ${{ env.JUST_VERSION }}
       - run: npm ci
-        working-directory: e2e
+        working-directory: tests/e2e
       - run: just format-check
 
   test:
@@ -183,7 +183,7 @@ jobs:
       - run: just build
       # The server the tiers start, copied to target/e2e (scripts/pin-server.sh).
       - run: just server
-      # The OSM fixtures as network tiles (e2e/fixtures/generated), which every tier serves or packs: made here, where
+      # The OSM fixtures as network tiles (tests/e2e/fixtures/generated), which every tier serves or packs: made here, where
       # Rust and its cache already are, so the UI and integration jobs need no toolchain.
       - run: just e2e-fixtures
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -193,11 +193,11 @@ jobs:
             web/pkg
             web/vendor
             target/e2e/cityloom_server
-            e2e/fixtures/generated
+            tests/e2e/fixtures/generated
           if-no-files-found: error
           retention-days: 1
 
-  # UI tier (e2e/tiers.json): one page, the network stubbed, the static server only. No database, no archive.
+  # UI tier (tests/e2e/tiers.json): one page, the network stubbed, the static server only. No database, no archive.
   # It is the longest job and main runs every spec, so it is split over runners: Playwright gives each shard a share of
   # the tests (fullyParallel).
   ui:
@@ -215,15 +215,15 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/browser-tests
       - run: npx playwright test --project=ui --shard=${{ matrix.shard }}/6
-        working-directory: e2e
+        working-directory: tests/e2e
       - name: Keep the report and traces of a failed run
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-ui-${{ matrix.shard }}
           path: |
-            e2e/playwright-report/
-            e2e/test-results/
+            tests/e2e/playwright-report/
+            tests/e2e/test-results/
           retention-days: 14
           if-no-files-found: ignore
 
@@ -251,15 +251,15 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/browser-tests
       - run: npx playwright test --project=integration
-        working-directory: e2e
+        working-directory: tests/e2e
       - name: Keep the report and traces of a failed run
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-integration
           path: |
-            e2e/playwright-report/
-            e2e/test-results/
+            tests/e2e/playwright-report/
+            tests/e2e/test-results/
           retention-days: 14
           if-no-files-found: ignore
 
@@ -286,8 +286,8 @@ jobs:
         with:
           name: playwright-report-e2e
           path: |
-            e2e/playwright-report/
-            e2e/test-results/
+            tests/e2e/playwright-report/
+            tests/e2e/test-results/
           retention-days: 14
           if-no-files-found: ignore
 

@@ -15,7 +15,7 @@ decided and, when GITHUB_OUTPUT is set, writes the job's outputs:
     server_release   true when the server is among the selected crates (its release build is checked for the fake provider)
     version    true unless every file is documentation or CI configuration (CI_CONFIGURATION): the version must be raised
     browser    true when some browser tier runs (the shared build of the wasm and the server)
-    ui         true when the UI tier runs (e2e/tiers.json: no database, no archive)
+    ui         true when the UI tier runs (tests/e2e/tiers.json: no database, no archive)
     ui_specs   its Playwright arguments ("" runs every spec of the tier)
     integration, integration_specs   the same for the integration tier (the server and a Postgres)
     e2e        true when the E2E tier runs (`just e2e-archive`: the unpacked archive and the delivery specs)
@@ -41,14 +41,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 EDITOR_TOML = "crates/cityloom_editor/Cargo.toml"  # where the product's version is
-TIERS = ("ui", "integration", "e2e")  # the tiers of e2e/tiers.json, and the CI job of each
+TIERS = ("ui", "integration", "e2e")  # the tiers of tests/e2e/tiers.json, and the CI job of each
 # CI configuration and its tooling: they change nothing the pages show, so they need no version bump (they still run
 # every test).
 CI_CONFIGURATION = (".github/**", "scripts/ci/**", "scripts/include/**", ".claude/**")
 # What no Rust crate reads: a change to only these leaves the crates' tests as they were. Anything else outside crates/
-# (web/, e2e/fixtures, Cargo.lock, the justfile, the workflows) runs every crate: the tests include_str! the pages, read the
+# (web/, tests/e2e/fixtures, Cargo.lock, the justfile, the workflows) runs every crate: the tests include_str! the pages, read the
 # fixtures and are built by those files.
-RUST_NEUTRAL = ("e2e/tests/**", "website/**", "scripts/ci/**", "scripts/include/**", ".claude/**")
+RUST_NEUTRAL = ("tests/e2e/tests/**", "website/**", "scripts/ci/**", "scripts/include/**", ".claude/**")
 # `just test-wasm` leaves these out: they are not built for the browser.
 NOT_WASM = ("cityloom_server", "citymodel_builder")
 CRATES = ROOT / "crates"
@@ -123,7 +123,7 @@ class Selection:
     all: bool = False
     crates: list[str] | None = None  # None: every crate
     specs: list[str] = field(default_factory=list)
-    tiers: dict = field(default_factory=dict)  # e2e/tiers.json
+    tiers: dict = field(default_factory=dict)  # tests/e2e/tiers.json
 
     @property
     def unit(self) -> bool:
@@ -283,8 +283,8 @@ def main() -> int:
     a = ap.parse_args()
 
     rules = json.loads((ROOT / "scripts" / "ci" / "spec-map.json").read_text(encoding="utf-8"))
-    tiers = json.loads((ROOT / "e2e" / "tiers.json").read_text(encoding="utf-8"))
-    every = sorted(p.name[: -len(".spec.ts")] for p in (ROOT / "e2e" / "tests").glob("*.spec.ts"))
+    tiers = json.loads((ROOT / "tests" / "e2e" / "tiers.json").read_text(encoding="utf-8"))
+    every = sorted(p.name[: -len(".spec.ts")] for p in (ROOT / "tests" / "e2e" / "tests").glob("*.spec.ts"))
     files = a.files or changed_files(a.base, a.head)
     if files is None:
         print("The change is not known: everything runs.")

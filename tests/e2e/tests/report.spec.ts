@@ -11,7 +11,7 @@ import { expect, forgive, live, mapReady, openJunction, openStreet, test } from 
 // place and the sources pages; the `cityloom_report`
 // module, loaded on first use by `web/report.js`) and saves it. The file is read back with pdf.js.
 
-const VERSION = readFileSync(new URL("../../crates/cityloom_editor/Cargo.toml", import.meta.url), "utf8").match(
+const VERSION = readFileSync(new URL("../../../crates/cityloom_editor/Cargo.toml", import.meta.url), "utf8").match(
   /^version = "(.+)"$/m,
 )![1];
 

@@ -12,7 +12,7 @@ updates:
     schedule:
       interval: weekly
   - package-ecosystem: npm
-    directory: /e2e
+    directory: /tests/e2e
     schedule:
       interval: weekly
   - package-ecosystem: npm

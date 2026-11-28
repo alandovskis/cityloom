@@ -19,8 +19,8 @@ sys.path.insert(0, str(ROOT / "scripts" / "ci"))
 import ci_changes  # noqa: E402
 
 MAP = json.loads((ROOT / "scripts" / "ci" / "spec-map.json").read_text(encoding="utf-8"))
-TIERS = json.loads((ROOT / "e2e" / "tiers.json").read_text(encoding="utf-8"))
-SPECS = sorted(p.name[: -len(".spec.ts")] for p in (ROOT / "e2e" / "tests").glob("*.spec.ts"))
+TIERS = json.loads((ROOT / "tests" / "e2e" / "tiers.json").read_text(encoding="utf-8"))
+SPECS = sorted(p.name[: -len(".spec.ts")] for p in (ROOT / "tests" / "e2e" / "tests").glob("*.spec.ts"))
 
 
 def paths_ignore(workflow: Path) -> dict[str, list[str] | None]:
@@ -159,12 +159,12 @@ class Selection(unittest.TestCase):
         self.assertTrue(s.unit)
 
     def test_a_changed_spec_runs_itself_alone(self):
-        s = pick("e2e/tests/speed.spec.ts")
+        s = pick("tests/e2e/tests/speed.spec.ts")
         self.assertEqual(s.specs, ["speed"])
 
     def test_a_helper_of_the_specs_runs_all(self):
-        self.assertTrue(pick("e2e/tests/fixtures.ts").all)
-        self.assertTrue(pick("e2e/playwright.config.ts").all)
+        self.assertTrue(pick("tests/e2e/tests/fixtures.ts").all)
+        self.assertTrue(pick("tests/e2e/playwright.config.ts").all)
 
     def test_shared_code_and_the_build_run_all(self):
         for f in ("crates/cityloom_editor/src/shared/ports.rs", "web/app.css", "justfile", ".github/workflows/presubmit.yml", "Cargo.lock", "crates/cityloom_server/src/app.rs", "scripts/build.sh"):
@@ -194,10 +194,10 @@ class Selection(unittest.TestCase):
         self.assertTrue(ci_changes.select(MAP, SPECS, [], tiers=TIERS).e2e)
 
     def test_a_changed_spec_runs_its_own_tier_alone(self):
-        s = pick("e2e/tests/sync.spec.ts")
+        s = pick("tests/e2e/tests/sync.spec.ts")
         self.assertTrue(s.integration)
         self.assertFalse(s.ui or s.e2e)
-        s = pick("e2e/tests/serve.spec.ts")
+        s = pick("tests/e2e/tests/serve.spec.ts")
         self.assertTrue(s.e2e)
         self.assertFalse(s.ui or s.integration)
 
@@ -208,14 +208,14 @@ class Selection(unittest.TestCase):
     def test_arguments_for_each_tier(self):
         s = pick("web/app.css")
         self.assertEqual((s.spec_args("ui"), s.spec_args("integration"), s.spec_args("e2e")), ("", "", ""))
-        s = pick("e2e/tests/speed.spec.ts", "e2e/tests/curb.spec.ts", "e2e/tests/sync.spec.ts")
+        s = pick("tests/e2e/tests/speed.spec.ts", "tests/e2e/tests/curb.spec.ts", "tests/e2e/tests/sync.spec.ts")
         self.assertEqual(s.spec_args("ui"), "tests/curb.spec.ts tests/speed.spec.ts")
         self.assertEqual(s.spec_args("integration"), "tests/sync.spec.ts")
 
     def test_the_archive_spec_repeats_the_pages_over_the_archive(self):
-        s = pick("e2e/tests/archive.spec.ts")
+        s = pick("tests/e2e/tests/archive.spec.ts")
         self.assertEqual(s.spec_args("e2e"), "tests/archive.spec.ts tests/map.spec.ts tests/street.spec.ts")
-        self.assertEqual(pick("e2e/tests/serve.spec.ts").spec_args("e2e"), "tests/serve.spec.ts")
+        self.assertEqual(pick("tests/e2e/tests/serve.spec.ts").spec_args("e2e"), "tests/serve.spec.ts")
 
 
 class Crates(unittest.TestCase):
@@ -266,7 +266,7 @@ class Crates(unittest.TestCase):
                 self.assertFalse(s.browser)
 
     def test_a_change_no_crate_reads_runs_no_crate(self):
-        for f in ("e2e/tests/street.spec.ts", "scripts/include/tests/test_ci_changes.py", "website/docs/a.md"):
+        for f in ("tests/e2e/tests/street.spec.ts", "scripts/include/tests/test_ci_changes.py", "website/docs/a.md"):
             with self.subTest(f):
                 s = pick(f, "scripts/ci/spec-map.json")
                 self.assertEqual(s.crates, [])
@@ -276,7 +276,7 @@ class Crates(unittest.TestCase):
         # The tests include the pages and fonts of web/, read the fixtures and are built by the manifests and the workflows.
         for f in (
             "web/street.html",
-            "e2e/fixtures/plateau.osm.pbf",
+            "tests/e2e/fixtures/plateau.osm.pbf",
             "Cargo.lock",
             "Cargo.toml",
             "justfile",
@@ -354,11 +354,11 @@ class PageFiles(unittest.TestCase):
         self.assertFalse(s.all)
 
     def test_a_helper_runs_the_specs_that_import_it(self):
-        helpers = ROOT / "e2e" / "tests"
+        helpers = ROOT / "tests" / "e2e" / "tests"
         users = sorted(
             p.name[: -len(".spec.ts")] for p in helpers.glob("*.spec.ts") if "account-helpers" in p.read_text(encoding="utf-8")
         )
-        self.assertEqual(pick("e2e/tests/account-helpers.ts").specs, users)
+        self.assertEqual(pick("tests/e2e/tests/account-helpers.ts").specs, users)
 
     def test_the_scripts_that_only_the_ci_jobs_run_need_no_browser_spec(self):
         for f in ("scripts/check-no-fake.sh", "scripts/check-version.sh", "deploy/Dockerfile", ".github/workflows/docs.yml"):
@@ -371,8 +371,8 @@ class PageFiles(unittest.TestCase):
 
 class Globs(unittest.TestCase):
     def test_star_stays_in_a_folder_and_double_star_crosses(self):
-        self.assertTrue(ci_changes.glob("e2e/tests/*.spec.ts", "e2e/tests/a.spec.ts"))
-        self.assertFalse(ci_changes.glob("e2e/tests/*.spec.ts", "e2e/tests/sub/a.spec.ts"))
+        self.assertTrue(ci_changes.glob("tests/e2e/tests/*.spec.ts", "tests/e2e/tests/a.spec.ts"))
+        self.assertFalse(ci_changes.glob("tests/e2e/tests/*.spec.ts", "tests/e2e/tests/sub/a.spec.ts"))
         self.assertTrue(ci_changes.glob("**/*.md", "README.md"))
         self.assertTrue(ci_changes.glob("**/*.md", "a/b/c.md"))
         self.assertTrue(ci_changes.glob("**/tests.rs", "crates/cityloom_editor/src/street/view/tests.rs"))
@@ -407,7 +407,7 @@ class Coverage(unittest.TestCase):
         for spec in SPECS:
             with self.subTest(spec):
                 in_tiers = [name for name, specs in tiers.items() if spec in specs]
-                self.assertEqual(len(in_tiers), 1, f"{spec} is in {in_tiers or 'no tier'} of e2e/tiers.json, not exactly one")
+                self.assertEqual(len(in_tiers), 1, f"{spec} is in {in_tiers or 'no tier'} of tests/e2e/tiers.json, not exactly one")
         named = {s for specs in tiers.values() for s in specs}
         self.assertEqual(sorted(named - set(SPECS)), [], "a tier names a spec that is not there")
         for name, specs in tiers.items():
@@ -416,6 +416,10 @@ class Coverage(unittest.TestCase):
     def test_the_archive_run_repeats_ui_specs_only(self):
         for spec in TIERS["archive_also"]:
             self.assertIn(spec, TIERS["ui"], f"{spec} is repeated in archive mode but is not a UI spec")
+
+    def test_the_browser_tests_live_under_tests(self):
+        self.assertTrue((ROOT / "tests" / "e2e" / "tiers.json").is_file())
+        self.assertFalse((ROOT / "e2e").exists())
 
     def test_every_source_folder_has_a_rule(self):
         for entry in sorted((ROOT / "crates/cityloom_editor" / "src").iterdir()):

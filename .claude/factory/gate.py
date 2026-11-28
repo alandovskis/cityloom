@@ -74,10 +74,11 @@ WASM_BUILD = [
 # Only the test-writer writes these: the tests, their fixtures, which tier runs a spec and which specs a change runs.
 TEST_FILES = (
     "**/tests.rs",
-    "**/tests/**",
-    "e2e/tests/**",
-    "e2e/fixtures/**",
-    "e2e/tiers.json",
+    "*/**/tests/**",  # a tests/ folder below the root; the root's tests/e2e/ is named entry by entry
+
+    "tests/e2e/tests/**",
+    "tests/e2e/fixtures/**",
+    "tests/e2e/tiers.json",
     "scripts/ci/spec-map.json",
 )
 # Nor may the implementer change what decides whether a check passes, or the factory that judges it.
@@ -91,8 +92,8 @@ GUARDED = TEST_FILES + (
     "crates/cityloom_editor/src/shared/contrast.rs",
 )
 
-# What the Documentation workflow (.github/workflows/docs.yml) runs, from e2e/ and website/ (test_factory_gate.py checks they agree).
-DOCS_PRETTIER = ("npx", "prettier", "--ignore-path", "../.prettierignore", "--check", "../website")
+# What the Documentation workflow (.github/workflows/docs.yml) runs, from tests/e2e/ and website/ (test_factory_gate.py checks they agree).
+DOCS_PRETTIER = ("npx", "prettier", "--ignore-path", "../../.prettierignore", "--check", "../../website")
 DOCS_BUILD = ("npm", "run", "build")
 # A page of the site in English, and the same page in Canadian French.
 DOCS_EN = "website/docs/"
@@ -210,12 +211,12 @@ def playwright_results(report: dict) -> Dict[str, Optional[str]]:
 
 
 def spec_of(name: str) -> str:
-    """The spec file (relative to e2e/tests) of a test named as `playwright_results` names it."""
+    """The spec file (relative to tests/e2e/tests) of a test named as `playwright_results` names it."""
     return name.split("::", 1)[0]
 
 
 def playwright_load_errors(report: dict) -> Dict[str, str]:
-    """The files a Playwright report could not load (relative to e2e/tests when they are there), each with its error's
+    """The files a Playwright report could not load (relative to tests/e2e/tests when they are there), each with its error's
     first line. Playwright leaves such a file's tests out of the report and says why in its top-level `errors`."""
     errors: Dict[str, str] = {}
     for error in report.get("errors", []):
@@ -321,7 +322,7 @@ def run(cmd: List[str], cwd: Path, env: Optional[dict] = None, timeout: Optional
 TESTS_FLOW_FILES = (
     "scripts/ci/features.json",
     "scripts/ci/spec-map.json",
-    "e2e/tiers.json",
+    "tests/e2e/tiers.json",
     "crates/cityloom_editor/src/shared/contrast.rs",
 )
 VERSION_FILES = ("crates/cityloom_editor/Cargo.toml", "Cargo.lock")
@@ -557,7 +558,7 @@ class Gate:
         if code == 127 or "with exit code 127" in out:
             raise Refused(
                 f"`{' '.join(cmd)}` could not run a tool ({_last_error(out)}): set the worktree up first "
-                "(`npm ci` at its root and in e2e/, or `just setup`; `just setup-docs` for the documentation site)"
+                "(`npm ci` at its root and in tests/e2e/, or `just setup`; `just setup-docs` for the documentation site)"
             )
         return code, out
 
@@ -592,7 +593,7 @@ class Gate:
             out = Path(tmp) / "report.json"
             args = ["npx", "playwright", "test"] + (["--list"] if listing else files) + ["--reporter=json"]
             env = {"PLAYWRIGHT_JSON_OUTPUT_FILE": str(out), "PLAYWRIGHT_JSON_OUTPUT_NAME": str(out)}
-            self._tool(args, self.repo / "e2e", env, timeout=timeout)
+            self._tool(args, self.repo / "tests" / "e2e", env, timeout=timeout)
             if not out.exists():
                 raise Refused("Playwright wrote no report: run `just e2e` by hand to see why")
             return json.loads(out.read_text(encoding="utf-8"))
@@ -605,7 +606,7 @@ class Gate:
 
     @staticmethod
     def _specs(paths: List[str]) -> List[str]:
-        return sorted(p[len("e2e/") :] for p in paths if glob("e2e/tests/*.spec.ts", p))
+        return sorted(p[len("tests/e2e/") :] for p in paths if glob("tests/e2e/tests/*.spec.ts", p))
 
     def red(self, base: str) -> Report:
         self._ready()
@@ -616,12 +617,12 @@ class Gate:
         changed = self._changed(base, red)
         rust = any(p.endswith(".rs") or p.endswith("Cargo.toml") for p in changed)
         specs = self._specs(changed)
-        # Any change under e2e/ touches the browser tests. One that is not a spec (a helper every spec imports, the
+        # Any change under tests/e2e/ touches the browser tests. One that is not a spec (a helper every spec imports, the
         # fixtures, the configuration, the packages) can change any spec's outcome; the tiers and the notes cannot,
         # and every new spec is listed in the tiers.
-        browser = [p for p in changed if p.startswith("e2e/")]
+        browser = [p for p in changed if p.startswith("tests/e2e/")]
         shared = any(
-            not glob("e2e/tests/*.spec.ts", p) and p != "e2e/tiers.json" and not p.endswith(".md") for p in browser
+            not glob("tests/e2e/tests/*.spec.ts", p) and p != "tests/e2e/tiers.json" and not p.endswith(".md") for p in browser
         )
         if browser:
             self._prepare_browser()
@@ -741,7 +742,7 @@ class Gate:
 
         if any(p.startswith("website/") for p in changed):
             checks = (
-                (DOCS_PRETTIER, "e2e", "the Prettier check of website/ fails", _last_error),
+                (DOCS_PRETTIER, "tests/e2e", "the Prettier check of website/ fails", _last_error),
                 (DOCS_BUILD, "website", "the documentation site does not build", build_error),
             )
             for cmd, folder, failure, cause in checks:
@@ -829,7 +830,7 @@ class Gate:
                 problems.append(f"{path}: a check or the factory's own file, which the tests flow may not change")
             elif path.startswith("website/") or is_documentation(path):
                 problems.append(f"{path}: documentation, which the tests flow may not change")
-            elif glob("e2e/tests/**", path) and not glob("e2e/tests/**/*.spec.ts", path) and before is not None:
+            elif glob("tests/e2e/tests/**", path) and not glob("tests/e2e/tests/**/*.spec.ts", path) and before is not None:
                 if not only_added(before, after or ""):
                     problems.append(f"{path}: a helper of the specs, which may gain lines but not change one")
             elif is_test_file(path):
@@ -854,7 +855,7 @@ class Gate:
                 continue
             if path.endswith(".rs"):
                 read = test_functions
-            elif glob("e2e/tests/**/*.spec.ts", path):
+            elif glob("tests/e2e/tests/**/*.spec.ts", path):
                 read = playwright_tests
             else:
                 continue
@@ -945,8 +946,8 @@ class Gate:
     def _run_tests(self, base: str, head: str, changed: List[str], report: Report) -> Tuple[List[str], List[str], dict]:
         """Rules 3 and 4. The new Rust and browser tests (head's listing less the base's), and the head's Playwright
         listing; each failure goes into the report."""
-        browser = [p for p in changed if p.startswith("e2e/")]
-        shared = any(not glob("e2e/tests/*.spec.ts", p) and p != "e2e/tiers.json" and not p.endswith(".md") for p in browser)
+        browser = [p for p in changed if p.startswith("tests/e2e/")]
+        shared = any(not glob("tests/e2e/tests/*.spec.ts", p) and p != "tests/e2e/tiers.json" and not p.endswith(".md") for p in browser)
         if browser:
             self._prepare_browser()
         start = self.git("rev-parse", "--abbrev-ref", "HEAD")
@@ -987,7 +988,7 @@ class Gate:
             listed = set(playwright_results(listing))
             report.problems += [f"Playwright: the test {name} is gone" for name in sorted(browser_before - listed)]
             browser_new = sorted(listed - browser_before)
-            changed_specs = {p[len("e2e/tests/") :] for p in browser if glob("e2e/tests/*.spec.ts", p)}
+            changed_specs = {p[len("tests/e2e/tests/") :] for p in browser if glob("tests/e2e/tests/*.spec.ts", p)}
             to_run = {spec_of(n) for n in listed} if shared else changed_specs & {spec_of(n) for n in listed}
             if to_run:
                 files = [] if shared else sorted("tests/" + spec for spec in to_run)
@@ -1092,7 +1093,7 @@ class Gate:
         return "crashed"
 
     def _prove_browser(self, tests: List[str], listing: dict, made, proof: "_Proof", report: Report, prove: bool) -> None:
-        tiers = json.loads((self.repo / "e2e" / "tiers.json").read_text(encoding="utf-8")) if (self.repo / "e2e" / "tiers.json").exists() else {}
+        tiers = json.loads((self.repo / "tests" / "e2e" / "tiers.json").read_text(encoding="utf-8")) if (self.repo / "tests" / "e2e" / "tiers.json").exists() else {}
         archived = set(tiers.get("e2e", []))
         for test in tests:
             if Path(spec_of(test)).name.removesuffix(".spec.ts") in archived:
