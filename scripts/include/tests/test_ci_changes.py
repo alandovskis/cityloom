@@ -368,6 +368,15 @@ class PageFiles(unittest.TestCase):
             with self.subTest(f):
                 self.assertTrue(pick(f).all)
 
+    def test_a_change_to_an_image_runs_every_spec(self):
+        # CI's jobs run in the toolchain images: a pull request that changes one is tested on it, browser tiers included,
+        # not first on main. Its README is documentation.
+        for f in ("dockerfiles/e2e.Dockerfile", "dockerfiles/rust.Dockerfile", "dockerfiles/docker-bake.hcl"):
+            with self.subTest(f):
+                self.assertTrue(pick(f).all)
+                self.assertTrue(pick(f).browser)
+        self.assertFalse(pick("dockerfiles/README.md").browser)
+
 
 class Globs(unittest.TestCase):
     def test_star_stays_in_a_folder_and_double_star_crosses(self):
@@ -752,6 +761,30 @@ class Pipelines(unittest.TestCase):
                 job = self.jobs(workflow)["server-release"]
                 self.assertIn("scripts/target-dir.sh", job)
                 self.assertNotIn("target/release/cityloom_server", job)
+
+    def test_the_rust_cache_keeps_the_build_the_image_makes(self):
+        # Swatinem/rust-cache caches <workspace>/target and does not read CARGO_TARGET_DIR, which the Rust image points at
+        # /target: each job that caches points the build back into the workspace first, or every run builds cold.
+        for workflow, jobs in self.IMAGE_JOBS.items():
+            found = self.jobs(workflow)
+            for job in jobs:
+                text = found[job]
+                if "Swatinem/rust-cache" not in text:
+                    continue
+                with self.subTest(workflow=workflow, job=job):
+                    redirect = text.find('echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/target" >> "$GITHUB_ENV"')
+                    self.assertGreater(redirect, -1)
+                    self.assertLess(redirect, text.find("Swatinem/rust-cache"))
+
+    def test_the_deploy_builds_with_the_rust_ci_tests(self):
+        # CI runs on the Rust image's pinned release; the deploy and Sonar build on the runner, with the same one, read
+        # from rust.Dockerfile, so what CI tested is what ships.
+        for workflow, job in (("postsubmit.yml", "deploy"), ("sonar.yml", "sonar")):
+            with self.subTest(workflow):
+                text = self.jobs(workflow)[job]
+                self.assertNotIn("toolchain: stable", text)
+                self.assertIn("dockerfiles/rust.Dockerfile", text)
+                self.assertIn("toolchain: ${{ steps.rust.outputs.version }}", text)
 
     def test_the_images_workflow_alone_writes_packages(self):
         # Pushing to GHCR needs `packages: write`; the workflow asks for it on its one job, never at the top.

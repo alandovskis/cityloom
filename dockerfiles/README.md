@@ -11,8 +11,8 @@ is something else: it is the runtime image that `just deploy` uploads.
 | `cityloom-docs` | `docs.Dockerfile` | Node LTS, Python 3                                                                                                                                                                                 | the documentation site in `website/`                       |
 | `cityloom-e2e`  | `e2e.Dockerfile`  | everything in `cityloom-rust`, plus Node LTS with npm, and Chromium at the build that the locked Playwright expects                                                                                | `just build`, `just e2e` and its tiers                     |
 
-Rust is pinned: `RUST_VERSION` in `rust.Dockerfile` (1.100.0, the newest stable when it was set). CI takes whatever
-stable is current, so raise the pin when a new stable comes out. To try another release without editing the file, run
+Rust is pinned: `RUST_VERSION` in `rust.Dockerfile` (1.100.0, the newest stable when it was set). CI's jobs, the
+deploy and Sonar all build with it, so raise the pin when a new stable comes out. To try another release without editing the file, run
 `docker buildx bake -f dockerfiles/docker-bake.hcl --set rust.args.RUST_VERSION=<version>`. Node follows CI:
 `node:lts-slim` is the current LTS, and a rebuild with `docker buildx bake --pull` fetches the newest.
 

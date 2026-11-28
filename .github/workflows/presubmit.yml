@@ -140,6 +140,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The Rust cache below keeps <workspace>/target, not the image's CARGO_TARGET_DIR (/target): build there instead.
+      - run: echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/target" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: just test-host $CRATES
         env:
@@ -161,6 +163,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The Rust cache below keeps <workspace>/target, not the image's CARGO_TARGET_DIR (/target): build there instead.
+      - run: echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/target" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: just test-wasm $CRATES
         env:
@@ -181,6 +185,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The Rust cache below keeps <workspace>/target, not the image's CARGO_TARGET_DIR (/target): build there instead.
+      - run: echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/target" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: just check-no-fake
       # A positive control: the check must fail on a build with the fake provider, or its markers have drifted. The image
@@ -211,6 +217,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The Rust cache below keeps <workspace>/target, not the image's CARGO_TARGET_DIR (/target): build there instead.
+      - run: echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/target" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       # wasm-bindgen-cli, at the version the editor pins, is in the image.

@@ -4,9 +4,9 @@
 # Built from the repository root, which only the pinned wasm-bindgen version is read from
 # (rust.Dockerfile.dockerignore keeps everything else out of the context).
 
-# The Rust release the image is built on, the newest stable when it was set. CI takes whatever stable is current
-# (`dtolnay/rust-toolchain`), so raise this when a new stable comes out; bake can also override it with
-# `--set rust.args.RUST_VERSION=<version>`.
+# The Rust release the image is built on, the newest stable when it was set. CI's jobs run on it, and the deploy and
+# Sonar, which build on the runner, read this line for theirs; raise it when a new stable comes out. Bake can also
+# override it with `--set rust.args.RUST_VERSION=<version>`.
 ARG RUST_VERSION=1.100.0
 
 # The wasm-bindgen pin alone, as a one-line file: the install below is keyed on it, not on the whole Cargo.toml,
