@@ -34,6 +34,8 @@ COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+# A run as the host's user (`--user`) has no writable home for npm's cache.
+ENV npm_config_cache=/tmp/npm-cache
 # Cargo's downloads (the registry, the git dependencies) and the locks that guard them, in one directory, so that
 # one volume shares them all between containers that run at once; the toolchain's proxies stay in
 # /usr/local/cargo/bin, on the PATH. Cargo's output goes to /target, out of the mounted checkout, so it never mixes

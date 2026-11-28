@@ -40,20 +40,21 @@ mount named volumes over these directories, and Cargo builds into a volume at `/
 container's own copies from one run to the next, so the host's files are never touched.
 
 Every checkout is mounted at the same `/src`. If two checkouts shared a target volume, Cargo could take one's build for
-the other's. So each checkout's volumes are named after a checksum of its path. Set the prefix once in the shell, at the
-checkout's root:
+the other's. So each checkout's volumes are named after its folder and a checksum of its path, for example
+`cityloom-main-4046072687-target`. The name says which checkout a volume belongs to, and the checksum keeps apart two
+checkouts whose folders have the same name. Set the prefix once in the shell, at the checkout's root:
 
 ```bash
-v=cityloom-$(printf '%s' "$PWD" | cksum | cut -d ' ' -f 1)
+v=cityloom-$(basename "$PWD" | tr -c 'A-Za-z0-9_.\n-' '-')-$(pwd -P | cksum | cut -d ' ' -f 1)
 ```
 
-The exception is `cityloom-cargo`, Cargo's downloads (the registry and the git dependencies) with the locks that guard
-them, which every checkout shares, even when several containers run at once. A checkout's target volume is large: about
-45 GB after `just test` and `just e2e-ui`. When you remove a worktree, remove its volumes first, from its root, with `v`
-set as above:
+The exception is `cityloom-cargo`, which every checkout shares, even when several containers run at once. It holds
+Cargo's downloads (the registry and the git dependencies) along with the locks that guard them. A checkout's target
+volume is large: about 45 GB after `just test` and `just e2e-ui`. Before you remove a worktree, remove its volumes. Run
+this from the worktree's root, with `v` set as above:
 
 ```bash
-docker volume rm "$v-target" "$v-checkout-target" "$v-tools" "$v-node-modules" "$v-e2e-node-modules" "$v-website-node-modules"
+docker volume ls -q --filter "name=^$v-" | xargs docker volume rm
 ```
 
 `--user` makes the files the container writes into the checkout belong to you. You need it on Linux. On macOS it does

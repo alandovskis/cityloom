@@ -15,8 +15,6 @@ RUN node -e ' \
       require("fs").writeFileSync("/playwright-version", entry.version);'
 
 FROM rust
-# A run as the host's user (`--user`) has no writable home for npm's cache.
-ENV npm_config_cache=/tmp/npm-cache
 # Chromium at the build the locked Playwright expects, outside the checkout so that `npm ci` in e2e/ finds it,
 # with the libraries it needs (`--with-deps`). Rebuild the image when e2e/package-lock.json moves Playwright.
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
