@@ -1912,6 +1912,40 @@ fn a_street_pressed_shows_its_name_what_it_is_its_checks_and_how_to_open_or_sele
 }
 
 #[test]
+fn a_street_pressed_that_fails_a_check_lists_each_check_it_fails() {
+    let (vm, storage) = map_vm();
+    change_a_street(&vm, &storage, 8_000);
+    assert!(vm.view().failing > 0, "the edit must break a check");
+    let (uid, failing) = vm.view().edges.iter().find(|e| !e.failing.is_empty()).map(|e| (e.uid, e.failing.clone())).expect("a street that fails a check");
+    vm.pick(Some(&format!("s-{uid}")));
+    let h = map_html(|| view! { <crate::map::view::details::PlacePane vm=vm.clone()/> });
+    assert!(h.contains(r#"<h3 class="note-h">Checks that fail</h3>"#), "{h}");
+    assert!(h.contains(r#"<ul class="map-place-failing">"#), "{h}");
+    assert_eq!(count(&h, "<li"), failing.len(), "one item per check it fails: {h}");
+    for s in &failing {
+        // the text as server rendering escapes it
+        let said = vm.say(s).replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+        assert!(h.contains(&format!("<li>{said}</li>")), "{said}: {h}");
+    }
+    assert!(!h.contains("Every check passes.") && !h.contains("map-place-ok"), "{h}");
+}
+
+#[test]
+fn a_failing_street_pressed_says_its_failed_checks_in_french() {
+    let (vm, storage) = map_vm_in(Locale::FrCa);
+    change_a_street(&vm, &storage, 8_000);
+    let (uid, failing) = vm.view().edges.iter().find(|e| !e.failing.is_empty()).map(|e| (e.uid, e.failing.clone())).expect("a street that fails a check");
+    vm.pick(Some(&format!("s-{uid}")));
+    let h = map_html(|| view! { <crate::map::view::details::PlacePane vm=vm.clone()/> });
+    assert!(h.contains(r#"<h3 class="note-h">Vérifications en échec</h3>"#), "{h}");
+    for s in &failing {
+        let said = vm.say(s).replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+        assert!(h.contains(&format!("<li>{said}</li>")), "{said}: {h}");
+    }
+    assert!(!h.contains("Toutes les vérifications réussissent."), "{h}");
+}
+
+#[test]
 fn the_map_page_has_a_city_level_and_a_place_level_shown_one_at_a_time() {
     let page = include_str!("../../../../../web/map.html");
     for id in ["map-path-slot", "map-city", "map-place", "map-place-slot"] {

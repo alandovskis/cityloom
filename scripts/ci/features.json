@@ -304,6 +304,7 @@
         "crates/cityloom_editor/src/map/view/mod.rs",
         "crates/cityloom_editor/src/map/view/selection_view.rs",
         "crates/cityloom_editor/src/map/view/details.rs",
+        "crates/cityloom_editor/src/map/view/tests.rs",
         "web/mapcanvas.js"
       ],
       "specs": ["map", "webgl"]
