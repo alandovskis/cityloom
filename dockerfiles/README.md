@@ -15,7 +15,7 @@ The Rust and Node versions follow CI: `rust:1-slim` is the latest stable and `no
 you rebuild an image you get the newest of each. Run `docker buildx bake --pull` to fetch new base images.
 
 Two versions are read from the checkout when an image is built, not when it runs: the `wasm-bindgen` line of
-`crates/cityloom_editor/Cargo.toml` and `@playwright/test` in `e2e/package-lock.json`. After a pull that changes either
+`crates/cityloom_editor/Cargo.toml` and `@playwright/test` in `tests/e2e/package-lock.json`. After a pull that changes either
 one, build the images again. Otherwise `just build` fails on a wasm-bindgen version mismatch, or Playwright reports that
 its browser executable does not exist. The rebuild redoes only the steps that use the changed version.
 
@@ -91,7 +91,7 @@ from the root's `node_modules`. `just e2e*` also writes into the checkout's `tar
 tests would otherwise reach in place of their fixtures. CI has none, so the tests see what they see in CI:
 
 ```bash
-docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/src -v "$v-node-modules":/src/node_modules -v "$v-e2e-node-modules":/src/e2e/node_modules -v "$v-tools":/src/.tools -v "$v-target":/target -v "$v-checkout-target":/src/target --mount type=tmpfs,dst=/src/web/data -v cityloom-cargo:/cargo cityloom-e2e sh -c 'cd e2e && npm ci && cd .. && just e2e-ui'
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/src -v "$v-node-modules":/src/node_modules -v "$v-e2e-node-modules":/src/tests/e2e/node_modules -v "$v-tools":/src/.tools -v "$v-target":/target -v "$v-checkout-target":/src/target --mount type=tmpfs,dst=/src/web/data -v cityloom-cargo:/cargo cityloom-e2e sh -c 'cd tests/e2e && npm ci && cd ../.. && just e2e-ui'
 ```
 
 The integration tier, and `just test` for the server's tests, need a Postgres. Start one on the host with `just db`. It
