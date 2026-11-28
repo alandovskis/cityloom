@@ -1,12 +1,12 @@
-# The Rust toolchain: what `just build`, `just test`, `just format-check` and the server need, with the checkout
-# mounted at /src (see dockerfiles/README.md). Nothing of the checkout is built into the image.
+# The Rust toolchain: what `scripts/build.sh`, `just test`, `cargo fmt` and the server need, with the checkout
+# mounted at /src (see dockerfiles/README.md). Nothing of the checkout is built into the image, and it has no Node:
+# the compressed copies that `just build` makes after build.sh (scripts/precompress.mjs) are made in the JS image.
 # Built from the repository root, which only the pinned wasm-bindgen version is read from
 # (rust.Dockerfile.dockerignore keeps everything else out of the context).
-FROM node:lts-slim AS node
 
 # The wasm-bindgen pin alone, as a one-line file: the install below is keyed on it, not on the whole Cargo.toml,
 # whose `version` every pull request raises.
-FROM node AS pin
+FROM rust:1-slim AS pin
 COPY crates/cityloom_editor/Cargo.toml /Cargo.toml
 RUN sed -n 's/^wasm-bindgen = "\(.*\)"/\1/p' /Cargo.toml > /wasm-bindgen-version \
     && [ -s /wasm-bindgen-version ] \
@@ -28,20 +28,13 @@ RUN cargo install wasm-bindgen-cli --version "$(cat /tmp/wasm-bindgen-version)" 
     && cargo install just --locked --root /usr/local \
     && rm -rf /tmp/wasm-bindgen-version /usr/local/.crates.toml /usr/local/.crates2.json \
         "$CARGO_HOME/registry" "$CARGO_HOME/git" "$CARGO_HOME"/.package-cache* "$CARGO_HOME"/.global-cache
-# Node, npm included: scripts/target-dir.sh and scripts/precompress.mjs run on it, and the e2e image's npm comes from
-# here too, so node and npm are always one release. The node image keeps npm and npx as links into its node_modules.
-COPY --from=node /usr/local/bin/node /usr/local/bin/node
-COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
-RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
-    && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
-# A run as the host's user (`--user`) has no writable home for npm's cache.
-ENV npm_config_cache=/tmp/npm-cache
 # Cargo's downloads (the registry, the git dependencies) and the locks that guard them, in one directory, so that
 # one volume shares them all between containers that run at once; the toolchain's proxies stay in
 # /usr/local/cargo/bin, on the PATH. Cargo's output goes to /target, out of the mounted checkout, so it never mixes
 # with the host's own target/ (another platform's binaries). The checkout's target/ (where `just e2e*` pins the
-# server), node_modules and .tools hold the host's own files too, so the README mounts volumes over them all; a
-# volume takes its owner from the image's directory, so these are writable by any user (`--user`).
+# server), node_modules (which build.sh copies MapLibre from) and .tools hold the host's own files too, so the README
+# mounts volumes over them all; a volume takes its owner from the image's directory, so these are writable by any
+# user (`--user`).
 ENV CARGO_HOME=/cargo CARGO_TARGET_DIR=/target
 RUN mkdir -p "$CARGO_HOME" "$CARGO_TARGET_DIR" /src/target /src/node_modules /src/.tools \
     && chmod 1777 "$CARGO_HOME" "$CARGO_TARGET_DIR" /src/target /src/node_modules /src/.tools

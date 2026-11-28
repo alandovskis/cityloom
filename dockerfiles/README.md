@@ -4,19 +4,19 @@ Four toolchain images, so that CityLoom can be built and tested without installi
 holds tools only. The checkout is mounted at `/src` and the usual commands run inside the container. `deploy/Dockerfile`
 is something else: it is the runtime image that `just deploy` uploads.
 
-| Image           | Dockerfile        | What it holds                                                                                                                                                                                                | For                                                          |
-| --------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| `cityloom-rust` | `rust.Dockerfile` | Rust stable, the `wasm32-unknown-unknown` target, rustfmt, clippy, `wasm-bindgen-cli` (the version pinned in `crates/cityloom_editor/Cargo.toml`), `just`, procps (`kill`, for two tests), Node LTS with npm | `just build`, `just test`, `just format-check`'s `cargo fmt` |
-| `cityloom-js`   | `js.Dockerfile`   | Node LTS                                                                                                                                                                                                     | `npm ci` at the root (MapLibre), `scripts/precompress.mjs`   |
-| `cityloom-docs` | `docs.Dockerfile` | Node LTS, Python 3                                                                                                                                                                                           | the documentation site in `website/`                         |
-| `cityloom-e2e`  | `e2e.Dockerfile`  | everything in `cityloom-rust`, plus Chromium at the build that the locked Playwright expects                                                                                                                 | `just e2e` and its tiers                                     |
+| Image           | Dockerfile        | What it holds                                                                                                                                                                                      | For                                                        |
+| --------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `cityloom-rust` | `rust.Dockerfile` | Rust stable, the `wasm32-unknown-unknown` target, rustfmt, clippy, `wasm-bindgen-cli` (the version pinned in `crates/cityloom_editor/Cargo.toml`), `just`, procps (`kill`, for two tests); no Node | `scripts/build.sh`, `just test`, `cargo fmt`               |
+| `cityloom-js`   | `js.Dockerfile`   | Node LTS                                                                                                                                                                                           | `npm ci` at the root (MapLibre), `scripts/precompress.mjs` |
+| `cityloom-docs` | `docs.Dockerfile` | Node LTS, Python 3                                                                                                                                                                                 | the documentation site in `website/`                       |
+| `cityloom-e2e`  | `e2e.Dockerfile`  | everything in `cityloom-rust`, plus Node LTS with npm, and Chromium at the build that the locked Playwright expects                                                                                | `just build`, `just e2e` and its tiers                     |
 
 The Rust and Node versions follow CI: `rust:1-slim` is the latest stable and `node:lts-slim` is the current LTS. When
 you rebuild an image you get the newest of each. Run `docker buildx bake --pull` to fetch new base images.
 
 Two versions are read from the checkout when an image is built, not when it runs: the `wasm-bindgen` line of
 `crates/cityloom_editor/Cargo.toml` and `@playwright/test` in `e2e/package-lock.json`. After a pull that changes either
-one, build the images again. Otherwise `just build` fails on a wasm-bindgen version mismatch, or Playwright reports that
+one, build the images again. Otherwise `scripts/build.sh` fails on a wasm-bindgen version mismatch, or Playwright reports that
 its browser executable does not exist. The rebuild redoes only the steps that use the changed version.
 
 ## Building
@@ -60,15 +60,24 @@ docker volume ls -q --filter "name=^$v-" | xargs docker volume rm
 `--user` makes the files the container writes into the checkout belong to you. You need it on Linux. On macOS it does
 no harm.
 
-Build the pages. This runs `npm ci` in the JS image, then the wasm build in the Rust image:
+Build the pages in three steps, which are what `just build` does on the host. The Rust image has no Node, so the first
+and last steps run in the JS image: `npm ci`, then `scripts/build.sh` (the wasm, and MapLibre copied into `web/vendor`)
+in the Rust image, then the compressed copies that the server sends:
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/src -v "$v-node-modules":/src/node_modules cityloom-js npm ci
 ```
 
 ```bash
-docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/src -v "$v-node-modules":/src/node_modules -v "$v-tools":/src/.tools -v "$v-target":/target -v cityloom-cargo:/cargo cityloom-rust just build
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/src -v "$v-node-modules":/src/node_modules -v "$v-tools":/src/.tools -v "$v-target":/target -v cityloom-cargo:/cargo cityloom-rust ./scripts/build.sh
 ```
+
+```bash
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/src cityloom-js node scripts/precompress.mjs web/pkg web/vendor
+```
+
+If you skip the last step, the server still works. It skips a compressed copy that is older than its file and
+compresses that file on the fly.
 
 Build the documentation site in English and fr-CA:
 
