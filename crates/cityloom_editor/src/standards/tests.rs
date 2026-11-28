@@ -278,3 +278,8 @@ fn the_refusals_have_reasons_in_both_languages() {
         assert!(!crate::shared::testing::fr(&said).contains("{"), "{:?}", said);
     }
 }
+
+#[test]
+fn english_and_french_hold_the_same_messages() {
+    assert_eq!(crate::shared::i18n::tests::parity_problems(super::RESOURCES.en, super::RESOURCES.fr), Vec::<String>::new());
+}
