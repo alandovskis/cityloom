@@ -8,17 +8,17 @@ Cette page décrit les données d’essai. Les paliers qui s’en servent sont d
 
 ## Données d’essai OpenStreetMap et tuiles
 
-Les données routières des tests dans le navigateur sont `e2e/fixtures/plateau.osm.pbf`, `turbo.osm.pbf` et
+Les données routières des tests dans le navigateur sont `tests/e2e/fixtures/plateau.osm.pbf`, `turbo.osm.pbf` et
 `open-ends.osm.pbf`. `open-ends.osm` est la source OSM XML de `open-ends.osm.pbf`, avec son élément `<bounds>`; les
 tests ne le lisent pas. `just e2e-fixtures` importe chaque `.osm.pbf` en une tuile du réseau,
-`e2e/fixtures/generated/<nom>.json` (`citymodel_builder fixture`; ignorée par Git). C’est une recette privée, que
+`tests/e2e/fixtures/generated/<nom>.json` (`citymodel_builder fixture`; ignorée par Git). C’est une recette privée, que
 `just` n’énumère donc pas; chaque recette de navigateur l’exécute d’abord. Dans l’intégration continue, la tâche
 `build` l’exécute une fois et transmet les tuiles dans l’artefact `browser-build`, avec le wasm, `web/vendor` et le
 serveur figé.
 
 ## `fixtures.ts`
 
-`e2e/tests/fixtures.ts` est ce qu’importe chaque spécification.
+`tests/e2e/tests/fixtures.ts` est ce qu’importe chaque spécification.
 
 - `PLATEAU_TILE`, `TURBO_TILE` et `OPEN_ENDS_TILE` sont les tuiles produites, et `tileFrom(file)` répond par l’une
   d’elles à une demande de tuile.
@@ -46,7 +46,7 @@ données. Dans l’intégration continue, les tâches des tests unitaires et d�
 
 ## L’archive e2e
 
-`scripts/e2e-archive.sh` copie `e2e/fixtures/generated/plateau.json` comme seule tuile métropolitaine, `0_0`,
+`scripts/e2e-archive.sh` copie `tests/e2e/fixtures/generated/plateau.json` comme seule tuile métropolitaine, `0_0`,
 l’empaquette avec `citymodel_builder pack` dans `target/e2e-archive/areas/plateau.citymodel`, et exécute
 `E2E_ARCHIVE=1 npx playwright test --project=e2e`. Le serveur extrait l’archive par `CITYLOOM_AREAS` et `DATA_ROOT`,
 tous deux dans `target/e2e-archive`.

@@ -5,7 +5,7 @@ mapped to the feature it covers (the test inventory). Each feature has a stable 
 the pages it lives on, the slice or crate that owns it, the paths of its code (globs) and the browser specs that
 cover it. The checks below hold the file against the repository, and are tried against fixture trees that break it.
 
-Every slice of the editor, every other crate, every page of `web/` and every spec of `e2e/tiers.json` belongs to at
+Every slice of the editor, every other crate, every page of `web/` and every spec of `tests/e2e/tiers.json` belongs to at
 least one feature: a slice or a crate when a feature names it as its owner or one of its globs lies inside it.
 
 A Rust test is mapped to a feature when a glob of its `code` matches the test's file. The share of the Rust tests that
@@ -30,8 +30,8 @@ FEATURES = Path("scripts/ci/features.json")
 EDITOR_SRC = Path("crates/cityloom_editor/src")
 CRATES = Path("crates")
 WEB = Path("web")
-TESTS = Path("e2e/tests")
-TIERS = Path("e2e/tiers.json")
+TESTS = Path("tests/e2e/tests")
+TIERS = Path("tests/e2e/tiers.json")
 
 FIELDS = {"id", "en", "fr-CA", "pages", "owner", "code", "specs"}
 ID = re.compile(r"[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*")

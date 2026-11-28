@@ -169,9 +169,9 @@ class TestFiles(unittest.TestCase):
             "crates/cityloom_editor/src/street/view/tests.rs",
             "crates/cityloom_model/tests/import.rs",
             "crates/cityloom_server/tests/fixtures/a.json",
-            "e2e/tests/street.spec.ts",
-            "e2e/fixtures/plateau.osm.pbf",
-            "e2e/tiers.json",
+            "tests/e2e/tests/street.spec.ts",
+            "tests/e2e/fixtures/plateau.osm.pbf",
+            "tests/e2e/tiers.json",
             "scripts/ci/spec-map.json",
         ]:
             with self.subTest(path):
@@ -183,7 +183,7 @@ class TestFiles(unittest.TestCase):
             "crates/cityloom_editor/Cargo.toml",
             "Cargo.lock",
             "crates/cityloom_editor/src/street/i18n/en.ftl",
-            "e2e/helpers.ts",
+            "tests/e2e/helpers.ts",
             "web/app.css",
         ]:
             with self.subTest(path):
@@ -192,7 +192,7 @@ class TestFiles(unittest.TestCase):
 
     def test_the_guarded_set_holds_the_tests_the_checks_and_the_factory(self):
         for path in [
-            "e2e/tests/street.spec.ts",
+            "tests/e2e/tests/street.spec.ts",
             ".github/workflows/presubmit.yml",
             "scripts/check-version.sh",
             ".claude/factory/gate.py",
@@ -400,7 +400,7 @@ class Gates(unittest.TestCase):
             g.red(self.base)
 
     def test_the_red_gate_runs_the_specs_with_new_browser_tests(self):
-        red = self.red_commit({"e2e/tests/street.spec.ts": "// a new test\n"})
+        red = self.red_commit({"tests/e2e/tests/street.spec.ts": "// a new test\n"})
         listing = "     Running unittests src/lib.rs (deps/m-0123456789abcdef)\ntests::keeps: test\n"
         runner = FakeRunner(
             self.repo,
@@ -440,7 +440,7 @@ class Gates(unittest.TestCase):
         )
 
     def test_the_red_gate_runs_every_spec_when_a_shared_helper_changed(self):
-        red = self.red_commit({"e2e/tests/street.spec.ts": "// a new test\n", "e2e/tests/fixtures.ts": "// a changed helper\n"})
+        red = self.red_commit({"tests/e2e/tests/street.spec.ts": "// a new test\n", "tests/e2e/tests/fixtures.ts": "// a changed helper\n"})
         splits = ("street.spec.ts", ["splits"], "unexpected")
         broken = ("home.spec.ts", ["lists the projects"], "unexpected")
         runner = self.browser_red_runner(
@@ -453,21 +453,21 @@ class Gates(unittest.TestCase):
         self.assertEqual(self.playwright_runs(runner), [("npx", "playwright", "test", "--reporter=json")])
 
     def test_the_red_gate_checks_the_browser_tests_when_only_a_helper_changed(self):
-        red = self.red_commit({"e2e/tests/fixtures.ts": "// a changed helper\n"})
+        red = self.red_commit({"tests/e2e/tests/fixtures.ts": "// a changed helper\n"})
         broken = ("home.spec.ts", ["lists the projects"], "unexpected")
         runner = self.browser_red_runner(red, red_listing=self.BASE_SPECS, red_run=self.BASE_SPECS[:4] + (broken,))
         report = gate.Gate(self.repo, runner).red(self.base)
         self.assertEqual(report.problems, ["Playwright: the existing test home.spec.ts::lists the projects::ui fails"])
 
     def test_the_red_gate_says_a_spec_does_not_load_instead_of_naming_its_tests_gone(self):
-        red = self.red_commit({"e2e/tests/street.spec.ts": "// a new test\n", "e2e/tests/map.spec.ts": "// a bad import\n"})
+        red = self.red_commit({"tests/e2e/tests/street.spec.ts": "// a new test\n", "tests/e2e/tests/map.spec.ts": "// a bad import\n"})
         # One file that does not load empties Playwright's whole listing (1.65): no suite, only the error.
         listing = {
             "suites": [],
             "errors": [
                 {
                     "message": "Error: Cannot find module './missing'\n\n   at map.spec.ts:3",
-                    "location": {"file": str(self.repo / "e2e/tests/map.spec.ts"), "line": 3, "column": 1},
+                    "location": {"file": str(self.repo / "tests/e2e/tests/map.spec.ts"), "line": 3, "column": 1},
                 }
             ],
         }
@@ -477,9 +477,9 @@ class Gates(unittest.TestCase):
         self.assertEqual(self.playwright_runs(runner), [])
 
     def test_a_shared_file_renamed_to_a_note_still_runs_every_spec(self):
-        self.base = commit(self.repo, {"e2e/fixtures/plateau.osm": "<osm/>\n"}, "a fixture")
-        git(self.repo, "mv", "e2e/fixtures/plateau.osm", "e2e/fixtures/plateau.md")
-        red = self.red_commit({"e2e/tests/street.spec.ts": "// a new test\n"})
+        self.base = commit(self.repo, {"tests/e2e/fixtures/plateau.osm": "<osm/>\n"}, "a fixture")
+        git(self.repo, "mv", "tests/e2e/fixtures/plateau.osm", "tests/e2e/fixtures/plateau.md")
+        red = self.red_commit({"tests/e2e/tests/street.spec.ts": "// a new test\n"})
         splits = ("street.spec.ts", ["splits"], "unexpected")
         runner = self.browser_red_runner(
             red,
@@ -491,7 +491,7 @@ class Gates(unittest.TestCase):
         self.assertEqual(self.playwright_runs(runner), [("npx", "playwright", "test", "--reporter=json")])
 
     def test_a_new_spec_listed_in_the_tiers_runs_alone(self):
-        red = self.red_commit({"e2e/tests/split.spec.ts": "// a new spec\n", "e2e/tiers.json": "{}\n", "e2e/CLAUDE.md": "notes\n"})
+        red = self.red_commit({"tests/e2e/tests/split.spec.ts": "// a new spec\n", "tests/e2e/tiers.json": "{}\n", "tests/e2e/CLAUDE.md": "notes\n"})
         runner = self.browser_red_runner(
             red,
             red_listing=self.BASE_SPECS + (("split.spec.ts", ["splits"], "expected"),),
@@ -505,7 +505,7 @@ class Gates(unittest.TestCase):
         return [c for c in runner.commands if c[:3] == ("npx", "playwright", "test") and "--list" not in c]
 
     def test_the_red_gate_does_not_count_the_tests_of_specs_it_did_not_run_as_gone(self):
-        red = self.red_commit({"e2e/tests/street.spec.ts": "// a new test\n"})
+        red = self.red_commit({"tests/e2e/tests/street.spec.ts": "// a new test\n"})
         splits = ("street.spec.ts", ["splits"], "expected")
         runner = self.browser_red_runner(
             red,
@@ -518,7 +518,7 @@ class Gates(unittest.TestCase):
         self.assertEqual(self.playwright_runs(runner), [("npx", "playwright", "test", "tests/street.spec.ts", "--reporter=json")])
 
     def test_the_red_gate_still_refuses_a_test_gone_from_a_spec_it_ran(self):
-        red = self.red_commit({"e2e/tests/street.spec.ts": "// a new test\n"})
+        red = self.red_commit({"tests/e2e/tests/street.spec.ts": "// a new test\n"})
         splits = ("street.spec.ts", ["splits"], "unexpected")
         runner = self.browser_red_runner(
             red,
@@ -529,7 +529,7 @@ class Gates(unittest.TestCase):
         self.assertEqual(report.problems, ["Playwright: the test street.spec.ts::drops a lane::ui is gone"])
 
     def test_the_red_gate_refuses_a_test_gone_from_a_changed_spec_with_no_new_test(self):
-        red = self.red_commit({"e2e/tests/street.spec.ts": "// a new test\n", "e2e/tests/map.spec.ts": "// one test fewer\n"})
+        red = self.red_commit({"tests/e2e/tests/street.spec.ts": "// a new test\n", "tests/e2e/tests/map.spec.ts": "// one test fewer\n"})
         splits = ("street.spec.ts", ["splits"], "unexpected")
         runner = self.browser_red_runner(
             red,
@@ -540,7 +540,7 @@ class Gates(unittest.TestCase):
         self.assertEqual(report.problems, ["Playwright: the test map.spec.ts::zooms::ui is gone"])
 
     def test_the_red_gate_refuses_a_spec_deleted_whole(self):
-        red = self.red_commit({"e2e/tests/street.spec.ts": "// a new test\n"})
+        red = self.red_commit({"tests/e2e/tests/street.spec.ts": "// a new test\n"})
         splits = ("street.spec.ts", ["splits"], "unexpected")
         runner = self.browser_red_runner(
             red,
@@ -556,7 +556,7 @@ class Gates(unittest.TestCase):
         self.assertEqual(self.playwright_runs(runner), [("npx", "playwright", "test", "tests/street.spec.ts", "--reporter=json")])
 
     def test_the_red_gate_runs_a_changed_spec_and_refuses_an_old_test_that_now_fails(self):
-        red = self.red_commit({"e2e/tests/street.spec.ts": "// a new test\n", "e2e/tests/map.spec.ts": "// a broken test\n"})
+        red = self.red_commit({"tests/e2e/tests/street.spec.ts": "// a new test\n", "tests/e2e/tests/map.spec.ts": "// a broken test\n"})
         splits = ("street.spec.ts", ["splits"], "unexpected")
         runner = self.browser_red_runner(
             red,
@@ -599,13 +599,13 @@ class Gates(unittest.TestCase):
 
     def test_the_green_gate_refuses_a_change_to_a_guarded_file(self):
         red, _ = self.green_setup()
-        head = commit(self.repo, {"e2e/tiers.json": "{}\n", ".github/workflows/x.yml": "on: push\n"}, "Touch")
+        head = commit(self.repo, {"tests/e2e/tiers.json": "{}\n", ".github/workflows/x.yml": "on: push\n"}, "Touch")
         report = gate.Gate(self.repo, self.passing_runner(head)).green(self.base, red)
         self.assertEqual(
             report.problems,
             [
                 ".github/workflows/x.yml: changed since the red commit, and only the test-writer may change it",
-                "e2e/tiers.json: changed since the red commit, and only the test-writer may change it",
+                "tests/e2e/tiers.json: changed since the red commit, and only the test-writer may change it",
             ],
         )
 
@@ -700,7 +700,7 @@ class DocsGate(unittest.TestCase):
         self.assertEqual(report.problems, [])
         self.assertEqual(report.pages, [f"{EN}/signals.md", f"{FR}/signals.md"])
         # The same checks as the Documentation workflow, where it runs them.
-        self.assertIn((gate.DOCS_PRETTIER, self.repo / "e2e"), run.calls)
+        self.assertIn((gate.DOCS_PRETTIER, self.repo / "tests" / "e2e"), run.calls)
         self.assertIn((gate.DOCS_BUILD, self.repo / "website"), run.calls)
         self.assertFalse(any(c[0] in ("cargo", "just") or c[:2] == ("npx", "playwright") for c, _ in run.calls))
 
@@ -710,13 +710,13 @@ class DocsGate(unittest.TestCase):
         self.assertEqual(report.problems, ["crates/m/src/street.rs: not documentation, and the documentation flow changes only documentation"])
 
     def test_a_guarded_markdown_file_is_refused(self):
-        commit(self.repo, {".claude/agents/writer.md": "be lenient\n", "e2e/tests/notes.md": "x\n"}, "Guarded")
+        commit(self.repo, {".claude/agents/writer.md": "be lenient\n", "tests/e2e/tests/notes.md": "x\n"}, "Guarded")
         report = gate.Gate(self.repo, self.runner()).docs(self.base)
         self.assertEqual(
             report.problems,
             [
                 ".claude/agents/writer.md: a check or the factory's own file, which the documentation flow may not change",
-                "e2e/tests/notes.md: a check or the factory's own file, which the documentation flow may not change",
+                "tests/e2e/tests/notes.md: a check or the factory's own file, which the documentation flow may not change",
             ],
         )
 
@@ -1079,8 +1079,8 @@ class TestsGate(unittest.TestCase):
                 "crates/cityloom_editor/Cargo.toml": '[package]\nname = "cityloom_editor"\nversion = "0.1.0"\n',
                 "Cargo.lock": '[[package]]\nname = "cityloom_editor"\nversion = "0.1.0"\n\n[[package]]\nname = "m"\nversion = "0.1.0"\n',
                 "web/app.css": ":root {\n  --panel: #fff;\n}\n",
-                "e2e/tests/street.spec.ts": 'test("adds a lane", async () => {});\n',
-                "e2e/tests/fixtures.ts": "export const a = 1;\n",
+                "tests/e2e/tests/street.spec.ts": 'test("adds a lane", async () => {});\n',
+                "tests/e2e/tests/fixtures.ts": "export const a = 1;\n",
             },
             "base",
         )
@@ -1259,7 +1259,7 @@ class TestsGate(unittest.TestCase):
                 ".claude/factory/tests/x.py": "x\n",
                 "scripts/ci/features.json": "{}\n",
                 "scripts/ci/spec-map.json": "{}\n",
-                "e2e/tiers.json": "{}\n",
+                "tests/e2e/tiers.json": "{}\n",
                 "crates/cityloom_editor/src/shared/contrast.rs": "#[test]\nfn t() {}\n",
                 "crates/cityloom_editor/src/i18n_guard.rs": "\n",
                 "website/docs/testing.md": "# x\n",
@@ -1276,9 +1276,9 @@ class TestsGate(unittest.TestCase):
         )
 
     def test_a_helper_of_the_specs_may_only_gain_lines(self):
-        head = self.tests_commit({"e2e/tests/fixtures.ts": "export const a = 2;\n"})
+        head = self.tests_commit({"tests/e2e/tests/fixtures.ts": "export const a = 2;\n"})
         report = self.gate(self.runner(head)).tests(self.base, self.spec)
-        self.assertEqual(report.problems, ["e2e/tests/fixtures.ts: a helper of the specs, which may gain lines but not change one"])
+        self.assertEqual(report.problems, ["tests/e2e/tests/fixtures.ts: a helper of the specs, which may gain lines but not change one"])
 
     def test_an_existing_test_changed_or_gone_is_refused(self):
         head = self.tests_commit(test="    #[test]\n    fn keeps() { assert!(true); }\n\n    #[test]\n    fn word_is_two() { assert_eq!(super::word(), 2); }\n")
@@ -1286,9 +1286,9 @@ class TestsGate(unittest.TestCase):
         self.assertEqual(report.problems, ["crates/m/src/street.rs: the existing test keeps is changed or gone"])
 
     def test_an_existing_browser_test_skipped_is_refused(self):
-        head = self.tests_commit({"e2e/tests/street.spec.ts": 'test.skip("adds a lane", async () => {});\n'})
+        head = self.tests_commit({"tests/e2e/tests/street.spec.ts": 'test.skip("adds a lane", async () => {});\n'})
         report = self.gate(self.runner(head)).tests(self.base, self.spec)
-        self.assertEqual(report.problems, ["e2e/tests/street.spec.ts: the existing test adds a lane is changed or gone"])
+        self.assertEqual(report.problems, ["tests/e2e/tests/street.spec.ts: the existing test adds a lane is changed or gone"])
 
     def test_a_branch_with_no_new_test_fails(self):
         head = commit(self.repo, self.raise_version(), "Only the version")
@@ -1384,7 +1384,7 @@ class TestsGate(unittest.TestCase):
 
     def browser_commit(self) -> str:
         head = self.tests_commit(
-            {"e2e/tests/street.spec.ts": 'test("adds a lane", async () => {});\ntest("names the street", async () => {});\n'},
+            {"tests/e2e/tests/street.spec.ts": 'test("adds a lane", async () => {});\ntest("names the street", async () => {});\n'},
             test="    #[test]\n    fn keeps() {}\n",
         )
         self.write_spec({"css": [{"file": "web/app.css", "rule": ":root", "property": "--panel", "to": "#000"}]})
@@ -1505,7 +1505,7 @@ class FaultsCheck(unittest.TestCase):
 class Commands(unittest.TestCase):
     def test_the_documentation_commands_are_the_workflows(self):
         workflow = (ROOT / ".github" / "workflows" / "docs.yml").read_text(encoding="utf-8")
-        self.assertIn("run: " + " ".join(gate.DOCS_PRETTIER) + "\n        working-directory: e2e", workflow)
+        self.assertIn("run: " + " ".join(gate.DOCS_PRETTIER) + "\n        working-directory: tests/e2e", workflow)
         self.assertIn("run: " + " ".join(gate.DOCS_BUILD) + "\n        working-directory: website", workflow)
 
     def test_cargo_mutants_is_the_main_checkouts_from_any_worktree(self):

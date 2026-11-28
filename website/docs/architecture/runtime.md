@@ -65,7 +65,7 @@ Who uses what the steps make:
 - A server reads the archive only when `CITYLOOM_AREAS` names a folder holding exactly one `.citymodel`. At start-up it
   checks the archive and unpacks it into `DATA_ROOT/<area>/` (`lib.rs::unpack_areas` in `cityloom_server`), and serves
   `/data/metro/` from there. Without it, `/data/metro/` comes from `web/data/`.
-- The E2E tier of the browser tests (`just e2e-archive`) packs `e2e/fixtures/generated/plateau.json` with
+- The E2E tier of the browser tests (`just e2e-archive`) packs `tests/e2e/fixtures/generated/plateau.json` with
   `citymodel_builder pack`, given no city but `--area`, `--out`, `--metro` and `--source`, into `target/e2e-archive`, and runs against a server that unpacks it.
 
 ## The deployed system

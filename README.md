@@ -32,13 +32,13 @@ just check    # test, then e2e
 just format   # rustfmt and Prettier (just format-check only checks)
 ```
 
-Without `just`: `cargo test --workspace --features cityloom_server/test-provider` (the server's tests need a Postgres: `just db` starts one and prints the `DATABASE_URL` to export; `just test` checks both), `./scripts/build.sh`, `cargo run -p cityloom_server`, and `cargo build -p cityloom_server --features test-provider && ./scripts/pin-server.sh` then `cd e2e && npx playwright test` (the tests start the pinned copy of the server).
+Without `just`: `cargo test --workspace --features cityloom_server/test-provider` (the server's tests need a Postgres: `just db` starts one and prints the `DATABASE_URL` to export; `just test` checks both), `./scripts/build.sh`, `cargo run -p cityloom_server`, and `cargo build -p cityloom_server --features test-provider && ./scripts/pin-server.sh` then `cd tests/e2e && npx playwright test` (the tests start the pinned copy of the server).
 
 The server's tests and the account spec need a Postgres: `just db`, then `export DATABASE_URL=...` as it prints.
 
 ## End-to-end tests
 
-Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first; the Rust server (`cityloom_server`) serves `web/` for the run (range requests included), with the fake sign-in provider and, for the integration tier, a Postgres; the specs are in three tiers (`e2e/tiers.json`), each its own CI job; `E2E_PORT` moves it off port 8137 when something else holds that.
+Playwright drives the built pages in Chromium (`tests/e2e/`). `just e2e` builds first; the Rust server (`cityloom_server`) serves `web/` for the run (range requests included), with the fake sign-in provider and, for the integration tier, a Postgres; the specs are in three tiers (`tests/e2e/tiers.json`), each its own CI job; `E2E_PORT` moves it off port 8137 when something else holds that.
 
 ## Continuous integration
 

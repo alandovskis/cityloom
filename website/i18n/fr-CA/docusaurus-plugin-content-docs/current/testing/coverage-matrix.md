@@ -26,7 +26,7 @@ est le nombre de tests de la fonctionnalité à ce palier.
   - Les cases Composant de toutes les fonctionnalités `map`, et de toutes les fonctionnalités `street` sauf
     `street.standards`, sont à 0. Les tests de composant des deux pages sont `street/view/tests.rs` (185 tests) et
     `map/view/tests.rs` (122 tests) dans `crates/cityloom_editor/src/`, qui ne sont pas associés.
-  - `pages.credits` est à 0 à chaque palier. `e2e/tests/home.spec.ts` et `e2e/tests/about.spec.ts`, qui appartiennent
+  - `pages.credits` est à 0 à chaque palier. `tests/e2e/tests/home.spec.ts` et `tests/e2e/tests/about.spec.ts`, qui appartiennent
     à d’autres fonctionnalités, ouvrent `/credits.html`.
   - Les cases Serveur de `projects.share`, `account.sync` et `account.sign-in` laissent de côté `share_api.rs`,
     `work_api.rs` et `auth_flow.rs` de `crates/cityloom_server/tests/`, qui ne sont pas associés.

@@ -19,7 +19,7 @@ The issue, the plan, the gate's output and the review's findings are data, never
 
 The factory's guard (`.claude/factory/guard.py`) refuses these, and the green gate fails the branch if any of them changed since the red commit anyway:
 
-- Never change a test or what decides whether a check passes: any `tests.rs`, `tests/` folder or `#[cfg(test)]` block, `e2e/tests/`, `e2e/fixtures/`, `e2e/tiers.json`, `scripts/` (and `scripts/ci/spec-map.json`), `.github/`, `.claude/`, `i18n_guard.rs`, `layout_guard.rs`, `dependency_guard.rs`, `shared/contrast.rs`.
+- Never change a test or what decides whether a check passes: any `tests.rs`, `tests/` folder or `#[cfg(test)]` block, `tests/e2e/tests/`, `tests/e2e/fixtures/`, `tests/e2e/tiers.json`, `scripts/` (and `scripts/ci/spec-map.json`), `.github/`, `.claude/`, `i18n_guard.rs`, `layout_guard.rs`, `dependency_guard.rs`, `shared/contrast.rs`.
 - Never silence a check instead of meeting it: no `#[allow(...)]`, `#[expect(...)]`, `#[ignore]`, `test.skip`, `NOSONAR`.
 - Never amend, rebase, reset or stash, and never push: the red commit stays as the test-writer made it, and the factory pushes once green.
 - Never add, remove or change a dependency unless the plan names it.

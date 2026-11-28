@@ -40,7 +40,7 @@ only; a run by hand never deploys.
 ## Documentation
 
 `.github/workflows/docs.yml` runs when a change touches `website/**` or the workflow. It checks `website/` with
-Prettier (from `e2e/`), then builds the site in both languages; a broken link or anchor fails the build. It publishes
+Prettier (from `tests/e2e/`), then builds the site in both languages; a broken link or anchor fails the build. It publishes
 the site to GitHub Pages from `main`. A change to `docs/**` or to a `*.md` outside `website/` starts no workflow.
 
 ## SonarCloud

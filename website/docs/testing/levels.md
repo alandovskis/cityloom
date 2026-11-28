@@ -77,7 +77,7 @@ raised whenever the importer's output changes for the same data.
 - The editor's tests write the report through the PDF writer: `cityloom_report_pdf` is one of the editor's
   dev-dependencies, so it stays out of the editor's own build. `scripts/build.sh` fails if the editor's JavaScript
   exports `report_pdf`.
-- In the browser, `e2e/tests/report.spec.ts` reads the PDF a page makes with `pdfjs-dist`.
+- In the browser, `tests/e2e/tests/report.spec.ts` reads the PDF a page makes with `pdfjs-dist`.
 
 ## Script tests
 
@@ -91,8 +91,8 @@ feature list is whole, and the share of Rust tests that no feature names stays w
 
 ## Browser tests
 
-The browser tests are Playwright specs, `e2e/tests/*.spec.ts`, run against the built `web/pkg` and a server built with
-the fake provider. `e2e/tiers.json` gives each spec exactly one tier:
+The browser tests are Playwright specs, `tests/e2e/tests/*.spec.ts`, run against the built `web/pkg` and a server built with
+the fake provider. `tests/e2e/tiers.json` gives each spec exactly one tier:
 
 - **UI** (35 specs): one page, the network stubbed, the static server only; no database, no archive. `just e2e-ui`.
 - **Integration**: `account-server`, `share` and `sync`, against the real server and a Postgres (`DATABASE_URL`).
@@ -101,7 +101,7 @@ the fake provider. `e2e/tiers.json` gives each spec exactly one tier:
   delivery of the site. `just e2e-archive`.
 - **`archive_also`**: `map` and `street` are UI specs that the E2E tier runs again over the unpacked archive.
 
-`e2e/playwright.config.ts` makes one Playwright project per tier, and throws when a spec is in no tier or in two. With
+`tests/e2e/playwright.config.ts` makes one Playwright project per tier, and throws when a spec is in no tier or in two. With
 `E2E_ARCHIVE=1` only the E2E project runs, with the `archive_also` specs added. Every project is Desktop Chrome at 1440
 by 900. In CI a failed test is retried once, `test.only` fails the run, and two workers run. The server is
 `target/e2e/cityloom_server`, the copy `scripts/pin-server.sh` makes, started with `FAKE_PROVIDER=1` and fixed test

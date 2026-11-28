@@ -45,7 +45,7 @@ une exécution à la main ne déploie jamais.
 ## Documentation
 
 `.github/workflows/docs.yml` s’exécute quand un changement touche `website/**` ou le flux de travail. Il vérifie
-`website/` avec Prettier (depuis `e2e/`), puis construit le site dans les deux langues; un lien ou une ancre brisé fait
+`website/` avec Prettier (depuis `tests/e2e/`), puis construit le site dans les deux langues; un lien ou une ancre brisé fait
 échouer la construction. Il publie le site sur GitHub Pages depuis `main`. Un changement à `docs/**` ou à un `*.md` hors
 de `website/` ne démarre aucun flux de travail.
 

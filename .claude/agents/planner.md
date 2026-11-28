@@ -77,7 +77,7 @@ Reply with only the plan, in Markdown, with exactly these sections in this order
 What the new tests will check, one line per behaviour, each tied to the issue's words.
 
 ## Where
-Each test file to change or add, and the id of the feature of `scripts/ci/features.json` a new test file goes in, with that file when its list changes. A new spec: its tier of `e2e/tiers.json` and its group of `scripts/ci/spec-map.json`.
+Each test file to change or add, and the id of the feature of `scripts/ci/features.json` a new test file goes in, with that file when its list changes. A new spec: its tier of `tests/e2e/tiers.json` and its group of `scripts/ci/spec-map.json`.
 
 ## Tests
 One line per test: its kind, its file, its name, the behaviour it checks and, for a browser test, its tier (ui or integration) and spec-map group. Every behaviour of Change has at least one test. Say which existing tests must stay as they are (all of them: this flow changes none).

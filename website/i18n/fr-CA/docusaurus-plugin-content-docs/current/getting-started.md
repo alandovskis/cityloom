@@ -21,7 +21,7 @@ ses tâches; lancez `just` sans argument pour les lister.
 just setup
 ```
 
-La recette exécute `npm ci` à la racine (la bibliothèque d’exécution de la carte, MapLibre) et dans `e2e`
+La recette exécute `npm ci` à la racine (la bibliothèque d’exécution de la carte, MapLibre) et dans `tests/e2e`
 (Playwright), installe `wasm-bindgen-cli` dans `.tools` à la version fixée dans `crates/cityloom_editor/Cargo.toml` et installe Chromium pour
 Playwright.
 
@@ -88,7 +88,7 @@ L’ouverture d’un lieu exige les tuiles de routes : sans elles, aucun lieu n
 ```sh
 just db            # un Postgres jetable dans Docker pour les tests du serveur et la spécification du compte
 just test          # cargo test --workspace, et une construction wasm32 du code que `cargo test` seul ne compile pas; exige `DATABASE_URL`
-just e2e           # construit, puis exécute les trois niveaux de tests Playwright de e2e/ (`just e2e-ui`, `just e2e-integration` et `just e2e-archive` en exécutent un chacun); le niveau d’intégration exige `DATABASE_URL`
+just e2e           # construit, puis exécute les trois niveaux de tests Playwright de tests/e2e/ (`just e2e-ui`, `just e2e-integration` et `just e2e-archive` en exécutent un chacun); le niveau d’intégration exige `DATABASE_URL`
 just check         # les deux
 just format        # rustfmt et Prettier
 just format-check  # la même vérification, sans rien modifier
@@ -108,7 +108,7 @@ doit réussir avant une fusion.
 
 `just db` démarre le Postgres dans un conteneur nommé `cityloom-db`, sur 127.0.0.1:55432, et affiche la ligne à
 exécuter : `export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom`. Les tests du serveur et la
-spécification du compte (`e2e/tests/account-server.spec.ts`) l’exigent et le disent quand il manque. `just db-stop`
+spécification du compte (`tests/e2e/tests/account-server.spec.ts`) l’exigent et le disent quand il manque. `just db-stop`
 supprime le conteneur.
 
 ## Comptes et déploiement
