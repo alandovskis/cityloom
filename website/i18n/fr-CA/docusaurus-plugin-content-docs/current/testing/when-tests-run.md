@@ -36,11 +36,24 @@ browser tests, UI tests, Integration tests et Version bump, et `CI`, qui les ras
 ## Flux de postvérification
 
 `.github/workflows/postsubmit.yml` s’exécute à chaque poussée sur `main` (avec le même `paths-ignore`) et à la main. Il
-n’a pas de tâche `changes` : il exécute toutes les tâches et toutes les spécifications, le niveau de l’interface en six
-partitions Playwright, et le niveau de bout en bout par `scripts/e2e-archive.sh`. Il fixe aussi
-`RUSTFLAGS=-D warnings`, et ses exécutions ne sont jamais annulées. Sa tâche `All checks` échoue quand une tâche a
-échoué ou a été annulée, et `Deploy to Railway` l’attend. Le déploiement ne se fait que pour une poussée sur `main`;
-une exécution à la main ne déploie jamais.
+exécute toutes les vérifications et toutes les spécifications, le niveau de l’interface en six partitions Playwright,
+et le niveau de bout en bout par `scripts/e2e-archive.sh`. Il fixe aussi `RUSTFLAGS=-D warnings`, et ses exécutions ne
+sont jamais annulées. Sa tâche `All checks` échoue quand une tâche a échoué ou a été annulée, et `Deploy to Railway`
+l’attend. Le déploiement ne se fait que pour une poussée sur `main`; une exécution à la main ne déploie jamais.
+
+Sa tâche `Changes` décide seulement si la poussée déploie; aucune vérification ne l’attend. Elle trouve le commit que
+`main` a déployé en dernier (`scripts/ci/last_deploy.py` : l’exécution antérieure la plus récente dont
+`Deploy to Railway` a réussi) et compare la poussée à ce commit avec `scripts/ci/ci_changes.py --event push`. Le
+déploiement ne se fait que si un fichier dont le site est construit a changé, selon la liste `DEPLOY_INPUTS` de
+`ci_changes.py` : les crates (sauf leurs tests et leurs gardes), `web/`, `deploy/`, `cities/`, les manifestes, le
+justfile et les scripts que le déploiement exécute. Une fusion qui ne touche que la configuration de
+l’intégration continue, ou des tests dans leurs propres fichiers (les spécifications, `tests.rs`, `crates/*/tests/`),
+passe toutes les vérifications et saute le déploiement. La liste se lit par fichier : un test ajouté à un module
+`#[cfg(test)]` d’un fichier source change ce fichier, et la fusion déploie. Un changement du site dont l’exécution a
+échoué reste dans la comparaison de la poussée suivante, et part avec elle. Quand le dernier déploiement est
+introuvable, la poussée déploie. Chaque fichier que git suit est dans `DEPLOY_INPUTS` ou dans `NOT_SERVED`;
+`just test-scripts` échoue sur un fichier qui n’est dans aucune des deux, si bien qu’un nouveau genre de fichier est
+placé d’un côté par la demande de fusion qui l’ajoute.
 
 ## Documentation
 

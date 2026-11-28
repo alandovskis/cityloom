@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts" / "ci"))
@@ -539,11 +542,26 @@ class Pipelines(unittest.TestCase):
 
     def test_the_deploy_waits_for_every_check(self):
         jobs = self.jobs("postsubmit.yml")
-        self.assertRegex(jobs["deploy"], r"needs: \[ci\b")
+        self.assertRegex(jobs["deploy"], r"needs: \[changes, ci\]")
         checks = set(jobs) - {"ci", "deploy"}
         needed = re.search(r"needs: \[([^\]]*)\]", jobs["ci"])
         self.assertIsNotNone(needed)
         self.assertEqual(checks, {n.strip() for n in needed.group(1).split(",")})
+
+    def test_main_decides_whether_to_deploy(self):
+        jobs = self.jobs("postsubmit.yml")
+        self.assertIn("scripts/ci/last_deploy.py", jobs["changes"])
+        self.assertIn("ci_changes.py --event push", jobs["changes"])
+        self.assertIn("actions: read", jobs["changes"])
+        self.assertIn("needs.changes.outputs.deploy == 'true'", jobs["deploy"])
+
+    def test_no_check_waits_for_the_decision(self):
+        # Every check runs in full on main; only the deploy reads what the Changes job decided.
+        for name, text in self.jobs("postsubmit.yml").items():
+            needs = re.search(r"needs: (.*)", text)
+            if name not in ("ci", "deploy") and needs:
+                with self.subTest(name):
+                    self.assertNotIn("changes", needs.group(1))
 
     def test_presubmit_has_the_one_check_to_require(self):
         jobs = self.jobs("presubmit.yml")
@@ -627,6 +645,98 @@ class Pipelines(unittest.TestCase):
     def test_only_a_pull_request_is_cancelled_by_a_newer_push(self):
         self.assertIn("cancel-in-progress: true", self.text("presubmit.yml"))
         self.assertIn("cancel-in-progress: false", self.text("postsubmit.yml"))
+
+
+class Deploy(unittest.TestCase):
+    """A push to main deploys only when it changed a file the deployed site is built from (DEPLOY_INPUTS), since the
+    last deploy: postsubmit.yml's Changes job passes that commit as the base."""
+
+    def test_tests_alone_do_not_deploy(self):
+        self.assertFalse(
+            ci_changes.deploys(
+                [
+                    "tests/e2e/tests/map.spec.ts",
+                    "crates/cityloom_editor/src/street/view/tests.rs",
+                    "crates/citymodel_builder/tests/tiles.rs",
+                    "crates/cityloom_editor/src/ui_guard.rs",
+                ]
+            )
+        )
+
+    def test_ci_configuration_alone_does_not_deploy(self):
+        self.assertFalse(ci_changes.deploys([".claude/agents/deploy.md", "scripts/ci/spec-map.json", ".github/workflows/presubmit.yml"]))
+
+    def test_one_input_among_tests_deploys(self):
+        self.assertTrue(ci_changes.deploys(["tests/e2e/tests/map.spec.ts", "web/app.css"]))
+
+    def test_each_kind_of_input_deploys(self):
+        for f in (
+            "crates/cityloom_server/src/main.rs",
+            "crates/cityloom_server/migrations/0007_x.sql",
+            "web/map.html",
+            "deploy/Dockerfile",
+            "cities/montreal.toml",
+            "Cargo.lock",
+            "package-lock.json",
+            "justfile",
+            "scripts/deploy.sh",
+            "scripts/precompress.mjs",
+            ".github/workflows/postsubmit.yml",
+        ):
+            with self.subTest(f):
+                self.assertTrue(ci_changes.deploys([f]))
+
+    def test_an_unknown_base_deploys(self):
+        self.assertTrue(ci_changes.deploys(None))
+
+    def test_a_bare_version_bump_does_not_deploy(self):
+        self.assertFalse(ci_changes.deploys([]))  # changed_files has already left the bump out
+
+    def test_a_site_change_behind_a_tests_only_one_deploys(self):
+        # The base is the last deployed commit, so a web/ change whose own run failed is still in the diff when a later
+        # merge adds only tests.
+        self.assertTrue(ci_changes.deploys(["web/app.js", "tests/e2e/tests/street.spec.ts"]))
+
+    def test_a_base_not_behind_head_deploys(self):
+        # A repository of its own: CI's checkouts are shallow, so this one's history cannot be counted on.
+        with tempfile.TemporaryDirectory() as tmp:
+            run = lambda *a: subprocess.run(["git", "-C", tmp, *a], check=True, capture_output=True, text=True).stdout.strip()
+            run("init", "-q")
+            for n in ("1", "2"):
+                (Path(tmp) / "f").write_text(n, encoding="utf-8")
+                run("add", "f")
+                run("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", n)
+            parent, head = run("rev-parse", "HEAD~1"), run("rev-parse", "HEAD")
+            with mock.patch.object(ci_changes, "ROOT", Path(tmp)):
+                self.assertTrue(ci_changes.behind(parent, head))
+                self.assertTrue(ci_changes.behind(head, head))
+                self.assertFalse(ci_changes.behind(head, parent))
+                self.assertFalse(ci_changes.behind("0" * 40, head))
+                self.assertFalse(ci_changes.behind("HEAD~1; rm -rf /", head))
+
+    def test_every_tracked_file_is_classified(self):
+        def known(f: str) -> bool:
+            return ci_changes.served(f) or any(ci_changes.glob(p, f) for p in ci_changes.NOT_SERVED + ci_changes.CARVED_OUT)
+
+        loose = [f for f in ci_changes.git("ls-files").splitlines() if not known(f)]
+        self.assertEqual(loose, [], "classify these in DEPLOY_INPUTS or NOT_SERVED (scripts/ci/ci_changes.py)")
+
+    def test_what_is_not_served_is_no_input(self):
+        both = [
+            f
+            for f in ci_changes.git("ls-files").splitlines()
+            if any(ci_changes.glob(p, f) for p in ci_changes.NOT_SERVED) and ci_changes.served(f)
+        ]
+        self.assertEqual(both, [])
+
+    def test_the_tile_cache_key_reads_only_inputs(self):
+        # Every file the deploy job's tile cache hashes is a deploy input.
+        workflow = (ROOT / ".github" / "workflows" / "postsubmit.yml").read_text(encoding="utf-8")
+        key = re.search(r"key: tiles-\$\{\{ hashFiles\(([^)]*)\)", workflow)
+        self.assertIsNotNone(key)
+        for pattern in [p for p in re.findall(r"'([^']*)'", key.group(1)) if not p.startswith("!")]:
+            with self.subTest(pattern):
+                self.assertTrue(ci_changes.served(pattern.replace("**", "x.rs")))
 
 
 class Revisions(unittest.TestCase):
