@@ -1,0 +1,5 @@
+PASS tests gate
+  new test: cityloom_editor unittests src/lib.rs::map::model::corridor::tests::a_change_the_storage_will_not_keep_is_reported_and_leaves_every_street_as_it_was
+  new test: cityloom_editor unittests src/lib.rs::map::model::corridor::tests::a_street_edited_since_refuses_the_undo_before_anything_is_written_even_when_the_storage_refuses
+  new test: cityloom_editor unittests src/lib.rs::map::model::corridor::tests::an_undo_the_storage_will_not_keep_names_the_streets_and_can_be_tried_again
+  the faults were run at 311f1290daa25b8306e812230a340b48aa79dc59: the branch is the same since, but for the version lines, and no faulted file changed
