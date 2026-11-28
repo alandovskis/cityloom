@@ -628,6 +628,34 @@ class Pipelines(unittest.TestCase):
         self.assertIn("cancel-in-progress: true", self.text("presubmit.yml"))
         self.assertIn("cancel-in-progress: false", self.text("postsubmit.yml"))
 
+    def test_the_images_workflow_is_called_and_gives_the_tag(self):
+        # The toolchain images of dockerfiles/, which the build and test jobs run in, are tagged by what they are built
+        # from (scripts/ci/image_tag.py); the callers read the tag from this workflow's output.
+        images = self.text("images.yml")
+        self.assertIn("workflow_call:", images)
+        self.assertRegex(images, r"outputs:\s*\n\s+tag:")
+        self.assertIn("scripts/ci/image_tag.py", images)
+
+    def test_the_images_are_pushed_only_when_missing(self):
+        # GHCR is asked first; the four images are baked and pushed only when one is missing at the tag.
+        images = self.text("images.yml")
+        inspect = images.find("docker buildx imagetools inspect")
+        bake = images.find("docker buildx bake")
+        self.assertGreater(inspect, -1)
+        self.assertGreater(bake, inspect)
+        self.assertIn("--push", images[bake:])
+        bake_step = images[: bake].rsplit("- ", 1)[-1]
+        self.assertRegex(bake_step, r"if: .*missing")
+        for image in ("rust", "js", "docs", "e2e"):
+            self.assertIn(f"cityloom-{image}", images)
+
+    def test_the_images_workflow_alone_writes_packages(self):
+        # Pushing to GHCR needs `packages: write`; the workflow asks for it on its one job, never at the top.
+        images = self.text("images.yml")
+        top = images.split("\njobs:")[0]
+        self.assertNotIn("packages: write", top)
+        self.assertIn("packages: write", self.jobs("images.yml")["images"])
+
 
 class Revisions(unittest.TestCase):
     def test_only_a_commit_id_or_head_reaches_git(self):
