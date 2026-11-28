@@ -76,8 +76,9 @@ Build the documentation site in English and fr-CA:
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/src -v "$v-website-node-modules":/src/website/node_modules -w /src/website cityloom-docs sh -c 'npm ci && npm run build'
 ```
 
-Serve the documentation site on http://localhost:3000/. As with `just docs`, the port is open on the host's loopback
-only:
+Serve the documentation site with live reload on http://localhost:3000/cityloom/. As with `just docs`, the port is open
+on the host's loopback only, and the server shows one language at a time: add `--locale fr-CA` after `--host 0.0.0.0`
+for the French site.
 
 ```bash
 docker run --rm -it --user "$(id -u):$(id -g)" -p 127.0.0.1:3000:3000 -v "$PWD":/src -v "$v-website-node-modules":/src/website/node_modules -w /src/website cityloom-docs npm run start -- --host 0.0.0.0
