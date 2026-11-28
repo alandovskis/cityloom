@@ -86,6 +86,7 @@ NOT_SERVED = (
     "*.md",
     ".claude/**",
     ".impeccable/**",
+    "dockerfiles/**",  # the toolchain images to build and test in; the runtime image is deploy/Dockerfile
     ".github/actions/**",
     ".github/ISSUE_TEMPLATE/**",
     ".github/dependabot.yml",
