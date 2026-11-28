@@ -1,0 +1,4 @@
+PASS tests gate
+  new test: cityloom_editor unittests src/lib.rs::map::view::tests::a_failing_street_pressed_says_its_failed_checks_in_french
+  new test: cityloom_editor unittests src/lib.rs::map::view::tests::a_street_pressed_that_fails_a_check_lists_each_check_it_fails
+  the faults were run at f1f17b5cfbdb66c0ecde4b6a262c5a0de47616b8: the branch is the same since, but for the version lines, and no faulted file changed

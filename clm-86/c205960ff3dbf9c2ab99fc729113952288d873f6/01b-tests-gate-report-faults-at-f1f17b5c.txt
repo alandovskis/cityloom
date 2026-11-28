@@ -1,0 +1,8 @@
+PASS tests gate
+  new test: cityloom_editor unittests src/lib.rs::map::view::tests::a_failing_street_pressed_says_its_failed_checks_in_french
+  new test: cityloom_editor unittests src/lib.rs::map::view::tests::a_street_pressed_that_fails_a_check_lists_each_check_it_fails
+  caught: cityloom_editor unittests src/lib.rs::map::view::tests::a_failing_street_pressed_says_its_failed_checks_in_french: 3 faults, the first: crates/cityloom_editor/src/map/vm/mod.rs: replace MapVm::picked_failing -> Vec<Said> with vec![]; crates/cityloom_editor/src/map/i18n/fr.ftl: remove the message map-place-failing; crates/cityloom_editor/src/map/view/details.rs: remove the attribute class="note-h"
+  caught: cityloom_editor unittests src/lib.rs::map::view::tests::a_street_pressed_that_fails_a_check_lists_each_check_it_fails: 3 faults, the first: crates/cityloom_editor/src/map/vm/mod.rs: replace MapVm::picked_failing -> Vec<Said> with vec![]; crates/cityloom_editor/src/map/i18n/en.ftl: remove the message map-place-failing; crates/cityloom_editor/src/map/view/details.rs: remove the attribute class="note-h"
+  not caught by any new test: crates/cityloom_editor/src/map/view/details.rs: remove the attribute class="insp-range map-place-ok"
+  did not compile: crates/cityloom_editor/src/map/vm/mod.rs: replace MapVm::picked_failing -> Vec<Said> with vec![Default::default()]
+  not run, every new test had caught three: 34 faults

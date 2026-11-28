@@ -1,0 +1,11 @@
+Each new test of CLM-86 run alone at c205960ff3dbf9c2ab99fc729113952288d873f6
+
+$ cargo test -p cityloom_editor --lib map::view::tests::a_street_pressed_that_fails_a_check_lists_each_check_it_fails -- --exact
+running 1 test
+test map::view::tests::a_street_pressed_that_fails_a_check_lists_each_check_it_fails ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4036 filtered out; finished in 0.24s
+
+$ cargo test -p cityloom_editor --lib map::view::tests::a_failing_street_pressed_says_its_failed_checks_in_french -- --exact
+running 1 test
+test map::view::tests::a_failing_street_pressed_says_its_failed_checks_in_french ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4036 filtered out; finished in 0.24s
