@@ -25,5 +25,8 @@ cp "$dir/$target/release/cityloom_server" "$stage/cityloom_server"
 ./scripts/check-no-fake.sh "$stage/cityloom_server"
 cp deploy/Dockerfile "$stage/Dockerfile"
 find "$stage" -name .DS_Store -delete
-railway up "$stage" --path-as-root --ci \
+# A failed upload is tried again, 4 attempts in all, after 30, 60 and 120 s (scripts/retry.sh). `railway up --ci` also
+# fails when the build or the deploy on Railway fails, and a retry then uploads and builds the same files again: at
+# worst a second deployment of them, which replaces the first.
+./scripts/retry.sh 4 30 railway up "$stage" --path-as-root --ci \
   --project ae2bfc37-376c-4ff2-b11d-afa8f0c89b78 --environment production --service cityloom
