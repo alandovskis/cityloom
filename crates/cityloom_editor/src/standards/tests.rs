@@ -278,3 +278,130 @@ fn the_refusals_have_reasons_in_both_languages() {
         assert!(!crate::shared::testing::fr(&said).contains("{"), "{:?}", said);
     }
 }
+
+fn profiles(vm: &Rc<StandardsVm>) -> String {
+    let vm = vm.clone();
+    html(|| leptos::prelude::IntoAny::into_any(leptos::prelude::view! { <Profiles vm=vm.clone()/> }))
+}
+
+/// What an element of the page holds between the end of its opening tag, found by its id, and its closing tag.
+fn inner(h: &str, id: &str, close: &str) -> String {
+    let at = h.find(&format!("id=\"{id}\"")).unwrap_or_else(|| panic!("no {id} in {h}"));
+    let start = h[at..].find('>').unwrap() + at + 1;
+    let end = h[start..].find(close).unwrap() + start;
+    h[start..end].to_string()
+}
+
+/// The words of a markup fragment: its tags and Leptos's markers taken out, its spaces trimmed.
+fn words(fragment: &str) -> String {
+    let mut out = String::new();
+    let mut in_tag = false;
+    for c in fragment.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    out.trim().to_string()
+}
+
+/// The opening tag of the element with this id.
+fn tag(h: &str, id: &str) -> String {
+    let at = h.find(&format!("id=\"{id}\"")).unwrap_or_else(|| panic!("no {id} in {h}"));
+    let start = h[..at].rfind('<').unwrap();
+    let end = h[at..].find('>').unwrap() + at;
+    h[start..=end].to_string()
+}
+
+#[test]
+fn removing_a_profile_asks_in_its_row_first() {
+    let t = setup();
+    t.vm.create("City of X");
+    let id = t.vm.rows()[0].id.clone();
+    let h = profiles(&t.vm);
+    assert_eq!(count(&h, "standards-ask"), 0, "{h}");
+    assert_eq!(count(&h, "id=\"standards-remove-yes\""), 0, "{h}");
+    t.vm.ask_remove(&id);
+    let h = profiles(&t.vm);
+    let at = h.find("class=\"standards-ask\"").unwrap_or_else(|| panic!("no question in {h}"));
+    let block = &h[h[..at].rfind('<').unwrap()..=at + h[at..].find('>').unwrap()];
+    assert!(block.starts_with("<div") && block.contains(r#"role="group""#) && block.contains(r#"aria-label="City of X""#), "{block}");
+    let ask = inner(&h, &format!("standards-remove-{id}"), "</li>");
+    assert!(ask.contains("standards-ask"), "the question is in the profile's row: {ask}");
+    let question = &h[h.find("standards-ask").unwrap()..];
+    let question = &question[question.find("<p>").unwrap()..question.find("</p>").unwrap()];
+    assert_eq!(words(question), "Remove the profile \"City of X\"?", "{h}");
+    assert_eq!(words(&inner(&h, "standards-remove-yes", "</button>")), "Yes, remove it", "{h}");
+    assert_eq!(words(&inner(&h, "standards-remove-no", "</button>")), "Cancel", "{h}");
+    t.vm.cancel_remove();
+    let h = profiles(&t.vm);
+    assert_eq!(count(&h, "standards-ask"), 0, "{h}");
+    assert_eq!(count(&h, "id=\"standards-remove-yes\""), 0, "{h}");
+}
+
+#[test]
+fn the_edit_form_lists_the_widths_set_and_says_when_there_are_none() {
+    let t = setup();
+    t.vm.create("City of X");
+    let id = t.vm.rows()[0].id.clone();
+    let none = "Every kind of piece keeps its built-in widths.";
+    let h = profiles(&t.vm);
+    assert!(h.contains("Piece widths"), "{h}");
+    assert!(h.contains(none), "{h}");
+    assert_eq!(words(&inner(&h, "standards-widths", "</ul>")), "", "{h}");
+    assert_eq!(count(&inner(&h, "standards-widths", "</ul>"), "<li"), 0, "{h}");
+    assert!(t.vm.set_widths(&id, "travel", "2.8", "3.6"));
+    let h = profiles(&t.vm);
+    let list = inner(&h, "standards-widths", "</ul>");
+    assert_eq!(count(&list, "<li"), 1, "{list}");
+    assert!(words(&list).contains(&format!("Driving lane: 2.8 m to 3.6 m (built-in {})", builtin_travel())), "{list}");
+    assert!(list.contains("id=\"standards-width-clear-travel\""), "{list}");
+    assert_eq!(words(&inner(&h, "standards-width-clear-travel", "</button>")), "Reset driving lane", "{h}");
+    assert!(!h.contains(none), "{h}");
+}
+
+#[test]
+fn the_edit_form_shows_its_warnings_only_when_a_figure_is_looser() {
+    let t = setup();
+    t.vm.create("X");
+    let id = t.vm.rows()[0].id.clone();
+    let h = profiles(&t.vm);
+    assert_eq!(count(&h, "standards-warnings"), 0, "{h}");
+    let mut f = form(&t.vm, &id);
+    f.lengths[0] = "2.5".into();
+    assert!(t.vm.save(&id, &f));
+    let h = profiles(&t.vm);
+    assert!(h.contains("id=\"standards-warnings\""), "{h}");
+    let warnings = inner(&h, "standards-warnings", "</div>");
+    assert!(warnings.contains("Looser than the built-in standards"), "{warnings}");
+    assert!(words(&warnings).contains("Emergency access lane width: 2.5 m is looser than the built-in 3.0 m."), "{warnings}");
+}
+
+#[test]
+fn an_exported_profile_is_shown_to_copy_and_to_download() {
+    let t = setup();
+    t.vm.create("City of X");
+    let id = t.vm.rows()[0].id.clone();
+    assert!(t.vm.export(&id));
+    let h = profiles(&t.vm);
+    let file = inner(&h, "standards-export-file", "</div>");
+    assert!(h.contains(r#"<label for="standards-exported">"#), "{h}");
+    assert_eq!(words(&inner(&h, "standards-export-file", "</label>")), "Exported profile \"City of X\" (copy it, or download it)", "{file}");
+    let textarea = tag(&h, "standards-exported");
+    assert!(textarea.starts_with("<textarea") && textarea.contains("readonly"), "{textarea}");
+    assert!(inner(&h, "standards-exported", "</textarea>").contains("schema_version"), "{file}");
+    let link = tag(&h, "standards-download");
+    assert!(link.starts_with("<a "), "{link}");
+    assert!(link.contains(r#"download="city-of-x.json""#), "{link}");
+    let href = &link[link.find("href=\"").expect("an href") + 6..];
+    let href = &href[..href.find('"').unwrap()];
+    assert!(href.starts_with("data:application/json;charset=utf-8,%7B"), "{href}");
+    assert!(href.contains("%22schema_version%22"), "{href}");
+    assert_eq!(words(&inner(&h, "standards-download", "</a>")), "Download file", "{file}");
+    assert_eq!(words(&inner(&h, "standards-export-close", "</button>")), "Close", "{file}");
+    t.vm.close_export();
+    let h = profiles(&t.vm);
+    assert_eq!(count(&h, "standards-export-file"), 0, "{h}");
+}
