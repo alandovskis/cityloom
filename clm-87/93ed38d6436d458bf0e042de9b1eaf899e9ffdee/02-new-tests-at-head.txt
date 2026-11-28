@@ -1,0 +1,16 @@
+Each new test of CLM-87 run alone at 93ed38d6436d458bf0e042de9b1eaf899e9ffdee
+
+$ cargo test -p cityloom_editor --lib standards::tests::opening_a_profile_shows_its_form_and_closing_it_puts_the_form_away -- --exact
+running 1 test
+test standards::tests::opening_a_profile_shows_its_form_and_closing_it_puts_the_form_away ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4037 filtered out; finished in 0.01s
+
+$ cargo test -p cityloom_editor --lib standards::tests::closing_the_export_hides_its_text_and_keeps_the_profiles -- --exact
+running 1 test
+test standards::tests::closing_the_export_hides_its_text_and_keeps_the_profiles ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4037 filtered out; finished in 0.01s
+
+$ cargo test -p cityloom_editor --lib standards::tests::a_width_range_wider_than_the_built_in_one_at_either_end_warns_of_it -- --exact
+running 1 test
+test standards::tests::a_width_range_wider_than_the_built_in_one_at_either_end_warns_of_it ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4037 filtered out; finished in 0.04s

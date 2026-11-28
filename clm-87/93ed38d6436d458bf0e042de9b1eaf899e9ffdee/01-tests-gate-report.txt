@@ -1,0 +1,5 @@
+PASS tests gate
+  new test: cityloom_editor unittests src/lib.rs::standards::tests::a_width_range_wider_than_the_built_in_one_at_either_end_warns_of_it
+  new test: cityloom_editor unittests src/lib.rs::standards::tests::closing_the_export_hides_its_text_and_keeps_the_profiles
+  new test: cityloom_editor unittests src/lib.rs::standards::tests::opening_a_profile_shows_its_form_and_closing_it_puts_the_form_away
+  the faults were run at 72814ea415a7f6d4b8dd4abc7f5b55a0f18c793d: the branch is the same since, but for the version lines, and no faulted file changed
