@@ -539,11 +539,26 @@ class Pipelines(unittest.TestCase):
 
     def test_the_deploy_waits_for_every_check(self):
         jobs = self.jobs("postsubmit.yml")
-        self.assertRegex(jobs["deploy"], r"needs: \[ci\b")
+        self.assertRegex(jobs["deploy"], r"needs: \[changes, ci\]")
         checks = set(jobs) - {"ci", "deploy"}
         needed = re.search(r"needs: \[([^\]]*)\]", jobs["ci"])
         self.assertIsNotNone(needed)
         self.assertEqual(checks, {n.strip() for n in needed.group(1).split(",")})
+
+    def test_main_decides_whether_to_deploy(self):
+        jobs = self.jobs("postsubmit.yml")
+        self.assertIn("scripts/ci/last_deploy.py", jobs["changes"])
+        self.assertIn("ci_changes.py --event push", jobs["changes"])
+        self.assertIn("actions: read", jobs["changes"])
+        self.assertIn("needs.changes.outputs.deploy == 'true'", jobs["deploy"])
+
+    def test_no_check_waits_for_the_decision(self):
+        # Every check runs in full on main; only the deploy reads what the Changes job decided.
+        for name, text in self.jobs("postsubmit.yml").items():
+            needs = re.search(r"needs: (.*)", text)
+            if name not in ("ci", "deploy") and needs:
+                with self.subTest(name):
+                    self.assertNotIn("changes", needs.group(1))
 
     def test_presubmit_has_the_one_check_to_require(self):
         jobs = self.jobs("presubmit.yml")
