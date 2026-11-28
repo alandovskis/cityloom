@@ -42,7 +42,7 @@ A station that hands back ends that issue's turn; the others go on. Do not do a 
 
 ## 3. Report
 
-The table of every issue: key, title, where it is, what it waits for and what this pass did to it; the PRs opened or prepared again, each now in `linear.states.review`; the hand-backs with their reasons; the bugs filed by the tests flow. When nothing moved and nothing is running, say the implement loop is idle.
+The table of every issue: key, title, where it is, what it waits for and what this pass did to it; the PRs opened or prepared again, each now in `linear.states.review`; the hand-backs with their reasons; the bugs filed by the tests flow. When nothing moved and nothing is running, say the implement loop is idle. Then print the status (README, **Status**) with `implement` as its loop, as the last thing of the run, also when the pass stopped before it began.
 
 ## Red flags
 

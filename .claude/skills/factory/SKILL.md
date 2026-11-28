@@ -17,4 +17,4 @@ Read `.claude/factory/README.md` first. Run **Before a pass** once (README), the
 
 ## Report
 
-Each loop's report, in the order run, then one table of every issue: key, title, where it is, which loop owns it, what it waits for (a person's answer, an approval on PR #<n>, CI) and what this pass did to it. When none of the three moved anything and nothing is running, say the line is idle.
+Each loop's report, in the order run, then one table of every issue: key, title, where it is, which loop owns it, what it waits for (a person's answer, an approval on PR #<n>, CI) and what this pass did to it. When none of the three moved anything and nothing is running, say the line is idle. Then print the status once (README, **Status**) with `all` as its loop, as the last thing of the run, instead of each loop's own: also when a loop stopped before it began.

@@ -34,6 +34,25 @@ Each issue is owned by one loop at a time, read from its records and its Linear 
 - **Room.** The intake takes issues only while the queue finds room (`caps.inFlight`, `caps.awaitingApproval`), and the room counts every issue in `linear.states.working`, planned or building, so the implement loop is never given more than it may build. The implement loop opens a PR only while fewer than `caps.awaitingApproval` are open.
 - **The main checkout's git** is shared by all three: its commands take their turn (**Side by side**).
 
+## Status
+
+Every run of a loop, and of `/factory`, ends by printing the line's status, whatever happened: after a pass that moved nothing, and after one stopped in **Before a pass** (then with `stopped:` and the reason, and the rest as far as it could be read). It is the last thing the run prints, in this shape:
+
+```
+Factory status · <loop: intake, implement, merge, or all> · <UTC time> · <moved | idle | stopped: reason>
+In flight: <n>/<caps.inFlight> · PRs open: <n>/<caps.awaitingApproval> · Waiting for a person: <n>
+
+| Issue  | Title | Loop      | Where                    | Waits for              | This run          |
+| ------ | ----- | --------- | ------------------------ | ---------------------- | ----------------- |
+| CLM-12 | …     | implement | green, in review round 2 | the reviewer           | review 1 findings |
+| CLM-15 | …     | merge     | PR #310 open             | approval of `abc1234`  | —                 |
+| CLM-17 | …     | —         | handed back (build)      | a person: S-needs-review | handed back     |
+
+Running: <each agent or gate still running in the background, with its issue>, or none
+```
+
+The table holds every issue the factory has in hand, not only the running loop's: each issue in `linear.states.working` or `linear.states.review` with a factory record, and each closed this run. Its loop is the one that owns it (**Three loops**), `—` when it waits for a person. A loop reads the other loops' issues only to place them, from their state, labels and records, and never acts on them. The counts are the queue's (`factory-queue`, **Room**).
+
 ## Before a pass
 
 Every loop starts with these, from the main checkout (`$CLAUDE_PROJECT_DIR`); each loop's skill says which it needs:

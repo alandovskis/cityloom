@@ -37,7 +37,7 @@ Read every open factory PR whose issue is in `linear.states.review` and carries 
 
 ## 4. Report
 
-Every factory PR: number, issue, head, approved or waiting (for whom), and what this pass did; the merges with their deploy result; the PRs sent back to the implement loop and why; the hand-backs with their reasons. When nothing moved, say the merge loop is idle.
+Every factory PR: number, issue, head, approved or waiting (for whom), and what this pass did; the merges with their deploy result; the PRs sent back to the implement loop and why; the hand-backs with their reasons. When nothing moved, say the merge loop is idle. Then print the status (README, **Status**) with `merge` as its loop, as the last thing of the run, also when the pass stopped before it began.
 
 ## Red flags
 

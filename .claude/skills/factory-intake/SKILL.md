@@ -27,7 +27,7 @@ Each feasible issue goes to `factory-plan`, steps 1 to 3 (the planner, the check
 
 ## 4. Report
 
-Each issue taken: key, title, the state it came from, the verdict and flow, and the plan posted or the hand-back with its reason; the room counts; and, when nothing was taken and nothing is running, that the intake is idle.
+Each issue taken: key, title, the state it came from, the verdict and flow, and the plan posted or the hand-back with its reason; the room counts; and, when nothing was taken and nothing is running, that the intake is idle. Then print the status (README, **Status**) with `intake` as its loop, as the last thing of the run, also when the pass stopped before it began.
 
 ## Red flags
 
