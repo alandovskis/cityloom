@@ -60,7 +60,7 @@ export { expect };
 /** What a screen reader was last told. */
 export const live = (page: Page) => page.locator("#live");
 
-/** The OSM fixtures of `e2e/fixtures`, each imported into one network tile (`just e2e-fixtures`, which the browser
+/** The OSM fixtures of `tests/e2e/fixtures`, each imported into one network tile (`just e2e-fixtures`, which the browser
  *  test recipes run first). */
 const generated = (name: string) => fileURLToPath(new URL(`../fixtures/generated/${name}.json`, import.meta.url));
 export const PLATEAU_TILE = generated("plateau");

@@ -34,7 +34,7 @@ const misplaced = specs.filter((s) => names.filter((n) => tiers[n].includes(s)).
 const missing = names.flatMap((n) => tiers[n].filter((s) => !specs.includes(s)).map((s) => `${n}: ${s}`));
 if (misplaced.length || missing.length) {
   throw new Error(
-    `e2e/tiers.json: every spec is in exactly one tier. In none or in two: ${misplaced.join(", ") || "-"}. Not a spec: ${missing.join(", ") || "-"}.`,
+    `tests/e2e/tiers.json: every spec is in exactly one tier. In none or in two: ${misplaced.join(", ") || "-"}. Not a spec: ${missing.join(", ") || "-"}.`,
   );
 }
 const match = (names: string[]) => new RegExp(`/(${names.join("|")})\\.spec\\.ts$`);
