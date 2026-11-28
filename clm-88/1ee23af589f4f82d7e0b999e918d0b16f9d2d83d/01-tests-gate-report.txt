@@ -1,0 +1,39 @@
+PASS tests gate
+  new test: cityloom_editor unittests src/lib.rs::standards::tests::an_exported_profile_is_shown_to_copy_and_to_download
+  new test: cityloom_editor unittests src/lib.rs::standards::tests::removing_a_profile_asks_in_its_row_first
+  new test: cityloom_editor unittests src/lib.rs::standards::tests::the_edit_form_lists_the_widths_set_and_says_when_there_are_none
+  new test: cityloom_editor unittests src/lib.rs::standards::tests::the_edit_form_shows_its_warnings_only_when_a_figure_is_looser
+  caught: cityloom_editor unittests src/lib.rs::standards::tests::an_exported_profile_is_shown_to_copy_and_to_download: 3 faults, the first: crates/cityloom_editor/src/standards/view.rs: replace data_address -> String with String::new(); crates/cityloom_editor/src/standards/view.rs: replace file_name -> String with String::new(); crates/cityloom_editor/src/standards/i18n/en.ftl: remove the message standards-exported-label
+  caught: cityloom_editor unittests src/lib.rs::standards::tests::removing_a_profile_asks_in_its_row_first: 3 faults, the first: crates/cityloom_editor/src/standards/view.rs: replace == with != in list_row; crates/cityloom_editor/src/standards/i18n/en.ftl: remove the message standards-remove-ask; crates/cityloom_editor/src/standards/i18n/en.ftl: remove the message standards-remove-confirm
+  caught: cityloom_editor unittests src/lib.rs::standards::tests::the_edit_form_lists_the_widths_set_and_says_when_there_are_none: 3 faults, the first: crates/cityloom_editor/src/standards/i18n/en.ftl: remove the message standards-width-heading; crates/cityloom_editor/src/standards/i18n/en.ftl: remove the message standards-width-none; crates/cityloom_editor/src/standards/i18n/en.ftl: remove the message standards-width-clear
+  caught: cityloom_editor unittests src/lib.rs::standards::tests::the_edit_form_shows_its_warnings_only_when_a_figure_is_looser: 2 faults, the first: crates/cityloom_editor/src/standards/view.rs: delete ! in edit_form; crates/cityloom_editor/src/standards/i18n/en.ftl: remove the message standards-warnings-heading
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: remove the attribute class="standards-export"
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: remove the message standards-cancel
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: remove the message standards-download
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: remove the message standards-close
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: replace data_address -> String with "xyzzy".into()
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: replace file_name -> String with "xyzzy".into()
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: remove the attribute id="standards-export-file"
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: remove the placeable { $name } of standards-remove-ask
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: remove the placeable { $kind } of standards-width-clear
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: remove the placeable { $name } of standards-exported-label
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: replace || with && in data_address
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: delete ! in file_name
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: remove the attribute for="standards-exported"
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: rename the variable $name of standards-remove-ask
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: rename the variable $kind of standards-width-clear
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: rename the variable $name of standards-exported-label
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: remove the attribute id="standards-exported"
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: remove the attribute readonly
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: remove the attribute rows="8"
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: remove the attribute id="standards-download"
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: remove the attribute href=href
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: remove the attribute download=download
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: remove the attribute type="button"
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: remove the attribute class="secondary"
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: remove the attribute id="standards-export-close"
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: remove the attribute on:click=move |_| vm.with_value(|v| v.close_export())
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: change the string "standards-export" to ""
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: change the string "standards-export-file" to ""
+  not caught by any new test: crates/cityloom_editor/src/standards/view.rs: change the string "standards-exported" to ""
+  left out by the limit: 12 faults: crates/cityloom_editor/src/standards/view.rs: change the string "standards-exported-label" to ""; crates/cityloom_editor/src/standards/view.rs: change the string "standards-exported" to ""; crates/cityloom_editor/src/standards/view.rs: change the string "8" to ""; crates/cityloom_editor/src/standards/view.rs: change the string "standards-download" to ""; crates/cityloom_editor/src/standards/view.rs: change the string "standards-download" to ""; crates/cityloom_editor/src/standards/view.rs: change the string "button" to ""; crates/cityloom_editor/src/standards/view.rs: change the string "secondary" to ""; crates/cityloom_editor/src/standards/view.rs: change the string "standards-export-close" to ""; crates/cityloom_editor/src/standards/view.rs: change the string "standards-close" to ""; crates/cityloom_editor/src/standards/view.rs: swap <label> and <textarea>; crates/cityloom_editor/src/standards/view.rs: swap <textarea> and <a>; crates/cityloom_editor/src/standards/view.rs: swap <a> and <button>
