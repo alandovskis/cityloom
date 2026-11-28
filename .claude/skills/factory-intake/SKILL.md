@@ -5,9 +5,9 @@ description: Use when asked to run the software factory's intake loop - to take 
 
 # Factory intake: new issues, judged and planned
 
-One pass of the factory's intake loop (README, **Three loops**): while there is room, it takes new issues from Linear, triages them and posts their plans. It ends at the `**Factory · plan**` record: the worktree and everything after it are the implement loop's (`factory-implement`). Read `.claude/factory/README.md` first. It keeps no state: each pass reads Linear again.
+One pass of the factory's intake loop (README, **Four loops**): while there is room, it takes new issues from Linear, triages them and posts their plans. It ends at the `**Factory · plan**` record: the worktree and everything after it are the implement loop's (`factory-implement`). Read `.claude/factory/README.md` first. It keeps no state: each pass reads Linear again.
 
-**Unattended**: `/loop /factory-intake`, about every 30 minutes (Linear changes at a person's pace), in its own session beside the other two loops (README, **Three loops**).
+**Unattended**: `/loop /factory-intake`, about every 30 minutes (Linear changes at a person's pace), in its own session beside the other loops (README, **Four loops**).
 
 ## 0. Before anything
 

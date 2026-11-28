@@ -59,8 +59,10 @@ the site to GitHub Pages from `main`. A change to `docs/**` or to a `*.md` outsi
   the base's. A change made only of documentation and CI configuration (`CI_CONFIGURATION` in `ci_changes.py`:
   `.github/**`, `scripts/ci/**`, `scripts/include/**`, `.claude/**`) needs none, and the job is skipped.
 - **The Documentation check**, for a change to `website/`. `CI` does not cover it.
-- **The merge itself.** The deploy agent (`.claude/agents/deploy.md`) merges only when every check passed or was
-  skipped and GitHub says `CLEAN`. In the software factory, a person approves the pull request's head first.
+- **The merge itself.** The integrate agent (`.claude/agents/integrate.md`) merges only when every check passed or was
+  skipped, GitHub says `CLEAN` and `main`'s last Postsubmit run succeeded. The deploy agent (`.claude/agents/deploy.md`)
+  then watches the deploy and checks the live site. In the software factory, a person approves the pull request's head
+  first.
 - **The factory's gates** (`.claude/factory/gate.py`, described in `.claude/factory/README.md`), for an issue the
   factory builds:
   - `red`: the new tests compile, every new test fails, and every old test passes;

@@ -68,9 +68,10 @@ avec `--cap-lints warn`. Il n’a pas de `-D warnings`.
   continue (`CI_CONFIGURATION` dans `ci_changes.py` : `.github/**`, `scripts/ci/**`, `scripts/include/**`,
   `.claude/**`) n’en exige pas, et la tâche est sautée.
 - **La vérification Documentation**, pour un changement à `website/`. `CI` ne la couvre pas.
-- **La fusion elle-même.** L’agent de déploiement (`.claude/agents/deploy.md`) ne fusionne que lorsque chaque
-  vérification a réussi ou a été sautée et que GitHub indique `CLEAN`. Dans l’usine logicielle, une personne approuve
-  d’abord la tête de la demande de fusion.
+- **La fusion elle-même.** L’agent d’intégration (`.claude/agents/integrate.md`) ne fusionne que lorsque chaque
+  vérification a réussi ou a été sautée, que GitHub indique `CLEAN` et que la dernière exécution de Postsubmit sur
+  `main` a réussi. L’agent de déploiement (`.claude/agents/deploy.md`) suit ensuite le déploiement et vérifie le site en
+  ligne. Dans l’usine logicielle, une personne approuve d’abord la tête de la demande de fusion.
 - **Les barrières de l’usine** (`.claude/factory/gate.py`, décrites dans `.claude/factory/README.md`), pour un billet
   que l’usine construit :
   - `red` : les nouveaux tests compilent, chaque nouveau test échoue, et chaque ancien test réussit;

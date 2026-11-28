@@ -5,9 +5,9 @@ description: Use when asked to run the software factory's implement loop - to ta
 
 # Factory implement: from the plan to a PR ready for approval
 
-One pass of the factory's implement loop (README, **Three loops**): every planned issue moves on by as many stations as it can, side by side, from its worktree to a pull request that is green, `CLEAN` and waiting for a person's approval. It starts at the `**Factory · plan**` record (posted by `factory-intake`) and ends when the issue is in `linear.states.review`, where the merge loop (`factory-merge`) takes it. Read `.claude/factory/README.md` first. It keeps no state: each pass reads Linear, Git and GitHub again.
+One pass of the factory's implement loop (README, **Four loops**): every planned issue moves on by as many stations as it can, side by side, from its worktree to a pull request that is green, `CLEAN` and waiting for a person's approval. It starts at the `**Factory · plan**` record (posted by `factory-intake`) and ends when the issue is in `linear.states.review`, where the merge loop (`factory-merge`) takes it. Read `.claude/factory/README.md` first. It keeps no state: each pass reads Linear, Git and GitHub again.
 
-**Unattended**: `/loop /factory-implement`, in its own session beside the other two loops. While agents or gates run, the next pass starts when they finish; with nothing to do but wait for a person or CI, wait about ten minutes. Needs its tool permissions settled beforehand (auto mode, or an allow list) and the workspace trusted, since the guard is a project hook.
+**Unattended**: `/loop /factory-implement`, in its own session beside the other loops. While agents or gates run, the next pass starts when they finish; with nothing to do but wait for a person or CI, wait about ten minutes. Needs its tool permissions settled beforehand (auto mode, or an allow list) and the workspace trusted, since the guard is a project hook.
 
 ## 0. Before anything
 
