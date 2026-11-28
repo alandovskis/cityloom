@@ -349,3 +349,159 @@ fn a_stale_milestone_has_its_own_refusal_in_both_languages() {
         assert!(!crate::i18n_for(locale).tr_now("timeline-refused-stale", &Default::default()).is_empty());
     }
 }
+
+use crate::restriction::store::RESTRICTIONS_KEY;
+use crate::shared::ports::{AccountCall, AccountError, AccountReply, FakeAccount, Me, test_ports_full};
+use crate::timeline::store::MilestoneStore;
+use serde_json::Value;
+
+/// A timeline page whose account can be answered.
+fn signed_page() -> (Rc<TimelineVm>, Rc<FakeAccount>, Rc<MemoryStorage>) {
+    let t = test_ports_full();
+    let context = Context { project_name: "Plateau".into(), app_version: "0.70.0".into() };
+    (TimelineVm::new(t.ports, crate::i18n_for(Locale::En), context), t.account, t.storage)
+}
+
+fn me(display_name: &str) -> AccountReply {
+    AccountReply::Me(Ok(Me { id: "u1".into(), display_name: display_name.into(), store_on_server: None, identities: vec![] }))
+}
+
+/// A street's record holding `street`.
+fn street(street: Value) -> Value {
+    json!({ "ways": [1], "import": STALE_BEFORE_IMPORT, "street": street })
+}
+
+/// Keeps `streets` and `junctions` (records by key) as the project's edits.
+fn keep_work(storage: &MemoryStorage, streets: Value, junctions: Value) {
+    assert!(storage.remember(EDITS_KEY, &json!({ "version": IMPORT_STAMP_VERSION, "streets": streets, "junctions": junctions }).to_string()));
+}
+
+/// A rule's record named `name`.
+fn rule(name: Value) -> Value {
+    json!({ "name": name, "rule": { "kind": "car_free" }, "ring": [[-73.6, 45.52], [-73.59, 45.52], [-73.59, 45.53]] })
+}
+
+/// Keeps `rules` (records by id) as the project's rules.
+fn keep_rules(storage: &MemoryStorage, rules: Value) {
+    assert!(storage.remember(RESTRICTIONS_KEY, &json!({ "version": 1, "next_id": 9, "restrictions": rules }).to_string()));
+}
+
+#[test]
+fn the_author_is_whoever_is_signed_in_asked_once() {
+    let (vm, account, storage) = signed_page();
+    vm.load_author();
+    assert_eq!(account.calls(), [AccountCall::Me]);
+    assert!(account.answer(me("Ada")));
+    keep(&storage, &[("w1", "Rue A", 9000)]);
+    assert!(vm.create("Base"));
+    assert_eq!(vm.rows()[0].author, "By Ada");
+}
+
+#[test]
+fn a_blank_name_or_nobody_signed_in_leaves_the_author_empty() {
+    let (vm, account, storage) = signed_page();
+    vm.load_author();
+    assert!(account.answer(me("  ")));
+    keep(&storage, &[("w1", "Rue A", 9000)]);
+    assert!(vm.create("A"));
+    assert_eq!(vm.rows()[0].author, "");
+
+    let (vm, account, storage) = signed_page();
+    vm.load_author();
+    assert!(account.answer(AccountReply::Me(Err(AccountError::SignedOut))));
+    keep(&storage, &[("w1", "Rue A", 9000)]);
+    assert!(vm.create("B"));
+    assert_eq!(vm.rows()[0].author, "");
+}
+
+#[test]
+fn a_comparison_names_streets_junctions_and_rules_from_their_records() {
+    let (vm, _, storage) = en();
+    keep_rules(&storage, json!({ "r1": rule(json!("Old Zone")) }));
+    assert!(vm.create("Base"));
+    let id = vm.rows()[0].id.clone();
+    keep_work(
+        &storage,
+        json!({ "w1": street(json!({ "row_mm": 9000 })), "w2": street(json!({ "name": "  ", "row_mm": 9000 })) }),
+        json!({ "j1": { "nodes": [30, 12, 25], "state": {} }, "j2": { "state": {} } }),
+    );
+    keep_rules(&storage, json!({ "r2": rule(json!("Quiet")), "r3": rule(json!("  ")) }));
+    assert!(vm.compare(&id));
+    let c = vm.comparison().unwrap();
+    let labels: Vec<&str> = c.rows.iter().map(|r| r.label.as_str()).collect();
+    assert_eq!(labels, ["Unnamed street", "Unnamed street", "Junction at node 12", "Junction", "Rule Old Zone", "Rule Quiet", "Area rule"]);
+    assert_eq!(c.rows[4].how, "Removed since", "the rule gone is named from the milestone's record");
+}
+
+#[test]
+fn a_changed_place_says_each_aspect_that_changed_in_words() {
+    let (vm, _, storage) = en();
+    keep_work(
+        &storage,
+        json!({ "w1": street(json!({ "name": "Rue A", "class": "local", "row_mm": 9000, "segments": [1], "speed_kmh": 30, "zones": [1] })) }),
+        json!({ "j1": { "nodes": [5], "state": { "arms": [1, 2], "control": 0 } } }),
+    );
+    keep_rules(&storage, json!({ "r1": rule(json!("Zone")) }));
+    assert!(vm.create("Base"));
+    let id = vm.rows()[0].id.clone();
+    keep_work(
+        &storage,
+        json!({ "w1": street(json!({ "name": "Rue B", "class": "arterial", "row_mm": 9000, "segments": [1, 2], "speed_kmh": 40, "zones": [2], "note": 1 })) }),
+        json!({ "j1": { "nodes": [5], "state": { "arms": [1, 2, 3], "control": 2 } } }),
+    );
+    keep_rules(&storage, json!({ "r1": { "name": "Zone B", "rule": { "kind": "speed_limit" }, "ring": [[-73.6, 45.52], [-73.58, 45.52], [-73.59, 45.53]] } }));
+    assert!(vm.compare(&id));
+    let c = vm.comparison().unwrap();
+    let seen: Vec<(&str, &str, Vec<&str>)> =
+        c.rows.iter().map(|r| (r.label.as_str(), r.how.as_str(), r.aspects.iter().map(String::as_str).collect())).collect();
+    assert_eq!(
+        seen,
+        [
+            ("Rue B", "Changed", vec!["name", "street class", "lanes", "speed limit", "zones", "other details"]),
+            ("Junction at node 5", "Changed", vec!["arms", "control"]),
+            ("Rule Zone B", "Changed", vec!["name", "rule", "outline"]),
+        ]
+    );
+}
+
+#[test]
+fn a_milestone_of_no_work_says_nothing_was_edited() {
+    let (vm, _, _) = en();
+    assert!(vm.create("Empty"));
+    assert_eq!(vm.rows()[0].summary, "No streets, junctions or rules edited");
+}
+
+#[test]
+fn work_that_cannot_be_read_now_cannot_be_compared() {
+    let (vm, said, storage) = en();
+    keep(&storage, &[("w1", "Rue A", 9000)]);
+    assert!(vm.create("Base"));
+    let id = vm.rows()[0].id.clone();
+    storage.remember(EDITS_KEY, "garbage");
+    said.take();
+    assert!(vm.compare(&id));
+    let unusable = "The work on this device cannot be read, so it cannot be compared.";
+    assert_eq!(said.take(), [unusable]);
+    let c = vm.comparison().unwrap();
+    assert_eq!(c.heading, "Since Base");
+    assert_eq!(c.summary, unusable);
+    assert!(c.rows.is_empty());
+}
+
+#[test]
+fn restoring_a_milestone_deleted_meanwhile_says_it_is_gone_and_changes_nothing() {
+    let (vm, said, storage) = en();
+    keep(&storage, &[("w1", "Rue A", 9000)]);
+    assert!(vm.create("Base"));
+    let id = vm.rows()[0].id.clone();
+    keep(&storage, &[("w1", "Rue A", 12000)]);
+    let edited = storage.recall(EDITS_KEY);
+    vm.ask_restore(&id);
+    let elsewhere: Rc<dyn Storage> = storage.clone();
+    MilestoneStore::new(elsewhere).delete(&id).unwrap();
+    said.take();
+    assert!(!vm.confirm_restore());
+    assert_eq!(said.take(), ["That milestone is no longer here."]);
+    assert_eq!(storage.recall(EDITS_KEY), edited, "the work stands");
+    assert!(vm.rows().is_empty(), "no backup was made");
+}
