@@ -157,6 +157,90 @@ fn builtin_travel() -> String {
 }
 
 #[test]
+fn opening_a_profile_shows_its_form_and_closing_it_puts_the_form_away() {
+    let t = setup();
+    assert!(t.vm.create("A"));
+    assert!(t.vm.create("B"));
+    let rows = t.vm.rows();
+    let (a, b) = (rows[0].id.clone(), rows[1].id.clone());
+    assert_eq!(t.vm.editing().as_deref(), Some(b.as_str()));
+    t.vm.begin_edit(&a);
+    assert_eq!(t.vm.editing().as_deref(), Some(a.as_str()));
+    let f = t.vm.form().unwrap();
+    assert_eq!((f.id.as_str(), f.name.as_str()), (a.as_str(), "A"));
+    t.vm.begin_edit(&b);
+    assert_eq!(t.vm.editing().as_deref(), Some(b.as_str()));
+    let f = t.vm.form().unwrap();
+    assert_eq!((f.id.as_str(), f.name.as_str()), (b.as_str(), "B"));
+    // a refusal showing and a removal asked
+    assert!(!t.vm.create("   "));
+    assert_eq!(t.vm.error().as_deref(), Some("Give the profile a name."));
+    t.vm.ask_remove(&a);
+    assert_eq!(t.vm.removing().as_deref(), Some(a.as_str()));
+    // an unknown profile changes nothing
+    t.vm.begin_edit("nope");
+    assert_eq!(t.vm.editing().as_deref(), Some(b.as_str()));
+    assert_eq!(t.vm.removing().as_deref(), Some(a.as_str()));
+    assert_eq!(t.vm.error().as_deref(), Some("Give the profile a name."));
+    // opening one puts the question and the refusal away
+    t.vm.begin_edit(&a);
+    assert_eq!(t.vm.editing().as_deref(), Some(a.as_str()));
+    assert_eq!(t.vm.removing(), None);
+    assert_eq!(t.vm.error(), None);
+    // closing the form puts it away with its refusal, and keeps the profiles
+    assert!(!t.vm.create("   "));
+    assert!(t.vm.error().is_some());
+    t.vm.close_edit();
+    assert_eq!(t.vm.editing(), None);
+    assert!(t.vm.form().is_none());
+    assert_eq!(t.vm.error(), None);
+    assert_eq!(t.vm.rows().len(), 2);
+}
+
+#[test]
+fn closing_the_export_hides_its_text_and_keeps_the_profiles() {
+    let t = setup();
+    assert!(t.vm.create("A"));
+    assert!(t.vm.create("B"));
+    let rows = t.vm.rows();
+    let (a, b) = (rows[0].id.clone(), rows[1].id.clone());
+    assert!(t.vm.export(&a));
+    assert_eq!(t.vm.exported().map(|(name, _)| name).as_deref(), Some("A"));
+    t.vm.close_export();
+    assert_eq!(t.vm.exported(), None);
+    assert_eq!(t.vm.rows().into_iter().map(|r| r.name).collect::<Vec<_>>(), vec!["A", "B"]);
+    assert_eq!(t.vm.editing().as_deref(), Some(b.as_str()));
+}
+
+#[test]
+fn a_width_range_wider_than_the_built_in_one_at_either_end_warns_of_it() {
+    let k = &crate::shared::catalogue::KINDS[crate::shared::catalogue::kind_index("travel").unwrap()];
+    let m = |mm: i32| format!("{:.1}", f64::from(mm) / 1000.0);
+    let t = setup();
+    assert!(t.vm.create("X"));
+    let id = t.vm.rows()[0].id.clone();
+    let warnings = || t.vm.form().unwrap().warnings;
+    assert!(warnings().is_empty());
+    // the built-in range, and one inside it
+    assert!(t.vm.set_widths(&id, "travel", &m(k.min_mm), &m(k.max_mm)));
+    assert!(warnings().is_empty());
+    assert!(t.vm.set_widths(&id, "travel", &m(k.min_mm + 100), &m(k.max_mm - 100)));
+    assert!(warnings().is_empty());
+    // wider at one end, then at the other
+    for (lo, hi) in [(k.min_mm - 100, k.max_mm), (k.min_mm, k.max_mm + 100)] {
+        assert!(t.vm.set_widths(&id, "travel", &m(lo), &m(hi)));
+        let w = warnings();
+        assert_eq!(w.len(), 1, "{lo} to {hi}");
+        assert_eq!(
+            crate::shared::testing::en(&w[0]),
+            format!("Piece widths of a driving lane: {} m to {} m is wider than the built-in {}.", m(lo), m(hi), builtin_travel())
+        );
+    }
+    assert!(t.vm.clear_widths(&id, "travel"));
+    assert!(warnings().is_empty());
+}
+
+#[test]
 fn removing_asks_first_and_puts_the_built_in_standards_back_if_it_was_in_force() {
     let t = setup();
     t.vm.create("X");
