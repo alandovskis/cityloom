@@ -73,6 +73,7 @@ DEPLOY_INPUTS = (
     "scripts/check-no-fake.sh",
     "scripts/precompress.mjs",
     ".github/workflows/postsubmit.yml",  # the deploy job's own steps
+    "dockerfiles/rust.Dockerfile",  # the deploy builds with its RUST_VERSION, the release CI tests on
 )
 # Inside a folder of DEPLOY_INPUTS, and not served: the tests, the guards, the notes.
 CARVED_OUT = ("**/tests.rs", "crates/*/tests/**", "crates/cityloom_editor/src/*_guard.rs", "**/*.md")
@@ -86,7 +87,13 @@ NOT_SERVED = (
     "*.md",
     ".claude/**",
     ".impeccable/**",
-    "dockerfiles/**",  # the toolchain images to build and test in; the runtime image is deploy/Dockerfile
+    # The other toolchain images CI builds and tests in, and how they are made; the runtime image is deploy/Dockerfile.
+    "dockerfiles/e2e.Dockerfile",
+    "dockerfiles/js.Dockerfile",
+    "dockerfiles/docs.Dockerfile",
+    "dockerfiles/docker-bake.hcl",
+    "dockerfiles/*.dockerignore",
+    ".github/workflows/images.yml",
     ".github/actions/**",
     ".github/ISSUE_TEMPLATE/**",
     ".github/dependabot.yml",

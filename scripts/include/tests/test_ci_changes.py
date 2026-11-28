@@ -879,6 +879,22 @@ class Deploy(unittest.TestCase):
                 self.assertFalse(ci_changes.behind("0" * 40, head))
                 self.assertFalse(ci_changes.behind("HEAD~1; rm -rf /", head))
 
+    def test_the_rust_image_is_an_input_and_the_other_images_are_not(self):
+        # The deploy builds with rust.Dockerfile's RUST_VERSION, so a change to it can change what ships; the other
+        # images, their workflow and their notes are only where CI builds and tests.
+        self.assertTrue(ci_changes.deploys(["dockerfiles/rust.Dockerfile"]))
+        for f in (
+            "dockerfiles/e2e.Dockerfile",
+            "dockerfiles/js.Dockerfile",
+            "dockerfiles/docs.Dockerfile",
+            "dockerfiles/docker-bake.hcl",
+            "dockerfiles/rust.Dockerfile.dockerignore",
+            "dockerfiles/README.md",
+            ".github/workflows/images.yml",
+        ):
+            with self.subTest(f):
+                self.assertFalse(ci_changes.deploys([f]))
+
     def test_every_tracked_file_is_classified(self):
         def known(f: str) -> bool:
             return ci_changes.served(f) or any(ci_changes.glob(p, f) for p in ci_changes.NOT_SERVED + ci_changes.CARVED_OUT)
