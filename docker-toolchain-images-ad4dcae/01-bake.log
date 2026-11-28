@@ -1,0 +1,6 @@
+$ docker buildx bake -f dockerfiles/docker-bake.hcl --progress=plain 2>&1 | grep -E "^#[0-9]+ (naming|ERROR)|ERROR"
+#15 naming to docker.io/library/cityloom-docs done
+#16 naming to docker.io/library/cityloom-js done
+#36 naming to docker.io/library/cityloom-rust done
+#37 naming to docker.io/library/cityloom-e2e done
+[exit 0]

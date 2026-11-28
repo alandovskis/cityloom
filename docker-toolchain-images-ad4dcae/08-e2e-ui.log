@@ -1,0 +1,9 @@
+host target/e2e/cityloom_server before: e148665f818094e3f1a3b4d907e8e11f9a209778d995327b7c798aa2cf7ff24c  target/e2e/cityloom_server
+$ docker run --rm --user 501:20 -v "$PWD":/src -v cityloom-main-4046072687-node-modules:/src/node_modules -v cityloom-main-4046072687-e2e-node-modules:/src/tests/e2e/node_modules -v cityloom-main-4046072687-tools:/src/.tools -v cityloom-main-4046072687-target:/target -v cityloom-main-4046072687-checkout-target:/src/target --mount type=tmpfs,dst=/src/web/data -v cityloom-cargo:/cargo cityloom-e2e sh -c 'cd tests/e2e && npm ci && cd ../.. && just e2e-ui'
+node scripts/precompress.mjs web/pkg web/vendor
+14 compressed copies
+Running 570 tests using 4 workers
+  1 skipped
+  569 passed (9.5m)
+[just e2e-ui exit 0]
+host target/e2e/cityloom_server after:  e148665f818094e3f1a3b4d907e8e11f9a209778d995327b7c798aa2cf7ff24c  target/e2e/cityloom_server

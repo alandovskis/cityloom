@@ -1,0 +1,5 @@
+$ docker run --rm --user 501:20 -v "$PWD":/src -v cityloom-main-4046072687-node-modules:/src/node_modules -v cityloom-main-4046072687-tools:/src/.tools -v cityloom-main-4046072687-target:/target -v cityloom-cargo:/cargo cityloom-rust ./scripts/build.sh 2>&1 | tail -4; echo '--- compressed copies after build.sh:'; ls web/pkg/*.br web/pkg/*.gz web/vendor/*.br web/vendor/*.gz 2>/dev/null | wc -l
+    Finished `release` profile [optimized] target(s) in 0.55s
+--- compressed copies after build.sh:
+       0
+[exit 0]

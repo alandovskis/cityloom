@@ -1,0 +1,13 @@
+$ docker run --rm --user 501:20 -v "$PWD":/src cityloom-js node scripts/precompress.mjs web/pkg web/vendor; echo '--- compressed copies after precompress:'; ls web/pkg/*.br web/pkg/*.gz web/vendor/*.br web/vendor/*.gz | wc -l
+web/pkg/cityloom_editor.js: 95890 B, br 12953 B, gzip 15435 B
+web/pkg/cityloom_editor_bg.wasm: 8747962 B, br 1471456 B, gzip 2274898 B
+web/pkg/cityloom_report_pdf.js: 8144 B, br 2062 B, gzip 2315 B
+web/pkg/cityloom_report_pdf_bg.wasm: 2369547 B, br 562810 B, gzip 780259 B
+web/vendor/maplibre-gl-shared.mjs: 0 B, br 1 B, gzip 20 B
+web/vendor/maplibre-gl-worker.mjs: 550754 B, br 130006 B, gzip 158020 B
+web/vendor/maplibre-gl.css: 71596 B, br 8326 B, gzip 10161 B
+web/vendor/maplibre-gl.mjs: 1106041 B, br 245431 B, gzip 299604 B
+14 compressed copies
+--- compressed copies after precompress:
+      14
+[exit 0]

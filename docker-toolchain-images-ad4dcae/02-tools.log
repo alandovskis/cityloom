@@ -1,0 +1,21 @@
+$ docker run --rm --user 501:20 cityloom-rust sh -c 'command -v node npm npx || echo no node, npm or npx in cityloom-rust; ls /usr/local/lib/node_modules 2>&1; which just wasm-bindgen cargo kill'; docker run --rm --user 501:20 cityloom-e2e sh -c 'which node npm npx; node -v; npm -v; npm config get cache; ls $PLAYWRIGHT_BROWSERS_PATH'; docker history cityloom-e2e --format '{{.Size}} {{.CreatedBy}}' | grep -i 'node' | cut -c1-80
+no node, npm or npx in cityloom-rust
+ls: cannot access '/usr/local/lib/node_modules': No such file or directory
+/usr/local/bin/just
+/usr/local/bin/wasm-bindgen
+/usr/local/cargo/bin/cargo
+/usr/bin/kill
+/usr/local/bin/node
+/usr/local/bin/npm
+/usr/local/bin/npx
+v26.13.1
+11.20.0
+/tmp/npm-cache
+chromium-1255
+chromium_headless_shell-1255
+ffmpeg-1013
+0B RUN /bin/sh -c mkdir -p /src/tests/e2e/node_…
+0B RUN /bin/sh -c ln -s ../lib/node_modules/npm…
+12.2MB COPY /usr/local/lib/node_modules /usr/local/…
+150MB COPY /usr/local/bin/node /usr/local/bin/node…
+[exit 0]

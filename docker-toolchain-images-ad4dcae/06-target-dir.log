@@ -1,0 +1,4 @@
+$ docker run --rm --user 501:20 -v "$PWD":/src:ro -v cityloom-cargo:/cargo cityloom-rust ./scripts/target-dir.sh; ./scripts/target-dir.sh
+/target
+~/src/cityloom/main/target
+[exit 0]

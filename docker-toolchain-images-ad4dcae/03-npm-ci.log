@@ -1,0 +1,9 @@
+$ docker run --rm --user 501:20 -v "$PWD":/src -v cityloom-main-4046072687-node-modules:/src/node_modules cityloom-js npm ci 2>&1 | grep -v 'npm notice'
+
+added 26 packages, and audited 27 packages in 1s
+
+2 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+[exit 0]
