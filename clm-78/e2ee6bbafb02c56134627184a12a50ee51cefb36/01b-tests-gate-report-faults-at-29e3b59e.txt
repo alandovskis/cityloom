@@ -1,0 +1,45 @@
+PASS tests gate
+  new test: cityloom_editor unittests src/lib.rs::street::model::replay::tests::a_change_of_times_of_day_reaches_the_counterpart_and_leaves_its_other_fields
+  new test: cityloom_editor unittests src/lib.rs::street::model::replay::tests::a_material_change_reaches_the_counterpart_and_leaves_its_other_fields
+  new test: cityloom_editor unittests src/lib.rs::street::model::replay::tests::a_tram_change_reaches_the_counterpart_and_leaves_its_other_fields
+  new test: cityloom_editor unittests src/lib.rs::street::model::replay::tests::an_added_first_piece_whose_right_neighbour_the_target_lacks_goes_at_the_start
+  new test: cityloom_editor unittests src/lib.rs::street::model::replay::tests::an_added_piece_with_no_counterpart_on_either_side_goes_at_the_end_when_not_nearer_the_start
+  new test: cityloom_editor unittests src/lib.rs::street::model::replay::tests::an_added_piece_with_no_counterpart_on_either_side_goes_at_the_start_when_nearer_it
+  new test: cityloom_editor unittests src/lib.rs::street::model::replay::tests::an_added_piece_with_no_counterpart_on_its_left_goes_before_the_nearest_on_its_right
+  new test: cityloom_editor unittests src/lib.rs::street::model::tests::a_change_of_side_lays_an_untouched_streets_own_stretches_out_again
+  new test: cityloom_editor unittests src/lib.rs::street::model::tests::a_change_of_side_on_an_edited_street_mirrors_the_direction_of_a_pieces_times_of_day
+  caught: cityloom_editor unittests src/lib.rs::street::model::replay::tests::a_change_of_times_of_day_reaches_the_counterpart_and_leaves_its_other_fields: 3 faults, the first: crates/cityloom_editor/src/street/model/replay.rs: replace carry with (); crates/cityloom_editor/src/street/model/replay.rs: replace != with == in carry; crates/cityloom_editor/src/street/model/replay.rs: replace != with == in carry
+  caught: cityloom_editor unittests src/lib.rs::street::model::replay::tests::a_material_change_reaches_the_counterpart_and_leaves_its_other_fields: 3 faults, the first: crates/cityloom_editor/src/street/model/replay.rs: replace carry with (); crates/cityloom_editor/src/street/model/replay.rs: replace != with == in carry; crates/cityloom_editor/src/street/model/replay.rs: replace != with == in carry
+  caught: cityloom_editor unittests src/lib.rs::street::model::replay::tests::a_tram_change_reaches_the_counterpart_and_leaves_its_other_fields: 3 faults, the first: crates/cityloom_editor/src/street/model/replay.rs: replace carry with (); crates/cityloom_editor/src/street/model/replay.rs: replace != with == in carry; crates/cityloom_editor/src/street/model/replay.rs: replace != with == in carry
+  caught: cityloom_editor unittests src/lib.rs::street::model::replay::tests::an_added_first_piece_whose_right_neighbour_the_target_lacks_goes_at_the_start: 3 faults, the first: crates/cityloom_editor/src/street/model/replay.rs: replace place -> usize with 1; crates/cityloom_editor/src/street/model/replay.rs: replace > with == in place; crates/cityloom_editor/src/street/model/replay.rs: replace > with >= in place
+  caught: cityloom_editor unittests src/lib.rs::street::model::replay::tests::an_added_piece_with_no_counterpart_on_either_side_goes_at_the_end_when_not_nearer_the_start: 3 faults, the first: crates/cityloom_editor/src/street/model/replay.rs: replace place -> usize with 0; crates/cityloom_editor/src/street/model/replay.rs: replace place -> usize with 1; crates/cityloom_editor/src/street/model/replay.rs: replace == with != in place
+  caught: cityloom_editor unittests src/lib.rs::street::model::replay::tests::an_added_piece_with_no_counterpart_on_either_side_goes_at_the_start_when_nearer_it: 2 faults, the first: crates/cityloom_editor/src/street/model/replay.rs: replace place -> usize with 1; crates/cityloom_editor/src/street/model/replay.rs: replace == with != in place
+  caught: cityloom_editor unittests src/lib.rs::street::model::replay::tests::an_added_piece_with_no_counterpart_on_its_left_goes_before_the_nearest_on_its_right: 2 faults, the first: crates/cityloom_editor/src/street/model/replay.rs: replace place -> usize with 0; crates/cityloom_editor/src/street/model/replay.rs: replace == with != in place
+  caught: cityloom_editor unittests src/lib.rs::street::model::tests::a_change_of_side_lays_an_untouched_streets_own_stretches_out_again: 3 faults, the first: crates/cityloom_editor/src/street/model/mod.rs: replace Editor::set_region -> bool with true; crates/cityloom_editor/src/street/model/mod.rs: replace default_directions with (); crates/cityloom_editor/src/street/model/mod.rs: replace Editor::set_region -> bool with false
+  caught: cityloom_editor unittests src/lib.rs::street::model::tests::a_change_of_side_on_an_edited_street_mirrors_the_direction_of_a_pieces_times_of_day: 3 faults, the first: crates/cityloom_editor/src/street/model/mod.rs: replace Editor::set_region -> bool with true; crates/cityloom_editor/src/street/model/mod.rs: replace Editor::set_region -> bool with false; crates/cityloom_editor/src/street/model/mod.rs: replace >= with < in Editor::set_region
+  not caught by any new test: crates/cityloom_editor/src/street/model/mod.rs: replace >= with < in default_directions
+  not caught by any new test: crates/cityloom_editor/src/street/model/mod.rs: replace || with && in Editor::set_region
+  not caught by any new test: crates/cityloom_editor/src/street/model/mod.rs: replace * with + in default_directions
+  not caught by any new test: crates/cityloom_editor/src/street/model/mod.rs: replace * with / in default_directions
+  not caught by any new test: crates/cityloom_editor/src/street/model/mod.rs: replace == with != in Editor::set_region
+  not caught by any new test: crates/cityloom_editor/src/street/model/mod.rs: replace == with != in default_directions
+  not caught by any new test: crates/cityloom_editor/src/street/model/replay.rs: replace != with == in carry
+  not caught by any new test: crates/cityloom_editor/src/street/model/mod.rs: replace != with == in Editor::set_region
+  not caught by any new test: crates/cityloom_editor/src/street/model/mod.rs: replace == with != in default_directions
+  not caught by any new test: crates/cityloom_editor/src/street/model/replay.rs: replace > with < in place
+  not caught by any new test: crates/cityloom_editor/src/street/model/mod.rs: delete ! in Editor::set_region
+  not caught by any new test: crates/cityloom_editor/src/street/model/replay.rs: replace != with == in carry
+  not caught by any new test: crates/cityloom_editor/src/street/model/mod.rs: replace == with != in Editor::set_region
+  not caught by any new test: crates/cityloom_editor/src/street/model/replay.rs: replace != with == in carry
+  not caught by any new test: crates/cityloom_editor/src/street/model/replay.rs: replace - with + in place
+  not caught by any new test: crates/cityloom_editor/src/street/model/mod.rs: replace - with + in Editor::set_region
+  not caught by any new test: crates/cityloom_editor/src/street/model/replay.rs: replace - with / in place
+  not caught by any new test: crates/cityloom_editor/src/street/model/mod.rs: replace - with / in Editor::set_region
+  not caught by any new test: crates/cityloom_editor/src/street/model/replay.rs: replace + with - in place
+  not caught by any new test: crates/cityloom_editor/src/street/model/mod.rs: replace - with + in Editor::set_region
+  not caught by any new test: crates/cityloom_editor/src/street/model/replay.rs: replace + with * in place
+  not caught by any new test: crates/cityloom_editor/src/street/model/mod.rs: replace - with / in Editor::set_region
+  not caught by any new test: crates/cityloom_editor/src/street/model/replay.rs: replace + with - in place
+  not caught by any new test: crates/cityloom_editor/src/street/model/replay.rs: replace + with * in place
+  did not compile: crates/cityloom_editor/src/street/model/replay.rs: replace && with || in place
+  left out by the limit: 14 faults: crates/cityloom_editor/src/street/model/replay.rs: replace == with != in place; crates/cityloom_editor/src/street/model/replay.rs: replace + with - in place; crates/cityloom_editor/src/street/model/replay.rs: replace + with * in place; crates/cityloom_editor/src/street/model/replay.rs: replace - with + in place; crates/cityloom_editor/src/street/model/replay.rs: replace - with / in place; crates/cityloom_editor/src/street/model/replay.rs: replace + with - in place; crates/cityloom_editor/src/street/model/replay.rs: replace + with * in place; crates/cityloom_editor/src/street/model/replay.rs: replace + with - in place; crates/cityloom_editor/src/street/model/replay.rs: replace + with * in place; crates/cityloom_editor/src/street/model/replay.rs: replace < with == in place; crates/cityloom_editor/src/street/model/replay.rs: replace < with > in place; crates/cityloom_editor/src/street/model/replay.rs: replace < with <= in place; crates/cityloom_editor/src/street/model/replay.rs: replace * with + in place; crates/cityloom_editor/src/street/model/replay.rs: replace * with / in place

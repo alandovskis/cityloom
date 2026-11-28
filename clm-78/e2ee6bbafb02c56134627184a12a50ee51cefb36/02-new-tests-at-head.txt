@@ -1,0 +1,46 @@
+Each new test of CLM-78 run alone at e2ee6bbafb02c56134627184a12a50ee51cefb36
+
+$ cargo test -p cityloom_editor --lib street::model::replay::tests::a_change_of_times_of_day_reaches_the_counterpart_and_leaves_its_other_fields -- --exact
+running 1 test
+test street::model::replay::tests::a_change_of_times_of_day_reaches_the_counterpart_and_leaves_its_other_fields ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4023 filtered out; finished in 0.03s
+
+$ cargo test -p cityloom_editor --lib street::model::replay::tests::a_material_change_reaches_the_counterpart_and_leaves_its_other_fields -- --exact
+running 1 test
+test street::model::replay::tests::a_material_change_reaches_the_counterpart_and_leaves_its_other_fields ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4023 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib street::model::replay::tests::a_tram_change_reaches_the_counterpart_and_leaves_its_other_fields -- --exact
+running 1 test
+test street::model::replay::tests::a_tram_change_reaches_the_counterpart_and_leaves_its_other_fields ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4023 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib street::model::replay::tests::an_added_first_piece_whose_right_neighbour_the_target_lacks_goes_at_the_start -- --exact
+running 1 test
+test street::model::replay::tests::an_added_first_piece_whose_right_neighbour_the_target_lacks_goes_at_the_start ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4023 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib street::model::replay::tests::an_added_piece_with_no_counterpart_on_either_side_goes_at_the_end_when_not_nearer_the_start -- --exact
+running 1 test
+test street::model::replay::tests::an_added_piece_with_no_counterpart_on_either_side_goes_at_the_end_when_not_nearer_the_start ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4023 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib street::model::replay::tests::an_added_piece_with_no_counterpart_on_either_side_goes_at_the_start_when_nearer_it -- --exact
+running 1 test
+test street::model::replay::tests::an_added_piece_with_no_counterpart_on_either_side_goes_at_the_start_when_nearer_it ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4023 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib street::model::replay::tests::an_added_piece_with_no_counterpart_on_its_left_goes_before_the_nearest_on_its_right -- --exact
+running 1 test
+test street::model::replay::tests::an_added_piece_with_no_counterpart_on_its_left_goes_before_the_nearest_on_its_right ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4023 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib street::model::tests::a_change_of_side_lays_an_untouched_streets_own_stretches_out_again -- --exact
+running 1 test
+test street::model::tests::a_change_of_side_lays_an_untouched_streets_own_stretches_out_again ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4023 filtered out; finished in 0.04s
+
+$ cargo test -p cityloom_editor --lib street::model::tests::a_change_of_side_on_an_edited_street_mirrors_the_direction_of_a_pieces_times_of_day -- --exact
+running 1 test
+test street::model::tests::a_change_of_side_on_an_edited_street_mirrors_the_direction_of_a_pieces_times_of_day ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4023 filtered out; finished in 0.03s
