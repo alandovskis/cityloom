@@ -432,6 +432,20 @@ def balanced(tokens: list[str]) -> bool:
     return not stack
 
 
+def drop_outer_attributes(out: list[str]) -> None:
+    """Remove the outer attributes (`#[…]`, not `#![…]`) that end the tokens kept so far."""
+    while out and out[-1] == "]":
+        depth, k = 0, len(out) - 1
+        while k >= 0:
+            depth += {"]": 1, "[": -1}.get(out[k], 0)
+            if depth == 0:
+                break
+            k -= 1
+        if k < 1 or out[k - 1] != "#":
+            return  # an index or array, or an inner attribute's `!`: not an outer attribute
+        del out[k - 1 :]
+
+
 def outside_tests(text: str) -> list[str] | None:
     """The tokens of a Rust file with every #[cfg(test)] item left out: what the deployed site is built from. None when
     the file cannot be read with confidence (it then counts as changed)."""
@@ -445,6 +459,7 @@ def outside_tests(text: str) -> list[str] | None:
             end = item_end(tokens, i + len(MARK))
             if end is None:
                 return None
+            drop_outer_attributes(out)  # the attributes above the mark are the item's too
             i = end
         else:
             out.append(tokens[i])
@@ -459,7 +474,7 @@ def changed_outside_tests(path: str, base: str, head: str) -> bool:
         return True
     try:
         old, new = (outside_tests(git("show", f"{rev}:{path}")) for rev in (base, head))
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, UnicodeDecodeError):
         return True
     return old is None or new is None or old != new
 

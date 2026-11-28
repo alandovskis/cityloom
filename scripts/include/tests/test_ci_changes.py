@@ -786,6 +786,15 @@ class Deploy(unittest.TestCase):
             with self.subTest(item):
                 self.assertTrue(self.same(self.CODE + "fn last() {}\n", self.CODE + item + "fn last() {}\n"))
 
+    def test_an_attribute_before_the_mark_goes_with_the_item(self):
+        # Rust strips the whole item, the attributes above #[cfg(test)] too: left behind, they would read as the next item's.
+        real = "pub fn real() {}\n"
+        self.assertFalse(self.same("#[wasm_bindgen]\n" + real, "#[wasm_bindgen]\n#[cfg(test)]\nfn helper() {}\n" + real))
+        moved = ("#[derive(Debug)]\n#[cfg(test)]\nstruct S;\npub struct T;\n", "#[cfg(test)]\nstruct S;\n#[derive(Debug)]\npub struct T;\n")
+        self.assertFalse(self.same(*moved))
+        self.assertTrue(self.same(real, "#[allow(dead_code)]\n#[cfg(test)]\nfn helper() {}\n" + real))
+        self.assertTrue(self.same("#![allow(x)]\n" + real, "#![allow(x)]\n#[cfg(test)]\nmod tests {}\n" + real))
+
     def test_other_conditions_are_code(self):
         for attr in ("#[cfg(not(test))]", "#[cfg(any(test, feature = \"x\"))]", "#[cfg(all(test, unix))]", "#![cfg(test)]"):
             with self.subTest(attr):
@@ -864,6 +873,10 @@ class Deploy(unittest.TestCase):
 
     def test_a_file_that_cannot_be_read_deploys(self):
         self.assertTrue(self.deploys_between({self.RS: "fn f() { (] }\n"}, {self.RS: "fn f() { (] }\n// x\n"}))
+
+    def test_a_file_that_is_not_utf8_deploys(self):
+        with mock.patch.object(ci_changes, "git", side_effect=UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid")):
+            self.assertTrue(ci_changes.changed_outside_tests(self.RS, "a" * 40, "HEAD"))
 
     def test_a_served_file_that_is_not_rust_deploys(self):
         self.assertTrue(self.deploys_between({"web/app.js": "a"}, {"web/app.js": "b"}))
