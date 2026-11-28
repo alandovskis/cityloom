@@ -1,0 +1,51 @@
+Each new test of CLM-81 run alone at 0b5c8041eb3e4ded0368ce5cc877834b4a054a3e
+
+$ cargo test -p cityloom_editor --lib junction::model::plans::tests::a_period_is_not_given_a_plan_the_junction_does_not_have -- --exact
+running 1 test
+test junction::model::plans::tests::a_period_is_not_given_a_plan_the_junction_does_not_have ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4008 filtered out; finished in 0.01s
+
+$ cargo test -p cityloom_editor --lib junction::model::plans::tests::a_period_that_is_not_there_is_not_removed_moved_or_given_a_plan -- --exact
+running 1 test
+test junction::model::plans::tests::a_period_that_is_not_there_is_not_removed_moved_or_given_a_plan ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4008 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib junction::model::plans::tests::the_schedule_is_not_changed_off_a_signal -- --exact
+running 1 test
+test junction::model::plans::tests::the_schedule_is_not_changed_off_a_signal ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4008 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib junction::model::tests::a_bus_lane_between_streets_that_are_not_there_is_refused_as_not_fitting -- --exact
+running 1 test
+test junction::model::tests::a_bus_lane_between_streets_that_are_not_there_is_refused_as_not_fitting ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4008 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib junction::model::tests::a_phase_for_a_pedestrian_street_is_refused_and_changes_nothing -- --exact
+running 1 test
+test junction::model::tests::a_phase_for_a_pedestrian_street_is_refused_and_changes_nothing ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4008 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib junction::model::tests::a_roundabout_that_cannot_be_drawn_and_eases_to_the_junction_as_laid_out_opens_on_it -- --exact
+running 1 test
+test junction::model::tests::a_roundabout_that_cannot_be_drawn_and_eases_to_the_junction_as_laid_out_opens_on_it ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4008 filtered out; finished in 0.00s
+
+$ cargo test -p cityloom_editor --lib junction::model::tests::a_roundabout_that_cannot_be_drawn_opens_eased_to_a_priority_junction_without_its_extras -- --exact
+running 1 test
+test junction::model::tests::a_roundabout_that_cannot_be_drawn_opens_eased_to_a_priority_junction_without_its_extras ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4008 filtered out; finished in 0.01s
+
+$ cargo test -p cityloom_editor --lib junction::model::tests::leaving_a_signal_with_bike_boxes_and_its_timing_says_both_went -- --exact
+running 1 test
+test junction::model::tests::leaving_a_signal_with_bike_boxes_and_its_timing_says_both_went ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4008 filtered out; finished in 0.02s
+
+$ cargo test -p cityloom_editor --lib junction::model::tests::leaving_a_signal_with_bike_boxes_protected_corners_and_its_timing_says_all_went -- --exact
+running 1 test
+test junction::model::tests::leaving_a_signal_with_bike_boxes_protected_corners_and_its_timing_says_all_went ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4008 filtered out; finished in 0.02s
+
+$ cargo test -p cityloom_editor --lib junction::model::tests::leaving_a_signal_with_protected_corners_and_its_timing_says_both_went -- --exact
+running 1 test
+test junction::model::tests::leaving_a_signal_with_protected_corners_and_its_timing_says_both_went ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4008 filtered out; finished in 0.02s
