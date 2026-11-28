@@ -31,11 +31,21 @@ browser tests, UI tests, Integration tests and Version bump, and `CI`, which gat
 
 ## Postsubmit
 
-`.github/workflows/postsubmit.yml` runs on every push to `main` (with the same `paths-ignore`) and by hand. It has no
-`changes` job: it runs every job and every spec, with the UI tier in six Playwright shards, and the E2E tier through
+`.github/workflows/postsubmit.yml` runs on every push to `main` (with the same `paths-ignore`) and by hand. It runs
+every check and every spec, with the UI tier in six Playwright shards, and the E2E tier through
 `scripts/e2e-archive.sh`. It also sets `RUSTFLAGS=-D warnings`, and its runs are never cancelled. Its `All checks` job
 fails when a job failed or was cancelled, and `Deploy to Railway` waits for it. The deploy runs on a push to `main`
 only; a run by hand never deploys.
+
+Its `Changes` job decides only whether the push deploys; no check waits for it. It finds the commit `main` last
+deployed (`scripts/ci/last_deploy.py`: the newest earlier run whose `Deploy to Railway` succeeded) and diffs the push
+from it with `scripts/ci/ci_changes.py --event push`. The deploy runs only when a file the site is built from changed,
+by the list `DEPLOY_INPUTS` of `ci_changes.py`: the crates (but their tests and guards), `web/`, `deploy/`, `cities/`,
+the manifests, the justfile and the scripts the deploy runs. A merge of tests or CI configuration alone passes every
+check and skips the deploy. A site change whose own run failed is still in the next push's diff, and goes out with it.
+When the last deploy cannot be found, the push deploys. Every file git tracks is in `DEPLOY_INPUTS` or in
+`NOT_SERVED`; `just test-scripts` fails on one in neither, so a new kind of file is put on one side by the pull
+request that adds it.
 
 ## Documentation
 

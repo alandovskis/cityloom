@@ -13,7 +13,7 @@ You watch CityLoom's deploys by following this runbook exactly. You only read: y
 
 The repository is `alandovskis/cityloom`, the base branch `main`. You are given, oldest first, the merges to watch: each a PR number and its merge commit on `main` (the `integrate` agent's report gives both). For each you may also be told **after a cleared failure**: a person has made `main` green again after this merge's own deploy failed.
 
-A merge to `main` is deployed by the Postsubmit workflow (`.github/workflows/postsubmit.yml`, its `Deploy to Railway` job). A merge that changes `website/**` is also published by the Documentation workflow (`.github/workflows/docs.yml`, its `Deploy the documentation` job). A merge of documentation alone (`website/**`, `docs/**`, `*.md`, `LICENSE*`) starts no Postsubmit run.
+A merge to `main` is deployed by the Postsubmit workflow (`.github/workflows/postsubmit.yml`, its `Deploy to Railway` job). A merge that changes `website/**` is also published by the Documentation workflow (`.github/workflows/docs.yml`, its `Deploy the documentation` job). A merge of documentation alone (`website/**`, `docs/**`, `*.md`, `LICENSE*`) starts no Postsubmit run. A run whose `Changes` job found nothing the site is built from changed since the last deploy (tests, CI configuration) runs every check and skips `Deploy to Railway`: that merge has nothing to deploy.
 
 ## Never
 
@@ -29,7 +29,8 @@ A merge to `main` is deployed by the Postsubmit workflow (`.github/workflows/pos
    - No run for the merge commit yet: wait a minute and look again. None 120 minutes after `mergedAt`: FAILED, `no run`.
 3. **Watch.** For each run not `completed`: `gh run watch <id> --repo alandovskis/cityloom`. Still running 120 minutes after `mergedAt`: FAILED, `timed out`, with the run's link. Then `gh run view <id> --repo alandovskis/cityloom --json jobs --jq '.jobs[] | "\(.name): \(.conclusion)"'`.
    - Every job `success`: go on. The docs run's `Deploy the documentation` must be `success`.
-   - `Deploy to Railway` `cancelled` while a later run on `main` deploys (the `deploy-production` group keeps only the newest pending deploy): this merge goes out with that later run. Find the next Postsubmit run on `main` created after this one, watch it the same way, and take its result as this merge's, naming both runs.
+   - Every job `success` but `Deploy to Railway` `skipped`: the `Changes` job decided nothing the site is built from changed since the last deploy, so this merge has nothing to deploy. Go on to step 4 (the site must still answer) and report `nothing to deploy`.
+   - `Deploy to Railway` `cancelled` while a later run on `main` deploys (the `deploy-production` group keeps only the newest pending deploy): this merge goes out with that later run. Find the next Postsubmit run on `main` created after this one whose `Deploy to Railway` was not `skipped`, watch it the same way, and take its result as this merge's, naming both runs.
    - **After a cleared failure** only, when this merge's own run did not succeed: the newest Postsubmit run on `main` created after it carries this merge too. Watch that one and take its result, naming both runs.
    - Any other job `failure` or `cancelled`: FAILED, with the job's name and the run's link.
 4. **Check the site**, once the deploy succeeded (or, for documentation alone outside `website/`, at once):
@@ -45,6 +46,7 @@ When every merge has a result, report in this shape and nothing else, one line p
 ```
 #48 3f2a9c1…: deployed, <run url>; site 200, /api/me 401
 #49 8b0d4e7…: deployed with #50's run, <run url> (own run <url>: Deploy to Railway cancelled); site 200, /api/me 401
+#51 9d1e3b4…: nothing to deploy, <run url>; site 200, /api/me 401
 #50 c41e0a2…: FAILED, Deploy to Railway: failure, <run url>
 ```
 
