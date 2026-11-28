@@ -1,0 +1,33 @@
+PASS tests gate
+  new test: cityloom_editor unittests src/lib.rs::standards::tests::a_width_range_wider_than_the_built_in_one_at_either_end_warns_of_it
+  new test: cityloom_editor unittests src/lib.rs::standards::tests::closing_the_export_hides_its_text_and_keeps_the_profiles
+  new test: cityloom_editor unittests src/lib.rs::standards::tests::opening_a_profile_shows_its_form_and_closing_it_puts_the_form_away
+  caught: cityloom_editor unittests src/lib.rs::standards::tests::a_width_range_wider_than_the_built_in_one_at_either_end_warns_of_it: 3 faults, the first: crates/cityloom_editor/src/standards/model.rs: replace Standards::warnings -> Vec<Said> with vec![]; crates/cityloom_editor/src/standards/i18n/en.ftl: remove the message standards-warn-width; crates/cityloom_editor/src/standards/i18n/en.ftl: remove the placeable { $field } of standards-warn-width
+  caught: cityloom_editor unittests src/lib.rs::standards::tests::closing_the_export_hides_its_text_and_keeps_the_profiles: 1 fault, the first: crates/cityloom_editor/src/standards/vm.rs: replace StandardsVm::close_export with ()
+  caught: cityloom_editor unittests src/lib.rs::standards::tests::opening_a_profile_shows_its_form_and_closing_it_puts_the_form_away: 3 faults, the first: crates/cityloom_editor/src/standards/vm.rs: replace StandardsVm::begin_edit with (); crates/cityloom_editor/src/standards/vm.rs: replace StandardsVm::close_edit with (); crates/cityloom_editor/src/standards/model.rs: replace - with + in Standards::warnings
+  not caught by any new test: crates/cityloom_editor/src/standards/model.rs: replace < with == in Standards::warnings
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: remove the placeable { $kind } of standards-warn-width
+  not caught by any new test: crates/cityloom_editor/src/standards/model.rs: replace < with > in Standards::warnings
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: remove the placeable { $min } of standards-warn-width
+  not caught by any new test: crates/cityloom_editor/src/standards/model.rs: replace < with <= in Standards::warnings
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: remove the placeable { $max } of standards-warn-width
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: remove the placeable { $builtin_min } of standards-warn-width
+  not caught by any new test: crates/cityloom_editor/src/standards/model.rs: replace - with / in Standards::warnings
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: remove the placeable { $builtin_max } of standards-warn-width
+  not caught by any new test: crates/cityloom_editor/src/standards/model.rs: replace > with == in Standards::warnings
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: rename the variable $field of standards-warn-width
+  not caught by any new test: crates/cityloom_editor/src/standards/model.rs: replace > with < in Standards::warnings
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: rename the variable $kind of standards-warn-width
+  not caught by any new test: crates/cityloom_editor/src/standards/model.rs: replace > with >= in Standards::warnings
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: rename the variable $min of standards-warn-width
+  not caught by any new test: crates/cityloom_editor/src/standards/model.rs: replace || with && in Standards::warnings
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: rename the variable $max of standards-warn-width
+  not caught by any new test: crates/cityloom_editor/src/standards/model.rs: replace < with == in Standards::warnings
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: rename the variable $builtin_min of standards-warn-width
+  not caught by any new test: crates/cityloom_editor/src/standards/model.rs: replace < with > in Standards::warnings
+  not caught by any new test: crates/cityloom_editor/src/standards/i18n/en.ftl: rename the variable $builtin_max of standards-warn-width
+  not caught by any new test: crates/cityloom_editor/src/standards/model.rs: replace < with <= in Standards::warnings
+  not caught by any new test: crates/cityloom_editor/src/standards/model.rs: replace > with == in Standards::warnings
+  not caught by any new test: crates/cityloom_editor/src/standards/model.rs: replace > with < in Standards::warnings
+  not caught by any new test: crates/cityloom_editor/src/standards/model.rs: replace > with >= in Standards::warnings
+  did not compile: crates/cityloom_editor/src/standards/model.rs: replace Standards::warnings -> Vec<Said> with vec![Default::default()]
