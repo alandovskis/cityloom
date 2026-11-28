@@ -44,10 +44,25 @@ une exécution à la main ne déploie jamais.
 
 ## Documentation
 
-`.github/workflows/docs.yml` s’exécute quand un changement touche `website/**` ou le flux de travail. Il vérifie
+`.github/workflows/docs.yml` s’exécute quand un changement touche `website/**`, le flux de travail, l’image de la
+documentation (`dockerfiles/docs.Dockerfile`) ou `images.yml`. Il vérifie
 `website/` avec Prettier (depuis `tests/e2e/`), puis construit le site dans les deux langues; un lien ou une ancre brisé fait
 échouer la construction. Il publie le site sur GitHub Pages depuis `main`. Un changement à `docs/**` ou à un `*.md` hors
 de `website/` ne démarre aucun flux de travail.
+
+## Où les tâches s’exécutent
+
+Les tâches de construction et de test des trois flux de travail ci-dessus s’exécutent dans les images d’outils de
+`dockerfiles/`. Le formatage, la construction pour le navigateur et les niveaux du navigateur utilisent l’image e2e.
+Les tests unitaires, la vérification wasm et la vérification du serveur de production utilisent l’image Rust. La
+construction de la documentation utilise l’image de la documentation. La première tâche de chaque flux de travail,
+`images` (`.github/workflows/images.yml`), tire l’étiquette des images de `scripts/ci/image_tag.py`. L’étiquette est une
+empreinte de `dockerfiles/` et des versions de wasm-bindgen et de Playwright que les images installent. Si GHCR a déjà
+les quatre images à cette étiquette, la tâche ne fait rien. Sinon, elle les construit et les pousse : une demande de
+fusion qui change une image est donc testée sur ses propres images. Une demande de fusion venant d’une bifurcation ne
+peut pas pousser. Son exécution échoue quand ses images manquent, jusqu’à ce qu’une exécution d’un responsable les ait
+poussées. Le sélecteur, les tests des scripts, la vérification de la version et les déploiements s’exécutent directement sur
+l’exécuteur (runner).
 
 ## SonarCloud
 

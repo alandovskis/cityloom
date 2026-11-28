@@ -39,9 +39,22 @@ only; a run by hand never deploys.
 
 ## Documentation
 
-`.github/workflows/docs.yml` runs when a change touches `website/**` or the workflow. It checks `website/` with
+`.github/workflows/docs.yml` runs when a change touches `website/**`, the workflow, the docs image
+(`dockerfiles/docs.Dockerfile`) or `images.yml`. It checks `website/` with
 Prettier (from `tests/e2e/`), then builds the site in both languages; a broken link or anchor fails the build. It publishes
 the site to GitHub Pages from `main`. A change to `docs/**` or to a `*.md` outside `website/` starts no workflow.
+
+## Where the jobs run
+
+The build and test jobs of the three workflows above run in the toolchain images of `dockerfiles/`. Format, the
+browser build and the browser tiers use the e2e image. The unit tests, the wasm check and the release-server check use
+the Rust image. The documentation build uses the docs image. Each workflow's first job, `images`
+(`.github/workflows/images.yml`), takes the images' tag from `scripts/ci/image_tag.py`. The tag is a hash of
+`dockerfiles/` and of the wasm-bindgen and Playwright versions the images install. If GHCR already holds the four images
+at that tag, the job does nothing. Otherwise it builds them and pushes them, so a pull request that changes an image is
+tested on its own images. A pull request from a fork cannot push. Its run fails when its images are missing, until a
+maintainer's run has pushed them. The selector, the script tests, the version check and the deploys run on the runner
+itself.
 
 ## SonarCloud
 

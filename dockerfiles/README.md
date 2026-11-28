@@ -34,6 +34,14 @@ add its name after the command, for example `docs`. To build the e2e image on it
 Rust image that is already built:
 `docker build --build-context rust=docker-image://cityloom-rust -f dockerfiles/e2e.Dockerfile -t cityloom-e2e .`
 
+## In CI
+
+CI's build and test jobs run in these images. `.github/workflows/images.yml` names them
+`ghcr.io/<owner>/cityloom-<name>:<tag>`. The tag comes from `scripts/ci/image_tag.py`, a hash of this folder (its
+Markdown left out) and of the wasm-bindgen and Playwright versions. A run pushes the images only when GHCR lacks them at
+that tag. `docker buildx bake` takes the same `REGISTRY` and `TAG` variables, so the CI images can be built the same way
+here. `.github/workflows/presubmit.yml` and `website/docs/testing/when-tests-run.md` say which job runs in which image.
+
 ## Running
 
 The host's `node_modules`, `.tools` and `target` can hold files built for another platform. On macOS, for example,
